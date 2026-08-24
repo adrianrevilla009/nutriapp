@@ -1,0 +1,65 @@
+{
+  "_comment_permissions": "Declarative allow/deny for common cases, checked before Claude Code even reaches a tool call. This complements, not replaces, the hooks below: hooks can inspect the actual command text (e.g. distinguishing 'terraform plan' from 'terraform apply'), which a static permission rule cannot. Keep both — a denied-by-permission action never even reaches the hook, which is a faster and more legible first line of defense for the clear-cut cases below.",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(pytest*)",
+      "Bash(ruff*)",
+      "Bash(mypy*)",
+      "Bash(npm run*)",
+      "Bash(pnpm*)",
+      "Bash(terraform plan*)",
+      "Bash(terraform fmt*)",
+      "Bash(terraform validate*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git branch -D*)",
+      "Bash(terraform apply*)",
+      "Bash(terraform destroy*)",
+      "Bash(kubectl delete*)",
+      "Bash(helm uninstall*)",
+      "Bash(helm delete*)",
+      "Bash(rm -rf /*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-bash-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-terraform-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-test-gate.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/subagent-stop-gate.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "_comment_mcpServers": "See docs/mcp-servers.md for recommended MCP servers (GitHub, read-only Postgres, Slack) and example configuration to add under an 'mcpServers' key here. None are wired by default.",
+  "mcpServers": {}
+}
