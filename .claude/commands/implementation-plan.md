@@ -28,3 +28,10 @@ part of this command.
 
 Stop here and present the plan for human approval. Do not proceed to
 `/test-plan` or `/implementation-execution` automatically.
+
+Once the human approves, persist the plan verbatim to
+`/plans/<service-or-initiative>/implementation-plan.md` (create the
+directory if it doesn't exist) before moving on — see CLAUDE.md section 6,
+"Plan Persistence". If this is a revision of an already-persisted plan,
+append a dated addendum rather than overwriting the original approved
+text.

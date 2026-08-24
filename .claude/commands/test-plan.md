@@ -27,3 +27,8 @@ Following `docs/testing-strategy.md` and
 
 Do not write any test code yet. Stop here for human approval before
 `/implementation-execution` begins.
+
+Once the human approves, persist the test plan verbatim to
+`/plans/<service-or-initiative>/test-plan.md` (same directory as the
+approved implementation plan) before moving on — see CLAUDE.md section 6,
+"Plan Persistence".
