@@ -29,14 +29,51 @@ a fact that happened.
 
 ---
 
-## Planned Events (to be implemented with each service's first version)
+## Events
+
+Events below are marked `Status: Active` once actually implemented and
+covered by a passing contract test; unmarked entries remain planned (not
+yet implemented — the owning service doesn't exist yet).
 
 ### UserRegistered (v1)
+- Status: Active
 - Producer: identity-service
 - Consumers: profile-service (to create the user's profile), diary-service,
   any service that needs to initialize a per-user context
 - Emitted when: a new user completes registration.
-- Payload: `{ "user_id": "uuid", "email": "string", "registered_at": "timestamp" }`
+- Payload: `{ "user_id": "uuid", "email": "string", "registered_at": "timestamp",
+  "email_verification_token_reference_id": "uuid" }`
+  — the `email_verification_token_reference_id` field was added additively
+  (implementation plan section 5): the raw verification secret never
+  travels in this event, only a reference id. `notification-service`
+  retrieves the actual secret via a synchronous, once-only internal call,
+  `POST /internal/v1/auth/tokens/{reference_id}/reveal` (never routed
+  through Kong), wrapped in a circuit breaker on its own side. Additive,
+  non-breaking for the existing consumers listed above — confirmed by
+  `architecture-agent` per the implementation plan.
+
+### PasswordResetRequested (v1)
+- Status: Active
+- Producer: identity-service
+- Consumers: notification-service (to send the reset email)
+- Emitted when: a user requests a password reset for an account that
+  exists (no event is published for an unknown email — no
+  user-enumeration signal).
+- Payload: `{ "user_id": "uuid", "email": "string",
+  "reset_token_reference_id": "uuid", "requested_at": "timestamp" }`
+  — reference id only, same reference+secret pattern as
+  `UserRegistered`'s `email_verification_token_reference_id`. No raw
+  secret.
+
+### NewDeviceLoginDetected (v1)
+- Status: Active
+- Producer: identity-service
+- Consumers: notification-service (new-device alert email)
+- Emitted when: a login succeeds from a device fingerprint (hash of
+  User-Agent + IP) not previously seen for that user. A user's very first
+  login is never flagged as "new."
+- Payload: `{ "user_id": "uuid", "device_fingerprint_hash": "string",
+  "occurred_at": "timestamp", "email": "string" }`. No raw credentials.
 
 ### ProductAdded / ProductUpdated (v1)
 - Producer: catalog-service

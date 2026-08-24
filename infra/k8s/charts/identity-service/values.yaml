@@ -1,0 +1,129 @@
+# Base values — environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ (platform-infra plan §3/§9.1) — see that chart's
+# own README.md for the full named-template contract once it lands.
+
+nameOverride: identity-service
+fullnameOverride: identity-service
+
+image:
+  repository: identity-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # _lib's _serviceaccount.tpl requires this exact key (irsaRoleArn, not
+  # nested under `annotations` — a prior mismatch here made this chart
+  # fail to render at all, caught in /implementation-review). Populated
+  # per environment by Terraform (identity-service.tf) with the IRSA role
+  # ARN granting access to this service's Secrets Manager entries only
+  # (CLAUDE.md §2.9, ADR-0007).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # _lib's _networkpolicy.tpl (infra/k8s/charts/_lib/templates/_networkpolicy.tpl)
+  # requires `ingressRules` — raw Kubernetes NetworkPolicy `ingress` array
+  # entries, rendered as-is (no `allowFrom`/`allowTo` convenience shape
+  # exists in _lib; a prior mismatch here made this chart fail to render
+  # at all, caught in /implementation-review). A bare podSelector (no
+  # namespaceSelector) scopes to the same namespace, which is correct
+  # here since every service shares one namespace (docs/containerization-and-orchestration.md
+  # §3.3). identity-service's only inbound synchronous dependency is
+  # notification-service calling the internal reveal endpoint
+  # (implementation plan §6) — never routed through Kong for that path;
+  # Kong is still allowed in for the public /api/v1/auth/* surface.
+  #
+  # NOTE: _lib only renders `policyTypes: [Ingress]` — there is currently
+  # no egress-restriction mechanism in the shared library chart, so
+  # egress (to the shared RDS instance, Redis, RabbitMQ) is unrestricted
+  # by this NetworkPolicy. Flagged as a residual, known gap in _lib
+  # itself (platform-infra's scope, not this chart's), not something
+  # this service can fix unilaterally.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: notification-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# _db-provision-job.tpl input (platform-infra plan §9.1): creates this
+# service's own logical database + role inside the shared RDS instance as
+# a pre-install/pre-upgrade Helm hook, idempotent on every upgrade.
+# Field names/shape MUST match infra/k8s/charts/_lib/templates/_db-provision-job.tpl's
+# documented "REQUIRED VALUES" contract exactly (namespaced under
+# `dbProvision`, not `dbProvisionJob` — a prior mismatch here silently
+# no-opped the whole Job, caught during platform-infra reconciliation).
+# rdsHost/rdsPort/rdsMasterSecretArn/dbCredentialSecretArn/irsaRoleArn are
+# left empty here and set by Terraform (identity-service.tf) at deploy
+# time — see that file's `dbProvision` helm_release value block.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url (infra/k8s/images/db-provision/ — built, smoke-tested, has its own ECR repo and CI workflow as of the platform-infra plan addendum)
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg) — _lib defaults to plain "postgresql" for services that don't override it
+  databaseName: identity_service
+  roleName: identity_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["identity-service"]
+
+env:
+  IDENTITY_JWT_KEY_ID: identity-service-key-1
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) — never a literal secret value in this file. Set by Terraform
+# (identity-service.tf) at deploy time; the empty defaults below are
+# `required(...)`-guarded in externalsecret.yaml equivalents where
+# applicable so a missing wire-up fails loudly, not silently.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  jwtSigningKeyPair: "" # set by Terraform: module.secrets.jwt_signing_key_secret_arns["identity-service"]
+  internalRevealCredential: "" # set by Terraform: module.secrets.internal_reveal_credential_secret_arns["identity-service"]

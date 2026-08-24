@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "nutriapp-lib consuming-chart values contract",
+  "description": "Copy this file to a consuming service chart's own values.schema.json (see README.md) so `helm lint`/`helm install` enforce it against that chart's OWN top-level values.yaml. Deliberately named *.template, not values.schema.json, in THIS directory: if a library chart ships its own values.schema.json, Helm additionally (and unavoidably) validates it against the parent's values namespaced under the dependency's alias (here, a `nutriapp-lib:` key) every time any consuming chart declares this as a `dependencies:` entry — which is empty/undefined in this project's convention (named templates are invoked with the consumer's full top-level `.` context, not a subchart-scoped one), so that cascade always fails with confusing 'irsaRoleArn is required' etc. errors unrelated to the consumer's actual (valid) values. Verified empirically against a throwaway test-harness chart during /implementation-execution — see the _lib README's validation section.",
+  "type": "object",
+  "required": ["image", "resources", "serviceAccount"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "not": { "const": "latest" },
+          "description": "Must be a git SHA, never the literal 'latest' (docs/containerization-and-orchestration.md section 1)."
+        },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "description": "Every container must declare both requests and limits — .claude/skills/containerization/SKILL.md.",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": { "type": "string", "minLength": 1 },
+            "memory": { "type": "string", "minLength": 1 }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": { "type": "string", "minLength": 1 },
+            "memory": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "required": ["irsaRoleArn"],
+      "properties": {
+        "irsaRoleArn": {
+          "type": "string",
+          "pattern": "^arn:aws:iam::[0-9]{12}:role/.+$",
+          "description": "IRSA role ARN annotation (ADR-0007) — required, no default."
+        }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "properties": {
+        "liveness": { "type": "object" },
+        "readiness": { "type": "object" },
+        "startup": { "type": "object" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressRules": { "type": "array" }
+      }
+    },
+    "hpa": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    }
+  }
+}

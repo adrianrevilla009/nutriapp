@@ -1,0 +1,10 @@
+apiVersion: v2
+name: identity-service
+description: NutriApp identity-service — authentication, registration, sessions, authorization.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"

@@ -1,0 +1,68 @@
+# Root-level local dev stack (containerization SKILL.md: keep in parity
+# with each chart's values-dev.yaml config keys). Currently wires up
+# identity-service and its dependencies only — later services add their
+# own db/cache blocks following this same pattern, never a shared schema
+# (CLAUDE.md section 2.5: one database per service).
+name: nutriapp
+
+services:
+  identity-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-identity_service}
+      POSTGRES_USER: ${POSTGRES_USER:-identity_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-identity_service}
+    ports:
+      - "5432:5432"
+    volumes:
+      - identity-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-identity_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  identity-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    ports:
+      - "5672:5672"
+      - "15672:15672" # management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  identity-service:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./.dev-keys/identity:/run/secrets:ro
+    depends_on:
+      identity-db:
+        condition: service_healthy
+      identity-redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  identity-db-data:

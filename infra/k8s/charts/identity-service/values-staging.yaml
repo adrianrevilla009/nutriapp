@@ -1,0 +1,15 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/identity-service/db-credentials
+  jwtSigningKeyPair: nutriapp/staging/identity-service/jwt-signing-key-pair
+  internalRevealCredential: nutriapp/staging/identity-service/internal-reveal-credential
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/identity-service/db-credentials

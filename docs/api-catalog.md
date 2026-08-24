@@ -18,7 +18,7 @@ an endpoint surface — enforced by `/implementation-review`.
 
 | Path prefix       | Owning service     | Current version | Status  |
 |---------------------|----------------------|--------------------|-----------|
-| `/api/v1/auth`         | `identity-service`      | v1                    | planned    |
+| `/api/v1/auth`         | `identity-service`      | v1                    | active    |
 | `/api/v1/catalog`        | `catalog-service`        | v1                    | planned    |
 | `/api/v1/diary-entries`             | `diary-service`         | v1                    | planned    |
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | planned    |
@@ -26,6 +26,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/dashboard`                  | `bff-service` (ADR-0008)             | v1                    | planned    |
+| `/.well-known/jwks.json`             | `identity-service` (ADR-0022)        | n/a (JWK Set, not versioned) | active |
 
 ## Internal APIs (service-to-service, not routed through Kong)
 
@@ -33,6 +34,7 @@ an endpoint surface — enforced by `/implementation-review`.
 |-----------------------------------|-------------------------|---------------------------------|-----------|
 | `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service`, `bff-service` | planned    |
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | planned    |
+| `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 
 ## Notes
 
