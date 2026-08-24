@@ -26,9 +26,15 @@ rules that don't fit a role cleanly.
 
 ## 2. Token Contents & Propagation
 
-- JWT access token (per `docs/security-and-compliance.md` section 1)
-  carries: `user_id`, `roles` (per-tenant if multi-tenant), and a short
-  expiry (15 min default, tunable).
+- **Signing mechanism and JWKS distribution are specified in full in
+  `docs/adr/0022-token-signing-and-jwks.md`** — this section covers claim
+  content and propagation only. Summary: RS256 asymmetric signing, a
+  short-lived access token (not individually revocable) plus a
+  server-side-tracked, individually revocable refresh token, public key
+  published via a JWKS endpoint so every service verifies locally.
+- JWT access token (per `docs/security-and-compliance.md` section 1,
+  ADR-0022) carries: `user_id`, `roles` (per-tenant if multi-tenant), and
+  a short expiry (15 min default, tunable).
 - **Permissions are never embedded in the token directly** — only roles.
   A permission-to-role mapping can change (a role gains a new permission)
   without invalidating every already-issued token; embedding raw

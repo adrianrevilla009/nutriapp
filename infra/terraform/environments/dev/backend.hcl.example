@@ -1,0 +1,10 @@
+# Copy to backend.hcl (gitignored) after running bootstrap, filling in
+# its outputs:
+#
+#   cd infra/terraform/bootstrap && terraform output
+#
+# Then: terraform init -backend-config=backend.hcl
+
+bucket         = "nutriapp-tfstate-<account-id>-<region>"
+region         = "<region>"
+dynamodb_table = "nutriapp-tfstate-lock"

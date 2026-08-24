@@ -1,0 +1,12 @@
+[project]
+name = "shared-contracts"
+version = "0.1.0"
+description = "NutriApp cross-service event/data shape contracts — schemas only, no business logic."
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.9"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "jsonschema>=4.23"]
+
+[tool.pytest.ini_options]
+pythonpath = ["python"]

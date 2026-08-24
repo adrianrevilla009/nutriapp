@@ -40,6 +40,7 @@ reference implementation (see `CLAUDE.md` section 14).
 | `DOMAIN-SETUP.md`          | Checklist to instantiate this template for a new product/domain — read this first  |
 | `CLAUDE.md`                | Architecture, standards, and agent operating model                                  |
 | `ARCHITECTURE.md`           | High-level diagrams                                                                    |
+| `plans/`                       | Durable record of every approved implementation/test plan, one directory per service or initiative — persisted on human approval, independent of any single agent session (CLAUDE.md section 6, "Plan Persistence") |
 | `docs/`                       | Full specification behind every summary in `CLAUDE.md`                                   |
 | `docs/adr/`                      | Architecture Decision Records                                                              |
 | `.claude/agents/`                  | Claude Code subagent definitions, one per domain + cross-cutting concerns                    |

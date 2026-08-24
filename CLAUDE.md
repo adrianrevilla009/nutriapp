@@ -351,10 +351,13 @@ Every non-trivial change follows this pipeline, each stage a separate, explicit 
 2. **Implementation Plan** (`/implementation-plan`) — an agent produces a concrete plan
    (files to touch, ports/adapters affected, events introduced or consumed, test plan
    reference). No code is written yet.
-3. **Human approval of the plan.**
+3. **Human approval of the plan.** Once approved, the plan is persisted verbatim to
+   `/plans/<service-or-initiative>/implementation-plan.md` (see "Plan Persistence"
+   below) — this happens immediately on approval, before any code is written.
 4. **Test Plan** (`/test-plan`) — test cases are defined before implementation (TDD).
 5. **Human approval of the test plan** (lightweight, can be combined with step 3 for
-   small changes).
+   small changes). Once approved, persisted to
+   `/plans/<service-or-initiative>/test-plan.md`.
 6. **Implementation Execution** (`/implementation-execution`) — code is written to make
    the planned tests pass.
 7. **Test Execution** (`/test-execution`) — full test suite run, coverage checked.
@@ -369,6 +372,23 @@ Every non-trivial change follows this pipeline, each stage a separate, explicit 
 
 No agent skips a gate. No agent merges or pushes without explicit human confirmation
 (enforced by `.claude/hooks/pre-bash-guard.sh` and `.claude/hooks/subagent-stop-gate.sh`).
+
+### Plan Persistence
+
+Approved plans are traced independently of any single agent session or
+conversation, not just via the eventual PR description. `/plans/` at the
+repo root holds one directory per service or cross-cutting initiative
+(e.g. `/plans/identity-service/`, `/plans/platform-infra/`), mirroring the
+`services/<name>/` naming where the plan is service-scoped. Each directory
+holds `implementation-plan.md` and, once approved, `test-plan.md` — the
+plan content as approved, not a summary. A later revision to an
+already-approved plan (scope change mid-implementation) appends a dated
+addendum section rather than silently overwriting the original approved
+text, so the approval history stays legible. `/plans/` is not touched by
+`/create-pr`'s `STATUS.md` update (`docs/project-status-tracking.md`) —
+the two serve different purposes: `/plans/` is the durable record of what
+was approved and why, `STATUS.md` is a live summary of what actually
+exists right now.
 
 ## 7. Non-negotiable Guardrails
 

@@ -1,0 +1,26 @@
+replicaCount: 3
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+
+pdb:
+  minAvailable: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+secretsManager:
+  dbCredentials: nutriapp/prod/identity-service/db-credentials
+  jwtSigningKeyPair: nutriapp/prod/identity-service/jwt-signing-key-pair
+  internalRevealCredential: nutriapp/prod/identity-service/internal-reveal-credential
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/prod/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/prod/identity-service/db-credentials

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: nutriapp-lib
+description: >-
+  Shared Helm library chart for NutriApp services (ADR-0006). Provides
+  named templates for Deployment, Service, HorizontalPodAutoscaler,
+  PodDisruptionBudget, NetworkPolicy, ServiceAccount (with IRSA
+  annotation), standard liveness/readiness/startup probes, and the
+  per-service DB-provisioning Job hook (implementation plan section
+  9.1). Renders nothing on its own — every consuming service chart
+  `include`s these templates from its own templates/ directory.
+type: library
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - nutriapp
+  - library
+home: https://github.com/nutriapp/nutriapp

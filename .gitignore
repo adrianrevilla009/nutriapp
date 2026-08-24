@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.uv/
+uv.lock.tmp
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.json
+htmlcov/
+
+# Helm — vendored subchart tarballs are regenerable via
+# `helm dependency update` (reads Chart.lock, which IS committed)
+**/charts/*.tgz
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.dev-keys/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Node / frontend
+node_modules/
+.next/
+dist/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

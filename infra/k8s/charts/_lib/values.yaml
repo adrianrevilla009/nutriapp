@@ -1,0 +1,96 @@
+# infra/k8s/charts/_lib/values.yaml
+#
+# Documents the default values every named template in this library
+# falls back to via `| default`. A library chart renders nothing on its
+# own (see README.md) — these defaults exist so `helm lint`/`helm
+# template` on a CONSUMING chart behave predictably even when that
+# chart's own values.yaml omits an optional key. Required keys (no
+# default — image.repository/tag, resources.*, serviceAccount.irsaRoleArn)
+# are enforced via `required` in the templates themselves and via
+# values.schema.json.
+
+replicaCount: 1
+revisionHistoryLimit: 5
+
+image:
+  pullPolicy: IfNotPresent
+  # repository / tag: no default — required per service (git SHA, never
+  # "latest").
+
+rollingUpdate:
+  maxSurge: 1
+  maxUnavailable: 0
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /ready
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  startup:
+    enabled: false
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    failureThreshold: 30
+
+securityContext:
+  runAsUser: 1000
+  fsGroup: 1000
+  readOnlyRootFilesystem: true
+
+serviceAccount:
+  automount: true
+  # name: defaults to the chart name
+  # irsaRoleArn: no default — required (ADR-0007)
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  maxUnavailable: 1
+
+networkPolicy:
+  enabled: true
+  ingressRules: []
+  # A service MUST override this with its actual allow rules (from Kong,
+  # named peer services, Prometheus) — the empty default above with
+  # networkPolicy.enabled=true would create an allow-nothing NetworkPolicy,
+  # which is a safe (if useless) default, never an accidental allow-all.
+
+dbProvision:
+  enabled: false
+  rdsPort: 5432
+  rdsAdminDatabase: postgres
+  # All other dbProvision.* keys: no default — see _db-provision-job.tpl
+  # header comment for the full required-keys list.
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
+env: []
+envFrom: []

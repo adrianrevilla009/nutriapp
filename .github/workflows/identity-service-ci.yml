@@ -1,0 +1,196 @@
+name: identity-service-ci
+
+on:
+  pull_request:
+    paths:
+      - "services/identity-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/identity-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/identity-service-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/identity-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/identity-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/identity-service-ci.yml"
+
+defaults:
+  run:
+    working-directory: services/identity-service
+
+# Stage order per ci-cd-conventions SKILL.md: lint -> type-check ->
+# secret-scan -> unit -> dep-vuln-scan -> integration -> contract ->
+# coverage-gate -> build-image -> image-scan -> push -> deploy-dev ->
+# smoke-e2e -> promote-staging -> manual-approval -> promote-prod.
+# This workflow covers lint through coverage-gate + build/scan; deploy
+# stages are devops-agent/CI infra follow-up once an EKS cluster exists
+# (platform-infra plan).
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  type-check:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: mypy
+        run: uv run mypy domain application infrastructure
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c # v2.3.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, type-check]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Unit tests (domain + application, no I/O)
+        run: uv run pytest tests/unit -q
+
+  dep-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: pip-audit
+        run: uvx pip-audit --strict -r <(uv pip compile pyproject.toml)
+
+  integration-and-contract-tests:
+    runs-on: ubuntu-latest
+    needs: dep-vuln-scan
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      # testcontainers pulls Postgres/Redis/RabbitMQ images at runtime —
+      # the ubuntu-latest runner ships Docker already.
+      - name: Integration tests (testcontainers)
+        run: uv run pytest tests/integration -q
+      - name: Contract tests (HTTP + event schemas)
+        run: uv run pytest tests/contract -q
+
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: integration-and-contract-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: pip install uv
+      - name: Install dependencies
+        run: uv sync --extra dev
+      # Per-layer thresholds (CLAUDE.md §3): domain >= 90%, application
+      # >= 85%, infrastructure >= 70%. One full-suite run collects a
+      # single .coverage data file; `coverage report --include=<layer>/*`
+      # is then run three times against that same data to gate each layer
+      # independently — cheaper than re-running the suite per layer, and
+      # avoids undercounting domain/application ports that are only
+      # exercised indirectly via infrastructure-layer imports when a
+      # narrower test selection is used.
+      - name: Full suite (collects coverage for all three layers)
+        run: |
+          uv run pytest tests/unit tests/contract tests/integration \
+            --cov=domain --cov=application --cov=infrastructure \
+            --cov-report=term-missing
+      - name: Enforce domain coverage >= 90%
+        run: uv run coverage report --include="domain/*" --fail-under=90
+      - name: Enforce application coverage >= 85%
+        run: uv run coverage report --include="application/*" --fail-under=85
+      - name: Enforce infrastructure coverage >= 70%
+        run: uv run coverage report --include="infrastructure/*" --fail-under=70
+
+  build-and-scan-image:
+    runs-on: ubuntu-latest
+    needs: coverage-gate
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image
+        run: docker build -t identity-service:${{ github.sha }} .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.24.0
+        with:
+          image-ref: identity-service:${{ github.sha }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+
+  helm-lint-and-template:
+    # Not part of the lint->...->coverage-gate->build chain above (this
+    # validates infra/k8s/charts/, not services/identity-service/'s own
+    # code) — runs independently so a chart-only change doesn't need to
+    # wait on/duplicate the Python stages. Flagged as a gap in
+    # /test-review: previously only infra/k8s/charts/_lib was covered by
+    # any CI gate (platform-infra plan §8); this service's own chart had
+    # no automated lint/template check at all.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/k8s/charts/identity-service
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+        with:
+          version: "v3.16.2"
+      - name: helm dependency update (vendors _lib)
+        run: helm dependency update .
+      - name: helm lint (dev values + checked-in CI fixture)
+        run: helm lint . -f values-dev.yaml -f ci/synthetic-values.yaml
+      - name: helm template (fails on any render error)
+        run: helm template identity-service . -f values-dev.yaml -f ci/synthetic-values.yaml > /dev/null
+
+  # push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
+  # promote-prod: follow-up once infra/terraform's platform-infra plan is
+  # applied and an ECR repo + EKS cluster exist (docs/ci-cd-strategy.md).

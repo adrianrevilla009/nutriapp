@@ -1,0 +1,44 @@
+# infra/k8s/charts/identity-service/ci/synthetic-values.yaml
+#
+# Checked-in fixture used ONLY by .github/workflows/identity-service-ci.yml's
+# helm-lint-and-template job to fill the fields Terraform normally injects
+# at deploy time (identity-service.tf) — ARNs/hosts/roles below are
+# syntactically valid but point at nothing real. Never use these values
+# outside CI. Flagged in /test-review as a gap: the chart previously had
+# no way to be lint/template-validated in CI at all, only ad hoc during
+# /implementation-execution.
+
+image:
+  repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/identity-service"
+  tag: "ci-fixture"
+
+serviceAccount:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-identity-service-app-secrets"
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: notification-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+secretsManager:
+  dbCredentials: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/identity-service/db-credentials-XyZ123"
+  jwtSigningKeyPair: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/identity-service/jwt-signing-key-AbCdEf"
+  internalRevealCredential: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/identity-service/internal-reveal-credential-QwErTy"
+
+dbProvision:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-identity-service-db-provision"
+  rdsHost: "nutriapp-dev-postgres.abc123.us-east-1.rds.amazonaws.com"
+  rdsMasterSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:rds!db-abc123"
+  dbCredentialSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/identity-service/db-credentials-XyZ123"
+  image:
+    repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/db-provision"
+    tag: "ci-fixture"

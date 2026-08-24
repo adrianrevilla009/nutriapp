@@ -1,0 +1,42 @@
+name: db-provision-image-ci
+
+on:
+  pull_request:
+    paths:
+      - "infra/k8s/images/db-provision/**"
+      - ".github/workflows/db-provision-image-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/k8s/images/db-provision/**"
+      - ".github/workflows/db-provision-image-ci.yml"
+
+# Shared platform utility image (platform-infra plan §9.1 / identity-service
+# plan §5) consumed by every service's `_db-provision-job.tpl` Helm hook —
+# not a NutriApp "service", so it gets its own minimal workflow rather than
+# living inside any one service's CI, mirroring identity-service-ci.yml's
+# build-and-scan stage shape (docs/ci-cd-strategy.md).
+jobs:
+  build-and-scan-image:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/k8s/images/db-provision
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image
+        run: docker build -t nutriapp/db-provision:${{ github.sha }} .
+      - name: Smoke test tools are on PATH
+        run: |
+          docker run --rm nutriapp/db-provision:${{ github.sha }} \
+            sh -c 'psql --version && aws --version && python3 --version'
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.24.0
+        with:
+          image-ref: nutriapp/db-provision:${{ github.sha }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+
+  # push / deploy-dev: follow-up once infra/terraform's platform-infra plan
+  # is actually applied (module.ecr_db_provision) and an EKS cluster
+  # exists — same sequencing note as identity-service-ci.yml.
