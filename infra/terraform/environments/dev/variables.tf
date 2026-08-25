@@ -98,7 +98,7 @@ variable "jwt_signing_key_service_names" {
 
 variable "db_credential_service_names" {
   type    = list(string)
-  default = ["identity-service"]
+  default = ["identity-service", "profile-service"]
 }
 
 variable "internal_reveal_credential_service_names" {

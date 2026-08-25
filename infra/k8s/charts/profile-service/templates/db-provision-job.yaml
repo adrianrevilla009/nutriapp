@@ -1,0 +1,11 @@
+{{/*
+Helm pre-install/pre-upgrade hook Job that creates this service's own
+logical database + role inside the shared RDS instance
+(platform-infra plan §9.1 — resolved decision: Kubernetes Job, not a
+Terraform `postgresql` provider resource, since Terraform has no network
+path into the private-subnet RDS instance). Idempotent: safe to re-run on
+every `helm upgrade`.
+*/}}
+{{- if .Values.dbProvision.enabled }}
+{{ include "nutriapp-lib.dbProvisionJob" . }}
+{{- end }}

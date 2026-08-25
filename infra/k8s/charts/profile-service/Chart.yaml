@@ -1,0 +1,10 @@
+apiVersion: v2
+name: profile-service
+description: NutriApp profile-service -- biometric/health metrics, goal-setting, evolution timeline (full event sourcing + CQRS).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"

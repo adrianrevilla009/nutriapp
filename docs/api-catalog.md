@@ -19,6 +19,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | Path prefix       | Owning service     | Current version | Status  |
 |---------------------|----------------------|--------------------|-----------|
 | `/api/v1/auth`         | `identity-service`      | v1                    | active    |
+| `/api/v1/profile`         | `profile-service`      | v1                    | active    |
 | `/api/v1/catalog`        | `catalog-service`        | v1                    | planned    |
 | `/api/v1/diary-entries`             | `diary-service`         | v1                    | planned    |
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | planned    |

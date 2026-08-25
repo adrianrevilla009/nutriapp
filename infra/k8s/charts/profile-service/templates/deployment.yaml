@@ -1,0 +1,11 @@
+{{/*
+Delegates to the shared library chart's Deployment template
+(infra/k8s/charts/_lib/templates/_deployment.tpl per the platform-infra
+plan §3). That template is expected to render resources.requests/limits,
+livenessProbe/readinessProbe (via _probes.tpl), and the ServiceAccount
+reference — see containerization SKILL.md's non-negotiable Deployment
+checklist. Re-validate this include with `helm template` once `_lib`
+physically exists (it does not yet — platform-infra plan is a companion,
+concurrently-developed plan).
+*/}}
+{{ include "nutriapp-lib.deployment" . }}

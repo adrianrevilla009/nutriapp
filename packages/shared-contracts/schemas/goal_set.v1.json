@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/goal_set.v1.json",
+  "title": "GoalSet",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "GoalSet" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "goal_type", "target_value", "target_date", "set_at"],
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "goal_type": { "type": "string", "enum": ["LOSE", "MAINTAIN", "GAIN"] },
+        "target_value": { "type": ["string", "null"], "description": "AES-256-GCM ciphertext (base64) when present -- never the plaintext number." },
+        "target_date": { "type": ["string", "null"], "format": "date" },
+        "set_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

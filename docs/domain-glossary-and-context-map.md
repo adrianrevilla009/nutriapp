@@ -19,6 +19,7 @@ entity or event name that uses it.
 | Nutrient Total | The computed macro/micronutrient sum for a Food Entry, a meal, or a day. | `nutrition-calculation-service` |
 | Nutrition Target | The computed calorie/macro goal for a user, derived from Profile metrics and Goal via the Mifflin-St Jeor formula. | `nutrition-calculation-service` |
 | Profile Metric | A single biometric reading (weight, height, age, sex, activity level). | `profile-service` |
+| Biometric Consent | A user's explicit, specific grant of consent to collect biometric/health data (CLAUDE.md section 8) — distinct from, and never bundled into, general ToS acceptance. Required before any Profile Metric or Goal can be recorded; recorded as its own event (`BiometricConsentGranted`), not a flag bundled into another record. | `profile-service` |
 | Goal | A user's stated objective (lose/maintain/gain weight, target value/date) used as a Nutrition Target input. | `profile-service` |
 | Detection | A food-recognition-service result from a photo or barcode scan: an identified item, a confidence range, and (for photos) an estimated nutrient range — always subject to user confirmation before becoming a Food Entry. | `food-recognition-service` |
 | Exercise Entry | A manually logged or wearable-synced bout of exercise with a calorie-burn estimate. | `activity-service` |

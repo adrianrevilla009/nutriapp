@@ -26,6 +26,21 @@ unacceptable — document that choice explicitly where used.
 | `nutrition:current-target:*`         | 1 hour     | Changes only on profile/goal updates            |
 | `catalog:search-results:*`           | 15 minutes | Balance freshness vs. scrape load               |
 
+### Non-Redis exception: in-process JWKS cache
+
+The JWT-verification helper (`shared_contracts.auth.jwt_verifier.JwtVerifier`,
+ADR-0022) caches a producing service's fetched JWKS document **in-process**,
+not in Redis — it is hot-path cryptographic key material needed
+synchronously on every authenticated request, and a Redis round trip on
+every request would reintroduce exactly the per-request network dependency
+JWKS local verification exists to avoid. The same explicit-TTL discipline
+still applies: 10 minutes by default (`DEFAULT_JWKS_CACHE_TTL_SECONDS`),
+long enough to avoid hammering the JWKS endpoint, short enough that a key
+rotation is picked up within a bounded window rather than requiring a
+process restart (ADR-0022's "consumers must not cache the JWKS response
+indefinitely"). `profile-service` is the first consumer
+(`services/profile-service/infrastructure/http/dependencies.py`).
+
 ## Event-Driven Invalidation
 Prefer invalidating a cache key in response to the domain event that makes it
 stale, rather than relying solely on TTL expiry:
