@@ -10,7 +10,7 @@ summary, not a changelog — see git history and `docs/adr/` for detail.
 | Service | Scaffolded? | Core domain implemented? | Deployed to dev? | Deployed to staging/prod? | Last significant change |
 |---|---|---|---|---|---|
 | `identity-service` | Yes | Yes — 139 tests passing (domain 99%, application 98%, infrastructure 91% coverage) | No — Terraform written and `plan`-validated, `apply` not yet run | No | 2026-08-24 — PR #1 merged: full hexagonal implementation (registration, login, tokens per ADR-0022, password reset, RBAC), reference for every other service |
-| `profile-service` | No | No | No | No | — |
+| `profile-service` | Yes | Yes — 143 tests passing (domain 99.4%, application 97.2%, infrastructure 88.4% coverage) | No — Terraform written (`profile-service.tf`, mirrors `identity-service.tf`) and `plan`-validated, `apply` not yet run | No | 2026-08-25 — PR #2 merged: full CQRS/event-sourced implementation (ProfileCreated, BiometricConsentGranted, WeightRecorded, BodyMetricRecorded, GoalSet, GoalUpdated), synchronous read-model updates per its documented deviation from `cqrs-event-sourcing` SKILL.md, AES-256-GCM per-user encryption of biometric fields via its own KMS key per ADR-0023 |
 | `catalog-service` | No | No | No | No | — |
 | `diary-service` | No | No | No | No | — |
 | `nutrition-calculation-service` | No | No | No | No | — |
@@ -52,6 +52,6 @@ this project to date.
 
 ### ADRs
 
-All 22 ADRs are **Accepted** (0001–0022). None Proposed or Superseded.
-Most recent: ADR-0022 (Token Signing Scheme and JWKS Distribution),
-accepted 2026-08-24 alongside `identity-service`'s merge.
+All 23 ADRs are **Accepted** (0001–0023). None Proposed or Superseded.
+Most recent: ADR-0023 (Per-Service Ownership of Erasable-Data Encryption
+Keys), accepted 2026-08-25 alongside `profile-service`'s merge.
