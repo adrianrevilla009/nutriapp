@@ -464,6 +464,8 @@ to match your domain decisions where the ADR references example services):
 - ADR-0019: Saga pattern for cross-service business transactions
 - ADR-0020: Target compliance framework — GDPR baseline (Accepted)
 - ADR-0021: Scale north star and revisit triggers
+- ADR-0022: Token signing scheme (RS256) and JWKS distribution (Accepted)
+- ADR-0023: Per-service ownership of erasable-data encryption keys (Accepted)
 
 Propose new ADRs via `/adr` whenever a decision changes the stack, the messaging
 backbone, the service boundaries, or the testing strategy.

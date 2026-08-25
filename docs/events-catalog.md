@@ -98,12 +98,74 @@ yet implemented — the owning service doesn't exist yet).
 - Consumers: analytics-service, notification-service (reminders)
 - Emitted when: the corresponding diary action happens.
 
-### WeightRecorded / BodyMetricRecorded / GoalSet / GoalUpdated (v1)
+### ProfileCreated (v1)
+- Status: Active
 - Producer: profile-service
-- Consumers: nutrition-calculation-service, analytics-service
-- Emitted when: a user records a biometric metric or sets/changes their goal.
-- Payload: `{ "user_id": "uuid", "metric": "string", "value": "number",
+- Consumers: none yet (internal to profile-service's own event-sourced
+  aggregate; not a documented cross-service contract).
+- Emitted when: profile-service reactively creates an empty profile
+  aggregate for a `user_id`, in response to consuming identity-service's
+  `UserRegistered` (v1). No synchronous call back to identity-service.
+- Payload: `{ "user_id": "uuid", "created_at": "timestamp" }`
+
+### BiometricConsentGranted (v1)
+- Status: Active
+- Producer: profile-service
+- Consumers: none yet (internal).
+- Emitted when: a user grants explicit, specific consent to collect
+  biometric/health data (CLAUDE.md section 8) -- required before any
+  metric-recording event can be produced for that user.
+- Payload: `{ "user_id": "uuid", "granted_at": "timestamp" }`
+
+### WeightRecorded (v1)
+- Status: Active
+- Producer: profile-service
+- Consumers: nutrition-calculation-service, analytics-service (both
+  documented, neither exists yet -- no live cross-service contract test
+  runs against them, only a payload-shape contract test against this
+  entry).
+- Emitted when: a user records a weight reading (consent-gated).
+- Payload: `{ "user_id": "uuid", "weight_kg": "string (AES-256-GCM
+  ciphertext, base64 -- per-user envelope-encrypted, GDPR Article 9
+  special-category data, implementation plan Addendum 1)",
   "recorded_at": "timestamp" }`
+
+### BodyMetricRecorded (v1)
+- Status: Active
+- Producer: profile-service
+- Consumers: nutrition-calculation-service, analytics-service (documented,
+  not yet existing).
+- Emitted when: a user records height, age, sex, or activity level
+  (consent-gated).
+- Payload: `{ "user_id": "uuid", "metric_type": "height|age|sex|activity_level",
+  "value": "string (AES-256-GCM ciphertext, base64 -- per-user
+  envelope-encrypted)", "recorded_at": "timestamp" }`
+
+### GoalSet (v1)
+- Status: Active
+- Producer: profile-service
+- Consumers: nutrition-calculation-service, analytics-service (documented,
+  not yet existing).
+- Emitted when: a user sets their goal for the first time (`set_goal` is
+  create-only -- `GoalUpdated` is the only path to change an existing
+  goal).
+- Payload: `{ "user_id": "uuid", "goal_type": "LOSE|MAINTAIN|GAIN",
+  "target_value": "string (AES-256-GCM ciphertext, base64) | null",
+  "target_date": "date | null", "set_at": "timestamp" }` -- `target_value`
+  is encrypted (health-adjacent data, same reasoning as the metrics
+  above); `goal_type`/`target_date` stay in clear, needed for
+  `goal_policy` evaluation and query filtering.
+
+### GoalUpdated (v1)
+- Status: Active
+- Producer: profile-service
+- Consumers: nutrition-calculation-service, analytics-service (documented,
+  not yet existing).
+- Emitted when: a user changes an existing goal.
+- Payload: same shape as `GoalSet` plus `previous_goal_type`:
+  `{ "user_id": "uuid", "goal_type": "LOSE|MAINTAIN|GAIN",
+  "target_value": "string (ciphertext) | null", "target_date": "date | null",
+  "set_at": "timestamp", "previous_goal_type": "LOSE|MAINTAIN|GAIN" }`
 
 ### FoodPhotoAnalyzed (v1)
 - Producer: food-recognition-service

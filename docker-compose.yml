@@ -1,8 +1,8 @@
 # Root-level local dev stack (containerization SKILL.md: keep in parity
-# with each chart's values-dev.yaml config keys). Currently wires up
-# identity-service and its dependencies only — later services add their
-# own db/cache blocks following this same pattern, never a shared schema
-# (CLAUDE.md section 2.5: one database per service).
+# with each chart's values-dev.yaml config keys). Wires up identity-service
+# and profile-service and their dependencies — each service gets its own
+# db block, never a shared schema (CLAUDE.md section 2.5: one database per
+# service). `rabbitmq` is shared (a message broker, not a database).
 name: nutriapp
 
 services:
@@ -64,5 +64,45 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  profile-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PROFILE_POSTGRES_DB:-profile_service}
+      POSTGRES_USER: ${PROFILE_POSTGRES_USER:-profile_service}
+      POSTGRES_PASSWORD: ${PROFILE_POSTGRES_PASSWORD:-profile_service}
+    ports:
+      - "5433:5432"
+    volumes:
+      - profile-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROFILE_POSTGRES_USER:-profile_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  profile-service:
+    build:
+      # Build context is the repo root (not services/profile-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/profile-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8002:8000"
+    # PROFILE_SERVICE_KMS_ENDPOINT_URL should point at a local KMS-compatible
+    # emulator (e.g. LocalStack, added by whoever needs it locally — not
+    # part of this stack yet) for local dev without real AWS credentials;
+    # left unset here, matching the .env-driven convention identity-service
+    # established (see README.md's "Running locally" section).
+    depends_on:
+      profile-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
+  profile-db-data:

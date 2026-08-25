@@ -4,6 +4,7 @@ Data shapes only — no business logic (monorepo-tooling SKILL.md). Any
 consuming service may use these for deserialization/validation, but must
 never import identity-service's internal code directly.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

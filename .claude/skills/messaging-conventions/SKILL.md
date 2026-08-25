@@ -8,14 +8,21 @@ Full rationale in `docs/adr/0004-messaging-backbone.md` and CLAUDE.md
 section 2.4.
 
 ## Naming Convention
-`{producing_service}.{aggregate}.{event_type_snake_case}`, e.g.:
+`{producing_service}.{aggregate}.{event_type_snake_case}`, where
+`{producing_service}` is unambiguously the **short** service name --
+always drop a `-service`/`-svc` suffix (`identity`, not `identity-service`;
+`profile`, not `profile-service`; `nutrition-calculation`, not
+`nutrition-calculation-service`). e.g.:
 - `diary.food_entry.logged`
 - `catalog.product.updated`
-- `nutrition-calculation-service.target.updated`
+- `identity.user.registered`
+- `profile.profile.weight_recorded`
+- `nutrition-calculation.target.updated`
 
-Exchanges are topic exchanges per producing service
-(`logging.events`, `catalog.events`, ...); queues are bound per consumer with
-a routing key matching the events that consumer cares about.
+Exchanges are topic exchanges per producing service, named
+`{producing_service}.events` with the same short-name rule (`identity.events`,
+`profile.events`, ...); queues are bound per consumer with a routing key
+matching the events that consumer cares about.
 
 ## Library
 `faststream` for new consumers/producers (async, type-safe, testable similarly

@@ -74,11 +74,33 @@ domain-agnostic — keep it as-is.
 
 **Resolution: crypto-shredding.** Personal data fields inside event payloads
 that must be erasable (not the whole event, just the personal fields) are
-encrypted per-user with a user-specific data key, itself stored in
-`identity-service`'s key store. Erasure deletes the user's data key, not the
-event — the event remains structurally intact (aggregate IDs, event types,
-timestamps) for system integrity, but its personal-data fields become
-permanently unreadable ciphertext.
+encrypted per-user with a user-specific data key. Erasure deletes the
+user's data key, not the event — the event remains structurally intact
+(aggregate IDs, event types, timestamps) for system integrity, but its
+personal-data fields become permanently unreadable ciphertext.
+
+**Key ownership: per-service, not centralized** (ADR-0023, formalizing the
+decision originally made in
+`/plans/profile-service/implementation-plan.md` Addendum 1 — this line
+previously said "identity-service's key store," which never existed:
+`identity-service`'s approved implementation plan and its test suite
+contain no key store, no KMS integration, and no account-deletion
+endpoint at all). Each event-sourced service that holds erasable personal
+data owns its own per-user data-key table, KMS-wrapped (envelope
+encryption) — e.g. `profile-service`'s `profile_data_keys` table
+(`services/profile-service/infrastructure/persistence/models.py`). This is
+consistent with CLAUDE.md section 2.5's "no shared schemas across service
+boundaries" principle already applied to every other per-service table
+(outbox, event store: every service gets its own, never a shared one). A
+future cross-cutting initiative may consolidate key ownership into a
+shared capability if/when a concrete need for that emerges; nothing today
+depends on that consolidation happening first. **Note:** `profile-service`
+currently implements the encrypted-storage half of this (crypto-shredding-
+*ready*) but not the erasure trigger itself — no upstream
+`AccountDeletionRequested`-style event exists yet anywhere in the system,
+so the deletion consumer/endpoint is explicitly out of scope until that
+trigger exists (see that plan's section 9.2). The checklist below still
+describes the target end-to-end flow once a trigger exists.
 
 Erasure checklist, verified end-to-end (not just "delete the users row"):
 1. Delete/expire the user's data key (crypto-shred), making event-store
