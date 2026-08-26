@@ -57,6 +57,15 @@ variable "internal_reveal_credential_service_names" {
   default     = []
 }
 
+variable "cross_service_reveal_credentials" {
+  description = "Per-(owner_service, caller_service) pairs that need a DISTINCT, Terraform-generated (random_password) bearer credential for one service's internal, non-Kong-routed endpoint to be called by exactly one named other service -- e.g. [{owner_service = \"profile-service\", caller_service = \"nutrition-calculation-service\"}] for the reveal-metrics endpoint (profile-service implementation plan Addendum 2). Distinct from internal_reveal_credential_service_names above: that one is a single per-service secret with no caller-specific IRSA grant; this one creates both the secret AND a narrow IRSA role scoped to read exactly that secret, trusting only the named caller_service's ServiceAccount. Never share one entry's credential across a different caller."
+  type = list(object({
+    owner_service  = string
+    caller_service = string
+  }))
+  default = []
+}
+
 variable "usda_fdc_api_key_service_names" {
   description = "Service names that need a Secrets Manager container for a third-party USDA FoodData Central API key (e.g. [\"catalog-service\"]). Unlike the JWT signing key/internal-reveal-credential above, this value cannot be Terraform-generated -- it is obtained externally (a free registered key from https://fdc.nal.usda.gov/api-key-signup.html) and written into the placeholder container manually, out-of-band, the same way _db-provision-job populates db_credentials at deploy time rather than Terraform apply time."
   type        = list(string)

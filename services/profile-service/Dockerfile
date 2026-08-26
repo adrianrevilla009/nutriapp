@@ -31,5 +31,13 @@ COPY services/profile-service/migrations/ migrations/
 COPY services/profile-service/alembic.ini ./
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
+# 8000: public API (Kong-routed). 8001: internal-only reveal-metrics API
+# (implementation plan Addendum 2) -- never routed through Kong, restricted
+# at the NetworkPolicy level to nutrition-calculation-service's pod
+# selector only (infra/k8s/charts/profile-service/values.yaml). Both ports
+# are served by ONE process (see infrastructure/main.py's `run()`), not two
+# containers -- they share one Container (DB pool, KMS client, Redis
+# client, RabbitMQ connection).
 EXPOSE 8000
-CMD ["uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8001
+CMD ["python", "-m", "infrastructure.main"]

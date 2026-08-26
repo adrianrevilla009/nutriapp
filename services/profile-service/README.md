@@ -44,6 +44,61 @@ account-deletion/erasure endpoint is implemented yet** (plan section
 make all their historical encrypted values permanently unreadable), not
 erasure-*capable* until an upstream deletion-trigger event exists.
 
+## Internal reveal-metrics endpoint (Addendum 2)
+
+`POST /internal/v1/profile/{user_id}/reveal-metrics` -- service-to-service
+only, called exactly once per BMR/TDEE calculation by
+`nutrition-calculation-service`, which cannot decrypt this service's
+per-user KMS-wrapped biometric data on its own (ADR-0023). See
+`/plans/profile-service/implementation-plan.md` Addendum 2 for the full
+rationale (a dedicated security-agent review found `identity-service`'s
+`.../reveal` precedent -- single shared credential, no rate limit, no
+audit trail -- insufficient for this endpoint's repeatedly-callable
+Article 9 health data disclosure).
+
+- **Never routed through Kong.** Served by a SEPARATE ASGI app
+  (`infrastructure/main.py`'s `create_internal_app()`), listening on a
+  distinct port (`PROFILE_SERVICE_INTERNAL_PORT`, default `8001`) from the
+  public API (`PROFILE_SERVICE_PUBLIC_PORT`, default `8000`) -- a genuinely
+  separate listening socket, not just a second allow-listed caller on the
+  same port. Enforced at the `NetworkPolicy` level
+  (`infra/k8s/charts/profile-service/values.yaml`): port 8001 is reachable
+  only from `nutrition-calculation-service`'s pods, excluding Kong
+  entirely; port 8000 remains Kong-only.
+- **Per-caller credential**: the caller presents
+  `X-Internal-Service-Credential`, compared via `hmac.compare_digest`
+  against a distinct, Terraform-generated (`random_password`) credential
+  (`PROFILE_SERVICE_REVEAL_CREDENTIAL_NUTRITION_CALC`) -- never
+  identity-service's shared secret, never reused for any other caller.
+  Wrong/missing credential -> `401`.
+- **Rate limited**: keyed by a hash of the caller credential + `user_id`
+  (`infrastructure/cache/redis_rate_limiter.py`, same fail-closed pattern
+  as identity-service's `RedisRateLimiter`), default 30 requests/60s
+  (`PROFILE_SERVICE_REVEAL_RATE_LIMIT` /
+  `PROFILE_SERVICE_REVEAL_RATE_LIMIT_WINDOW_SECONDS`). Exceeding it ->
+  `429`, and the KMS-decrypting `DataEncryptionPort` is never invoked for
+  a throttled request. A Redis outage fails **closed** -> `503`, never an
+  unlimited internal endpoint.
+- **Response minimization**: exactly `weight_kg, height_cm, age, sex,
+  activity_level, goal_type` -- a dedicated query
+  (`application/queries/get_biometric_snapshot_for_calculation.py`), never
+  a wrapper around the full-profile snapshot (which also carries
+  `consent_granted`, `goal_target_value`, `goal_target_date`).
+- **Audit trail** (this service's first -- `domain/entities/audit_record.py`,
+  `infrastructure/persistence/postgres_audit_repository.py`): every call,
+  success or failure, writes exactly one append-only row to
+  `audit_records` (`action="biometric_snapshot_revealed"`,
+  `target_type="profile"`, `target_id=user_id`, `outcome`,
+  `metadata={"fields": [...]}` on success or `{"reason": ...}` on failure
+  -- field NAMES only, never a raw biometric VALUE), via a dedicated DB
+  role (`profile_service_audit_writer`) granted INSERT-only, exactly like
+  identity-service's `audit_log`.
+- **No field value ever logged**: structured logs record that a reveal
+  occurred, the `user_id`, the outcome, and (on success) the field NAMES
+  revealed -- never a numeric/enum VALUE. See
+  `tests/contract/http/test_internal_reveal_metrics_routes.py`'s
+  log-redaction test.
+
 ## Authentication
 
 Per ADR-0022 and `docs/authorization-model.md` section 2: every request
@@ -63,8 +118,13 @@ JWKS-fetch failure, all fail closed as `401`.
 ## Running locally
 
 ```
-docker compose up profile-service profile-db rabbitmq
+docker compose up profile-service profile-db profile-redis rabbitmq
 ```
+
+The container runs `python -m infrastructure.main` (not a bare `uvicorn
+infrastructure.main:app`), which serves the public API and the internal
+reveal-metrics API concurrently, on two distinct ports, in one process
+(`infrastructure/main.py`'s `run()`).
 
 See root `docker-compose.yml` for required environment variables
 (`PROFILE_SERVICE_DATABASE_URL`, `PROFILE_SERVICE_RABBITMQ_URL`,
@@ -72,7 +132,10 @@ See root `docker-compose.yml` for required environment variables
 LocalStack/moto use, `PROFILE_SERVICE_IDENTITY_JWKS_URL` /
 `PROFILE_SERVICE_IDENTITY_ISSUER` for the JWT verifier -- defaults to
 `http://identity-service:8000/.well-known/jwks.json` / `identity-service`,
-matching the docker-compose service name).
+matching the docker-compose service name; `PROFILE_SERVICE_REDIS_URL`,
+`PROFILE_SERVICE_REVEAL_CREDENTIAL_NUTRITION_CALC`,
+`PROFILE_SERVICE_PUBLIC_PORT` / `PROFILE_SERVICE_INTERNAL_PORT` for the
+reveal-metrics endpoint, Addendum 2).
 
 ## Testing
 
@@ -164,6 +227,12 @@ independently configured circuit breaker (`.claude/skills/resilience-patterns/SK
   (`x-profile-retry-count` header, manually incremented on republish),
   then routed to `profile-service.user_registered.dlq` instead of being
   retried forever or dropped silently.
+- Reveal-metrics rate limiter (Redis, `PROFILE_SERVICE_REDIS_URL`) has its
+  own client/connection pool (bulkhead), independent of the DB/KMS/RabbitMQ
+  resources above -- a Redis outage's blast radius is scoped to that one
+  internal endpoint. `RedisRateLimiter` fails **closed** (`503`) on any
+  `RedisError`, including a timeout (`socket_connect_timeout=2`,
+  `socket_timeout=2`) -- never treated as "no limit".
 
 ## Owned events (see docs/events-catalog.md)
 
@@ -185,3 +254,5 @@ independently configured circuit breaker (`.claude/skills/resilience-patterns/SK
 - AWS KMS (per-user envelope encryption key wrapping).
 - RabbitMQ (outbox relay -> `profile.events` topic exchange;
   consumes identity-service's `identity.events` exchange).
+- Redis (shared ElastiCache cluster, `profile:*` key namespace) --
+  reveal-metrics rate limiting only (Addendum 2).

@@ -52,10 +52,42 @@ This file is scoped guidance for any agent working inside
   on every request, only on a JWKS cache miss/expiry -- see
   `infrastructure/http/dependencies.py`'s `get_authenticated_user_id`.
 
+## Internal reveal-metrics endpoint (Addendum 2)
+
+`POST /internal/v1/profile/{user_id}/reveal-metrics` is a SEPARATE,
+security-sensitive surface -- read `README.md`'s dedicated section before
+touching anything under `infrastructure/http/routes/internal_reveal_metrics_routes.py`,
+`application/queries/get_biometric_snapshot_for_calculation.py`,
+`domain/entities/audit_record.py`, or `infrastructure/cache/`. Non-negotiable
+invariants specific to this endpoint (all 8 requirements in
+`/plans/profile-service/implementation-plan.md` Addendum 2 are binding,
+not advisory):
+
+- Never let this endpoint's route/handler decrypt or return any field
+  beyond the exact 6 allow-listed in `REVEALED_FIELDS`
+  (`get_biometric_snapshot_for_calculation.py`) -- not even by "helpfully"
+  reusing `GetProfileSnapshotHandler`.
+- Every call (success AND failure) writes exactly one `AuditRecord` via
+  `AuditRepositoryPort` -- `domain/entities/audit_record.py`'s
+  `__post_init__` rejects metadata containing a biometric value key as a
+  backstop, but do not rely on that backstop instead of getting the
+  call site right.
+- The rate limiter check happens BEFORE any call to `DataEncryptionPort` --
+  a throttled request must never reach KMS.
+- Never add a public (Kong-routed) route to `infrastructure/main.py`'s
+  `create_internal_app()`, and never add this endpoint's router to
+  `create_app()` (the public app) -- the two-port/two-app split is the
+  actual security boundary, not just the NetworkPolicy.
+- This is this service's first audit-trail capability -- `audit_records`
+  is genuinely append-only via a dedicated Postgres role
+  (`profile_service_audit_writer`, INSERT-only), not just an
+  application-level convention.
+
 ## Where things live
 
 - Ports: `domain/ports/*.py` (Python `Protocol`s).
 - Adapters: `infrastructure/persistence/`, `infrastructure/security/`,
+  `infrastructure/cache/` (Redis rate limiter, reveal-metrics only),
   `infrastructure/messaging/`.
 - Composition root: `infrastructure/composition_root.py` -- the only
   place concrete adapters are wired to ports.
