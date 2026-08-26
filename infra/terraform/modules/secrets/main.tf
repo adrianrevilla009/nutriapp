@@ -107,6 +107,43 @@ resource "aws_secretsmanager_secret_version" "internal_reveal_credential" {
   })
 }
 
+# --- profile-service reveal-metrics credential (per CALLER, not per owning
+# service) -----------------------------------------------------------------
+# nutrition-calculation-service implementation plan Addendum 1, security
+# sub-addendum requirement 1: a distinct credential per caller of
+# profile-service's internal `/internal/v1/profile/{user_id}/reveal-metrics`
+# endpoint -- rejected the `internal_reveal_credential` shape above
+# (one shared bearer credential, no per-caller distinction) specifically
+# for this integration. Named `.../profile-service/internal-reveal-
+# credential-{caller}` so a future second caller gets its own, independent
+# container rather than reusing this one.
+
+resource "random_password" "profile_reveal_credential" {
+  for_each = toset(var.profile_reveal_credential_caller_service_names)
+  length   = 32
+  special  = false
+}
+
+resource "aws_secretsmanager_secret" "profile_reveal_credential" {
+  # checkov:skip=CKV2_AWS_57:Same manual-rotation posture as internal_reveal_credential above -- no AWS-native rotation Lambda template for an application-defined shared bearer credential, until volume justifies building a custom one.
+  for_each   = toset(var.profile_reveal_credential_caller_service_names)
+  name       = "nutriapp/${var.environment}/profile-service/internal-reveal-credential-${each.value}"
+  kms_key_id = var.secrets_kms_key_id
+
+  tags = merge(local.base_tags, {
+    Name = "profile-service-internal-reveal-credential-${each.value}"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "profile_reveal_credential" {
+  for_each  = toset(var.profile_reveal_credential_caller_service_names)
+  secret_id = aws_secretsmanager_secret.profile_reveal_credential[each.value].id
+  secret_string = jsonencode({
+    credential = random_password.profile_reveal_credential[each.value].result
+    note       = "Per-caller credential for ${each.value} to call profile-service's internal reveal-metrics endpoint. profile-service verifies it via hmac.compare_digest; granting profile-service's own read access to this ARN is that service's own Terraform, out of this module's scope."
+  })
+}
+
 # --- USDA FoodData Central API key (per service) --------------------------
 # Empty (placeholder) container, same shape as db_credentials above: this
 # value is a genuine external, third-party-issued secret (a free
@@ -266,6 +303,12 @@ data "aws_iam_policy_document" "app_secrets" {
       contains(var.jwt_signing_key_service_names, each.value) ? aws_secretsmanager_secret.jwt_signing_key[each.value].arn : "",
       contains(var.internal_reveal_credential_service_names, each.value) ? aws_secretsmanager_secret.internal_reveal_credential[each.value].arn : "",
       contains(var.usda_fdc_api_key_service_names, each.value) ? aws_secretsmanager_secret.usda_fdc_api_key[each.value].arn : "",
+      # Narrow, human-approved exception to "no service reads another
+      # service's secrets" (CLAUDE.md section 2.9): exactly this one ARN,
+      # never profile-service's db-credentials or KMS key (nutrition-
+      # calculation-service implementation plan Addendum 1, security
+      # sub-addendum requirement 2).
+      contains(var.profile_reveal_credential_caller_service_names, each.value) ? aws_secretsmanager_secret.profile_reveal_credential[each.value].arn : "",
     ])
   }
 }

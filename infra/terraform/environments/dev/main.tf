@@ -84,10 +84,11 @@ module "secrets" {
   oidc_provider_url          = module.eks.oidc_provider_url
   rds_master_user_secret_arn = module.rds.master_user_secret_arn
 
-  jwt_signing_key_service_names            = var.jwt_signing_key_service_names
-  db_credential_service_names              = var.db_credential_service_names
-  internal_reveal_credential_service_names = var.internal_reveal_credential_service_names
-  usda_fdc_api_key_service_names           = var.usda_fdc_api_key_service_names
+  jwt_signing_key_service_names                  = var.jwt_signing_key_service_names
+  db_credential_service_names                    = var.db_credential_service_names
+  internal_reveal_credential_service_names       = var.internal_reveal_credential_service_names
+  usda_fdc_api_key_service_names                 = var.usda_fdc_api_key_service_names
+  profile_reveal_credential_caller_service_names = var.profile_reveal_credential_caller_service_names
 
   tags = local.common_tags
 }

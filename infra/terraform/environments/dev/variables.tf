@@ -98,12 +98,18 @@ variable "jwt_signing_key_service_names" {
 
 variable "db_credential_service_names" {
   type    = list(string)
-  default = ["identity-service", "profile-service", "catalog-service"]
+  default = ["identity-service", "profile-service", "catalog-service", "nutrition-calculation-service"]
 }
 
 variable "internal_reveal_credential_service_names" {
   type    = list(string)
   default = ["identity-service"]
+}
+
+variable "profile_reveal_credential_caller_service_names" {
+  description = "Callers of profile-service's internal reveal-metrics endpoint (nutrition-calculation-service implementation plan Addendum 1)."
+  type        = list(string)
+  default     = ["nutrition-calculation-service"]
 }
 
 variable "usda_fdc_api_key_service_names" {

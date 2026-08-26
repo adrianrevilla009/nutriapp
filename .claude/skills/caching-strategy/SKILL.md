@@ -24,6 +24,7 @@ unacceptable — document that choice explicitly where used.
 | `diary:daily-summary:*`              | 5 minutes  | Frequently updated intra-day, short staleness ok |
 | `catalog:product:*`                | 24 hours   | Reference data changes infrequently             |
 | `nutrition:current-target:*`         | 1 hour     | Changes only on profile/goal updates            |
+| `nutrition:daily-total:*`            | 5 minutes  | Frequently updated intra-day (new diary entries), short staleness ok -- nutrition-calculation-service implementation plan section 7 |
 | `catalog:search-results:*`           | 15 minutes | Balance freshness vs. scrape load               |
 
 ### Non-Redis exception: in-process JWKS cache
@@ -47,6 +48,7 @@ stale, rather than relying solely on TTL expiry:
 - `FoodEntryLogged` -> invalidate `diary:daily-summary:{user_id}:{date}`.
 - `ProductUpdated` -> invalidate `catalog:product:{product_id}`.
 - `NutritionTargetUpdated` -> invalidate `nutrition:current-target:{user_id}`.
+- `NutritionValueRecomputed` -> invalidate `nutrition:daily-total:{user_id}:{date}`.
 
 TTL remains as a safety net in case an invalidation is ever missed, but should
 not be the primary invalidation mechanism for data with a clear triggering

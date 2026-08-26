@@ -22,7 +22,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/profile`         | `profile-service`      | v1                    | active    |
 | `/api/v1/catalog`        | `catalog-service`        | v1                    | active    |
 | `/api/v1/diary`             | `diary-service`         | v1                    | active    |
-| `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | planned    |
+| `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | active    |
 | `/api/v1/media`              | `food-recognition-service`              | v1                    | planned    |
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
@@ -36,6 +36,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service`, `bff-service` | planned    |
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | planned    |
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
+| `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | planned |
 
 ## Notes
 

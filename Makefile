@@ -1,7 +1,7 @@
-.PHONY: help dev-keys up down logs test test-identity test-profile test-catalog test-diary lint fmt migrate-identity migrate-profile migrate-catalog migrate-diary
+.PHONY: help dev-keys up down logs test test-identity test-profile test-catalog test-diary test-nutrition-calculation lint fmt migrate-identity migrate-profile migrate-catalog migrate-diary migrate-nutrition-calculation
 
 help:
-	@echo "Targets: dev-keys, up, down, logs, test, test-identity, test-profile, test-catalog, test-diary, lint, fmt, migrate-identity, migrate-profile, migrate-catalog, migrate-diary"
+	@echo "Targets: dev-keys, up, down, logs, test, test-identity, test-profile, test-catalog, test-diary, test-nutrition-calculation, lint, fmt, migrate-identity, migrate-profile, migrate-catalog, migrate-diary, migrate-nutrition-calculation"
 
 # Generates a local-dev-only RSA key pair for identity-service's JWT
 # signing (ADR-0022). Production keys are provisioned by the
@@ -40,6 +40,9 @@ test-catalog:
 test-diary:
 	$(MAKE) test SERVICE=diary-service
 
+test-nutrition-calculation:
+	$(MAKE) test SERVICE=nutrition-calculation-service
+
 lint:
 	pre-commit run --all-files
 
@@ -57,3 +60,6 @@ migrate-catalog:
 
 migrate-diary:
 	cd services/diary-service && alembic upgrade head
+
+migrate-nutrition-calculation:
+	cd services/nutrition-calculation-service && alembic upgrade head

@@ -63,6 +63,12 @@ variable "usda_fdc_api_key_service_names" {
   default     = []
 }
 
+variable "profile_reveal_credential_caller_service_names" {
+  description = "Service names authorized to call profile-service's internal `/internal/v1/profile/{user_id}/reveal-metrics` endpoint (nutrition-calculation-service implementation plan Addendum 1, security sub-addendum requirement 1: e.g. [\"nutrition-calculation-service\"]). Each caller gets its OWN, distinct, Terraform-generated (random_password) Secrets Manager container named `nutriapp/{environment}/profile-service/internal-reveal-credential-{caller}` -- deliberately NOT reusing `internal_reveal_credential_service_names` above, which is a single shared-bearer-credential-per-owning-service shape the security-agent review rejected for this specific integration (no per-caller distinction). profile-service itself verifies the presented credential via `hmac.compare_digest`; granting profile-service's own audit/rate-limit machinery read access to these containers is out of this module's scope (profile-service's own Terraform)."
+  type        = list(string)
+  default     = []
+}
+
 variable "jwt_key_algorithm" {
   type    = string
   default = "RSA"
