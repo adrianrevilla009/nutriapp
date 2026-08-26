@@ -219,3 +219,57 @@ weight is health-adjacent data under the same GDPR Art. 9 reasoning as
 clear in the original draft. `goal_type` and `target_date` remain
 unencrypted: needed directly for `goal_policy` evaluation and query
 filtering, and neither is a biometric value by itself.
+
+## Addendum 2 — 2026-08-26, new internal reveal-metrics endpoint
+
+**Scope added**: `profile-service` gains `POST /internal/v1/profile/{user_id}/reveal-metrics`,
+called synchronously by `nutrition-calculation-service` (its own plan,
+`/plans/nutrition-calculation-service/implementation-plan.md` §9.1 and its
+security-agent sub-addendum) to obtain plaintext biometric values for its
+Mifflin-St Jeor BMR/TDEE calculation, since ADR-0023 deliberately isolates
+`profile-service`'s per-user KMS key material to `profile-service` alone.
+
+This is **not** a reuse of `identity-service`'s `.../reveal` endpoint
+pattern as-is — a dedicated `security-agent` review (conducted as part of
+approving `nutrition-calculation-service`'s plan) found that precedent's
+single-shared-credential, no-rate-limit, no-audit-trail design
+insufficient for repeatedly-callable Article 9 health data disclosure.
+Human-approved, binding requirements for this endpoint (full detail in the
+other plan's sub-addendum, restated here since they land in this
+service's own codebase):
+
+1. A new, distinct per-caller Secrets Manager credential (Terraform
+   `random_password`), not a shared secret.
+2. A narrow, human-approved IRSA exception letting `nutrition-calculation-service`
+   read exactly that one secret ARN — nothing else.
+3. A dedicated port + `NetworkPolicy` for this endpoint, excluding Kong,
+   restricted to `nutrition-calculation-service`'s pod selector only.
+4. App-level rate limiting keyed by caller-credential + `user_id`
+   (reuse `identity-service`'s `RateLimiterPort`/`RedisRateLimiter` pattern).
+5. Response minimization: exactly `weight_kg, height_cm, age, sex,
+   activity_level, goal_type` — a new dedicated query, not a wrapper
+   around the full-profile decrypt path.
+6. **A new audit-trail capability in `profile-service`** (none exists
+   today) — append-only, INSERT-only DB role, recording every call
+   (success and failure): `actor_id`, `action="biometric_snapshot_revealed"`,
+   `target_type="profile"`, `target_id=user_id`, `outcome`,
+   `metadata={"fields": [...]}` (names only, never values), `correlation_id`.
+7. Never logs the response body or any field value — field names only.
+8. `docs/api-catalog.md`'s Internal APIs table gets a new row.
+
+**Files added to `services/profile-service/`**: `infrastructure/http/routes/internal_reveal_metrics_routes.py`,
+`application/queries/get_biometric_snapshot_for_calculation.py` (+handler),
+`domain/entities/audit_record.py` (or equivalent — first audit-trail
+capability in this service), `domain/ports/audit_repository_port.py`,
+`infrastructure/persistence/postgres_audit_repository.py`,
+`infrastructure/persistence/postgres_rate_limiter.py` (or reuse
+`identity-service`'s pattern via a shared internal package if that's
+cleaner — implementer's call, not dictated here), a new Alembic migration
+(`audit_records` table, append-only/INSERT-only role grant), Helm/Terraform
+changes per requirements 1–3 above, and `README.md`/`CLAUDE.md` updates
+documenting the new endpoint, its caller, and its audit behavior.
+
+**Reviewed together**: this addendum's implementation and
+`nutrition-calculation-service`'s implementation are reviewed together at
+`/implementation-review` before either merges, since they're two halves
+of one feature.

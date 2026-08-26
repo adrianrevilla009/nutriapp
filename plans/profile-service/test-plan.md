@@ -135,3 +135,27 @@ is added to the E2E set.
 - **Domain ≥ 90%** — every value object validation branch, every aggregate state transition (creation, consent, metric recording, goal set/update and their rejection paths), and every `goal_policy` branch from §0 is covered above.
 - **Application ≥ 85%** — all 8 handlers have happy-path + every documented failure/idempotency branch covered.
 - **Infrastructure ≥ 70%** — every adapter's round-trip, the projector-replay tests, the outbox atomicity tests, and the KMS resilience tests (circuit open/half-open/closed, timeout) are covered. Actual % confirmed by `pytest-cov` at `/test-execution`.
+
+## Addendum 2 — 2026-08-26, `reveal-metrics` endpoint test cases
+
+Implements Addendum 2 of `/plans/profile-service/implementation-plan.md`. All cases below are security-critical — this endpoint discloses Article 9 health data outside its owning service.
+
+**Unit (domain/application, fake ports)**
+- `GetBiometricSnapshotForCalculationQuery` handler returns exactly the 6 allow-listed fields (`weight_kg, height_cm, age, sex, activity_level, goal_type`) — a response-shape test asserting no other key is present, even if the underlying aggregate has more decryptable fields available.
+- Handler writes exactly one audit record per call, `outcome="success"`, with `metadata.fields` listing the 6 field names and no values, on every successful call.
+- Handler writes exactly one audit record with `outcome="failure"` on a rejected call (bad credential), before returning the error response.
+
+**Integration (testcontainers Postgres + Redis)**
+- Correct credential + valid `user_id` → `200` with the 6-field body; audit record persisted.
+- Missing/wrong credential → `401`/`403`; audit record persisted with `outcome="failure"`; response body contains no biometric data.
+- Rate limit exceeded (same caller-credential + `user_id` combination, above the configured threshold) → `429`; no additional decryption/KMS call is made for the throttled request (verify the KMS-decrypting port is never invoked once the limiter rejects).
+- `audit_records` table: confirmed append-only at the DB-role level (a DB-level `UPDATE`/`DELETE` attempt against the audit table, executed directly in the test, is rejected by the grant — not just "the application code never issues one").
+- **Log-redaction test**: capture structured log output for a successful reveal call; assert no numeric weight/height/age value or raw `sex`/`activity_level`/`goal_type` value appears anywhere in the captured log lines — only field names, `user_id`, and outcome.
+- Circuit/timeout behavior on the KMS-decryption path this endpoint depends on is already covered by `profile-service`'s existing `KmsEnvelopeDataEncryption` resilience tests — not re-tested here, this endpoint just reuses that adapter.
+
+**Contract**
+- `POST /internal/v1/profile/{user_id}/reveal-metrics` response schema documented and contract-tested, added to `docs/api-catalog.md`'s Internal APIs table (enforced by `/implementation-review`).
+
+## Addendum 2 coverage expectation
+
+This endpoint's handler, audit-write path, and rate-limiter integration are expected to be fully covered given the security-critical nature of the feature — treat any uncovered branch here as a `/test-review` blocking finding, not an advisory one, given what's at stake (Article 9 data disclosure).
