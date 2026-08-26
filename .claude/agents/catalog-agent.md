@@ -14,11 +14,14 @@ sourced from third-party supermarket APIs. See CLAUDE.md section 2.2.
 
 ## Architectural Constraints (non-negotiable)
 - Hexagonal architecture per ADR-0001. Ingestion implementations are
-  adapters behind a `ProductSourcePort`; the domain never depends
+  adapters behind a `CatalogSourcePort`; the domain never depends
   on a specific scraping/ingestion library directly.
 - Conventional persistence per ADR-0002 (not event-sourced), publishing
-  `ProductAdded` / `ProductUpdated` events via the Outbox pattern for
-  `diary-service` and `food-recognition-service` to consume.
+  `ProductCatalogued` / `ProductUpdated` events via the Outbox pattern for
+  `diary-service` and `food-recognition-service` to consume. (`ProductCatalogued`
+  was named `ProductAdded` in an earlier draft of this doc — renamed for
+  PascalCase-past-tense precision per the catalog-service implementation
+  plan section 5; see `docs/events-catalog.md`.)
 - Every external ingestion call is wrapped in a circuit breaker + retry with
   backoff (CLAUDE.md section 2.6) and respects the caching strategy
   (`.claude/skills/caching-strategy/SKILL.md`) to minimize repeated requests.

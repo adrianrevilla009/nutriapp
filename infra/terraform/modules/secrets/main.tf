@@ -107,6 +107,41 @@ resource "aws_secretsmanager_secret_version" "internal_reveal_credential" {
   })
 }
 
+# --- USDA FoodData Central API key (per service) --------------------------
+# Empty (placeholder) container, same shape as db_credentials above: this
+# value is a genuine external, third-party-issued secret (a free
+# registered key from https://fdc.nal.usda.gov/api-key-signup.html) that
+# cannot be Terraform-generated -- it must be written into this container
+# manually (out-of-band, e.g. `aws secretsmanager put-secret-value`) by
+# whoever registers the key, before catalog-service's first real (rather
+# than DEMO_KEY smoke-test) ingestion run. Terraform intentionally ignores
+# drift on `secret_string` after that manual write, exactly like
+# db_credentials.
+
+resource "aws_secretsmanager_secret" "usda_fdc_api_key" {
+  # checkov:skip=CKV2_AWS_57:Externally-issued third-party API key, manually rotated per a documented runbook -- no AWS-native rotation Lambda template applies to a USDA-issued credential.
+  for_each   = toset(var.usda_fdc_api_key_service_names)
+  name       = "nutriapp/${var.environment}/${each.value}/usda-fdc-api-key"
+  kms_key_id = var.secrets_kms_key_id
+
+  tags = merge(local.base_tags, {
+    Name = "${each.value}-usda-fdc-api-key"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "usda_fdc_api_key_placeholder" {
+  for_each  = toset(var.usda_fdc_api_key_service_names)
+  secret_id = aws_secretsmanager_secret.usda_fdc_api_key[each.value].id
+  secret_string = jsonencode({
+    api_key = "PENDING"
+    note    = "Populated manually, out-of-band, with a real key registered at https://fdc.nal.usda.gov/api-key-signup.html -- never by Terraform."
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
 # --- IRSA: db-provision-job (write-only, per service) ---------------------
 # Trust policy binds to "<service>-db-provision" ServiceAccount in the
 # shared namespace — the consuming Helm chart's Job must use exactly this
@@ -230,6 +265,7 @@ data "aws_iam_policy_document" "app_secrets" {
       aws_secretsmanager_secret.db_credentials[each.value].arn,
       contains(var.jwt_signing_key_service_names, each.value) ? aws_secretsmanager_secret.jwt_signing_key[each.value].arn : "",
       contains(var.internal_reveal_credential_service_names, each.value) ? aws_secretsmanager_secret.internal_reveal_credential[each.value].arn : "",
+      contains(var.usda_fdc_api_key_service_names, each.value) ? aws_secretsmanager_secret.usda_fdc_api_key[each.value].arn : "",
     ])
   }
 }

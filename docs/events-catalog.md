@@ -75,14 +75,45 @@ yet implemented — the owning service doesn't exist yet).
 - Payload: `{ "user_id": "uuid", "device_fingerprint_hash": "string",
   "occurred_at": "timestamp", "email": "string" }`. No raw credentials.
 
-### ProductAdded / ProductUpdated (v1)
+### ProductCatalogued (v1)
+- Status: Active
 - Producer: catalog-service
 - Consumers: diary-service, food-recognition-service (for barcode/product
-  matching), recipe-service
-- Emitted when: a new product is added, or an existing product's data
-  changes, via ingestion or manual curation.
-- Payload: `{ "product_id": "uuid", "name": "string", "barcode": "string | null",
-  "nutrition_per_100g": { "...": "macro/micro fields" }, "source": "string" }`
+  matching), recipe-service — none exist as live consumers yet, so no
+  live integration breaks; this payload shape is their future contract.
+- Emitted when: a new product (by dedup key — barcode when present,
+  otherwise `(source, source_product_id)`) is first written to
+  `products`, regardless of which source triggered it.
+- Payload: `{ "product_id": "uuid", "barcode": "string | null",
+  "name": "string | null", "brand": "string | null", "category": "string | null",
+  "nutrition_per_100g": { "...": "macro/micro fields" } | null,
+  "dietary_tags": ["string"], "allergen_tags": ["string"],
+  "package_size": { "value": "number", "unit": "string" } | null,
+  "sources": ["open_food_facts" | "usda_fdc"], "catalogued_at": "timestamp" }`
+  — renamed from an earlier `ProductAdded` placeholder for PascalCase-
+  past-tense precision consistent with `UserRegistered`/`WeightRecorded`
+  (catalog-service implementation plan section 5): "Added" reads as a raw
+  CRUD verb, whereas "Catalogued" names the actual domain fact and fits
+  the dedup/merge design's "a second source can complete a record a first
+  source started, still a fresh catalog entry from the read side" case.
+  See `packages/shared-contracts/schemas/product_catalogued.v1.json`.
+
+### ProductUpdated (v1)
+- Status: Active
+- Producer: catalog-service
+- Consumers: diary-service, food-recognition-service, recipe-service
+  (same as `ProductCatalogued`, none live yet).
+- Emitted when: an already-catalogued product's data changes on a
+  subsequent ingestion pass (the same source re-syncing, or a second
+  source's data reconciling into the row per the dedup/conflict-
+  resolution rule: barcode is the sole cross-source dedup key; on a
+  numeric disagreement, the most-recently-updated source wins on the
+  live row, both sources' raw values are retained in `product_sources`).
+  Never published with an empty `changed_fields` — that is a no-op
+  ingestion pass, not an update.
+- Payload: same shape as `ProductCatalogued` plus
+  `"changed_fields": ["string"]` (non-empty). See
+  `packages/shared-contracts/schemas/product_updated.v1.json`.
 
 ### FoodEntryLogged / FoodEntryCorrected / FoodEntryDeleted (v1)
 - Producer: diary-service

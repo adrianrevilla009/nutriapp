@@ -57,6 +57,12 @@ variable "internal_reveal_credential_service_names" {
   default     = []
 }
 
+variable "usda_fdc_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a third-party USDA FoodData Central API key (e.g. [\"catalog-service\"]). Unlike the JWT signing key/internal-reveal-credential above, this value cannot be Terraform-generated -- it is obtained externally (a free registered key from https://fdc.nal.usda.gov/api-key-signup.html) and written into the placeholder container manually, out-of-band, the same way _db-provision-job populates db_credentials at deploy time rather than Terraform apply time."
+  type        = list(string)
+  default     = []
+}
+
 variable "jwt_key_algorithm" {
   type    = string
   default = "RSA"

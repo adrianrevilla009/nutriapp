@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/product_updated.v1.json",
+  "title": "ProductUpdated",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "ProductUpdated" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": [
+        "product_id", "barcode", "name", "brand", "category",
+        "nutrition_per_100g", "dietary_tags", "allergen_tags",
+        "package_size", "sources", "catalogued_at", "changed_fields"
+      ],
+      "properties": {
+        "product_id": { "type": "string", "format": "uuid" },
+        "barcode": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "brand": { "type": ["string", "null"] },
+        "category": { "type": ["string", "null"] },
+        "nutrition_per_100g": { "type": ["object", "null"] },
+        "dietary_tags": { "type": "array", "items": { "type": "string" } },
+        "allergen_tags": { "type": "array", "items": { "type": "string" } },
+        "package_size": {
+          "type": ["object", "null"],
+          "properties": {
+            "value": { "type": "number" },
+            "unit": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "catalogued_at": { "type": "string", "format": "date-time" },
+        "changed_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

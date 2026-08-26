@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "OVER_RATE_LIMIT",
+    "message": "API rate limit exceeded. Please try again later or register for a higher limit."
+  }
+}
