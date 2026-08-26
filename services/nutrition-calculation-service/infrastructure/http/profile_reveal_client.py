@@ -43,7 +43,7 @@ from domain.value_objects.sex import Sex
 CIRCUIT_NAME = "profile_reveal"
 DEFAULT_FAIL_MAX = 5
 DEFAULT_RESET_TIMEOUT_SECONDS = 30
-CREDENTIAL_HEADER_NAME = "X-Nutrition-Calc-Reveal-Credential"
+CREDENTIAL_HEADER_NAME = "X-Internal-Service-Credential"
 _REQUIRED_FIELDS = ("weight_kg", "height_cm", "age", "sex", "activity_level", "goal_type")
 
 

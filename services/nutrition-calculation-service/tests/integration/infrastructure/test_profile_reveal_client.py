@@ -56,7 +56,7 @@ async def test_successful_reveal_returns_metrics_and_sends_credential_header():
     assert metrics.sex is Sex.MALE
     assert metrics.activity_level is ActivityLevel.MODERATE
     assert metrics.goal_type is GoalType.MAINTAIN
-    assert received_headers.get("x-nutrition-calc-reveal-credential") == "test-credential"
+    assert received_headers.get("x-internal-service-credential") == "test-credential"
     await client.aclose()
 
 

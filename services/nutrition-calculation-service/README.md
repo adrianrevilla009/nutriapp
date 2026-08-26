@@ -59,8 +59,9 @@ documented HTTP contract).
   the recompute is deferred cleanly (logged, no crash, no
   `NutritionTargetUpdated` published) — never a guessed/defaulted
   biometric value.
-- Per-caller service credential, sent as `X-Nutrition-Calc-Reveal-Credential`
-  (env `NUTRITION_CALCULATION_SERVICE_PROFILE_REVEAL_CREDENTIAL`).
+- Per-caller service credential, sent as `X-Internal-Service-Credential`
+  (env `NUTRITION_CALCULATION_SERVICE_PROFILE_REVEAL_CREDENTIAL`) — matches
+  the header name `profile-service`'s reveal-metrics endpoint actually reads.
 
 ## Security — no plaintext biometric persistence (Addendum 1, requirement 8)
 
