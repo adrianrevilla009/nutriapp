@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from domain.value_objects.macro_snapshot import MacroSnapshot
+from domain.value_objects.quantity import Quantity
 
 SUPPORTED_SOURCE_TYPES = frozenset({"catalog_product", "recipe", "ai_detected"})
 
@@ -27,6 +28,12 @@ class FoodSourceSnapshot:
     quantity: float
     unit: str
     macros_per_unit: MacroSnapshot
+
+    def __post_init__(self) -> None:
+        # Delegates to Quantity so amount/unit invariants (test-plan section 0/1's
+        # g|ml|serving vocabulary) are enforced on this actual write path, not just
+        # proven in isolation on the standalone Quantity value object.
+        Quantity(amount=self.quantity, unit=self.unit)
 
     def to_dict(self) -> dict[str, Any]:
         return {

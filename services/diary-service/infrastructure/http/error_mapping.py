@@ -23,6 +23,7 @@ from domain.entities.fasting_window import (
 from domain.entities.food_entry import EntryAlreadyDeletedError
 from domain.entities.meal_plan_entry import PlanEntryAlreadyRemovedError
 from domain.entities.water_intake_entry import EntryAlreadyRemovedError
+from domain.ports.event_store_port import OptimisticConcurrencyError
 from domain.value_objects.food_source import InvalidFoodSourceError
 from domain.value_objects.macro_snapshot import InvalidMacroSnapshotError
 from domain.value_objects.meal_slot import InvalidMealSlotError
@@ -56,6 +57,11 @@ _MAPPING: list[tuple[type[Exception], int, str]] = [
     (InvalidMacroSnapshotError, status.HTTP_400_BAD_REQUEST, "INVALID_MACRO_SNAPSHOT"),
     (InvalidWaterAmountError, status.HTTP_400_BAD_REQUEST, "INVALID_WATER_AMOUNT"),
     (InvalidTimeWindowError, status.HTTP_400_BAD_REQUEST, "INVALID_TIME_WINDOW"),
+    (
+        OptimisticConcurrencyError,
+        status.HTTP_409_CONFLICT,
+        "CONCURRENT_MODIFICATION",
+    ),
 ]
 
 
