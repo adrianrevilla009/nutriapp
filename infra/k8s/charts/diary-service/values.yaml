@@ -1,0 +1,131 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Mirrors infra/k8s/charts/profile-service/values.yaml's
+# structure (this service's closer ES/CQRS precedent), adapted for
+# diary-service's own dependencies: no KMS/per-user envelope encryption
+# (implementation plan section 7 -- diary data isn't GDPR Article 9
+# special-category data the way profile-service's biometric data is), but
+# a Redis (shared ElastiCache) connection instead, wired via a plain env
+# var (see diary-service.tf's header comment on the auth-token posture).
+
+nameOverride: diary-service
+fullnameOverride: diary-service
+
+image:
+  repository: diary-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # _lib's _serviceaccount.tpl requires this exact top-level key (not
+  # nested under `annotations` -- identity-service's /implementation-review
+  # addendum caught this mismatch; getting it right here from the start).
+  # Populated per environment by Terraform (diary-service.tf) with the
+  # IRSA role ARN granting access to this service's own Secrets Manager
+  # entries only (no KMS grant needed, unlike profile-service).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  # Higher ceiling than profile-service/identity-service: this is the
+  # highest-write-volume service in the system (CLAUDE.md section 2.2).
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # diary-service's only public HTTP surface is /api/v1/diary/* via Kong --
+  # it has no other inbound synchronous dependency in this scope
+  # (nutrition-calculation-service/analytics-service, the documented
+  # future consumers of its events, integrate asynchronously via RabbitMQ,
+  # not a synchronous call into this service). Bare podSelector (no
+  # namespaceSelector) scopes to the shared namespace, same convention as
+  # identity-service's/profile-service's charts.
+  #
+  # NOTE (same known _lib-level gap identity-service's/profile-service's
+  # charts document): _lib only renders `policyTypes: [Ingress]` --
+  # egress (to the shared RDS instance, RabbitMQ, ElastiCache) is
+  # unrestricted by this NetworkPolicy.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# _db-provision-job.tpl input (infra/k8s/charts/_lib): creates this
+# service's own logical database + role inside the shared RDS instance as
+# a pre-install/pre-upgrade Helm hook, idempotent on every upgrade. Field
+# names/shape MUST match _db-provision-job.tpl's documented "REQUIRED
+# VALUES" contract exactly (namespaced under `dbProvision`).
+# rdsHost/rdsPort/rdsMasterSecretArn/dbCredentialSecretArn/irsaRoleArn are
+# left empty here and set by Terraform (diary-service.tf) at deploy time.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url (shared image, same as identity-service's/profile-service's)
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: diary_service
+  roleName: diary_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["diary-service"]
+
+env:
+  AWS_REGION: us-east-1
+  # DIARY_SERVICE_REDIS_URL: set by Terraform (diary-service.tf) from the
+  # shared ElastiCache module's host:port -- no auth token composed in
+  # yet, matching modules/elasticache/main.tf's own documented gap ("this
+  # token isn't yet in active use by any service"); diary-service reuses
+  # the single shared cluster via a `diary:*` key namespace
+  # (RedisDailySummaryCache), same resolution as catalog-service's
+  # Addendum 1 -- no new ElastiCache cluster provisioned here.
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (diary-service.tf) at deploy time. Only DB credentials -- no JWT signing
+# key, no internal reveal credential, no KMS key (diary-service issues no
+# tokens, exposes no internal non-Kong-routed endpoint, and owns no
+# per-user encryption key).
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
