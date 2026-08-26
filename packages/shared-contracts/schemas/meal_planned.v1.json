@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/meal_planned.v1.json",
+  "title": "MealPlanned",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "MealPlanned" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["plan_entry_id", "user_id", "source", "meal_slot", "planned_for"],
+      "properties": {
+        "plan_entry_id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "source": {
+          "type": "object",
+          "required": ["source_type", "source_reference_id", "snapshot"],
+          "properties": {
+            "source_type": { "type": "string", "enum": ["catalog_product", "recipe", "ai_detected"] },
+            "source_reference_id": { "type": "string" },
+            "snapshot": {
+              "type": "object",
+              "required": ["name", "brand", "quantity", "unit", "macros_per_unit"],
+              "properties": {
+                "name": { "type": "string" },
+                "brand": { "type": ["string", "null"] },
+                "quantity": { "type": "number" },
+                "unit": { "type": "string", "enum": ["g", "ml", "serving"] },
+                "macros_per_unit": {
+                  "type": "object",
+                  "required": ["calories_kcal", "protein_g", "carbs_g", "fat_g"],
+                  "properties": {
+                    "calories_kcal": { "type": "number" },
+                    "protein_g": { "type": "number" },
+                    "carbs_g": { "type": "number" },
+                    "fat_g": { "type": "number" }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "meal_slot": { "type": "string", "enum": ["breakfast", "lunch", "dinner", "snack"] },
+        "planned_for": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

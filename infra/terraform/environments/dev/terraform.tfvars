@@ -29,7 +29,7 @@ rds_multi_az          = false
 redis_node_type = "cache.t4g.micro"
 
 jwt_signing_key_service_names = ["identity-service"]
-db_credential_service_names   = ["identity-service", "profile-service"]
+db_credential_service_names   = ["identity-service", "profile-service", "diary-service"]
 
 scale_down_schedule_expression = "cron(0 20 ? * MON-FRI *)"
 scale_up_schedule_expression   = "cron(0 7 ? * MON-FRI *)"
