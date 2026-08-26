@@ -20,7 +20,7 @@ an endpoint surface — enforced by `/implementation-review`.
 |---------------------|----------------------|--------------------|-----------|
 | `/api/v1/auth`         | `identity-service`      | v1                    | active    |
 | `/api/v1/profile`         | `profile-service`      | v1                    | active    |
-| `/api/v1/catalog`        | `catalog-service`        | v1                    | planned    |
+| `/api/v1/catalog`        | `catalog-service`        | v1                    | active    |
 | `/api/v1/diary`             | `diary-service`         | v1                    | active    |
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | planned    |
 | `/api/v1/media`              | `food-recognition-service`              | v1                    | planned    |

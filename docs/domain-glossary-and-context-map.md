@@ -16,6 +16,8 @@ entity or event name that uses it.
 | Fasting Window | A recorded start/end interval of an intermittent-fasting period. | `diary-service` |
 | Meal Plan Entry | A food entry scheduled ahead of time, distinct from an as-eaten Food Entry. | `diary-service` |
 | Product | An item in the supermarket product inventory: name, brand, barcode, per-100g nutrition data, dietary/allergen tags. | `catalog-service` |
+| Dedup Key | The identity `catalog-service` uses to decide whether an incoming, normalized source record is the same Product as one already catalogued: barcode when present (the sole cross-source key — no fuzzy name+brand matching), otherwise `(source, source_product_id)` scoped to that one source only. | `catalog-service` |
+| Ingestion Run | One bounded execution of a `catalog-service` source adapter over a page/batch of records, audited (source, started/finished timestamps, items seen/added/updated/skipped, status) independent of any other source's run — one source's failure never blocks another's. | `catalog-service` |
 | Nutrient Total | The computed macro/micronutrient sum for a Food Entry, a meal, or a day. | `nutrition-calculation-service` |
 | Nutrition Target | The computed calorie/macro goal for a user, derived from Profile metrics and Goal via the Mifflin-St Jeor formula. | `nutrition-calculation-service` |
 | Profile Metric | A single biometric reading (weight, height, age, sex, activity level). | `profile-service` |

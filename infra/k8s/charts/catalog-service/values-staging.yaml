@@ -1,0 +1,14 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/catalog-service/db-credentials
+  usdaFdcApiKey: nutriapp/staging/catalog-service/usda-fdc-api-key
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/catalog-service/db-credentials

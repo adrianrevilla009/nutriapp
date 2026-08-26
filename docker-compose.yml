@@ -119,6 +119,22 @@ services:
       timeout: 5s
       retries: 10
 
+  catalog-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${CATALOG_POSTGRES_DB:-catalog_service}
+      POSTGRES_USER: ${CATALOG_POSTGRES_USER:-catalog_service}
+      POSTGRES_PASSWORD: ${CATALOG_POSTGRES_PASSWORD:-catalog_service}
+    ports:
+      - "5435:5432"
+    volumes:
+      - catalog-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_POSTGRES_USER:-catalog_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # Own Redis instance for local dev parity with the shared ElastiCache
   # cluster diary-service reuses in AWS via a `diary:*` key namespace
   # (implementation plan section 7/terraform footprint) -- a dedicated
@@ -127,6 +143,21 @@ services:
     image: redis:7-alpine
     ports:
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Dedicated per-service container for local dev parity only — in
+  # Terraform/prod this reuses the single shared ElastiCache cluster the
+  # platform-infra plan provisions, isolated purely by a `catalog:*` Redis
+  # key namespace (implementation plan Addendum 1, section 9.7). No new
+  # ElastiCache cluster is provisioned.
+  catalog-redis:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -155,7 +186,24 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  catalog-service:
+    build:
+      context: ./services/catalog-service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8004:8000"
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+      catalog-redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
   diary-db-data:
+  catalog-db-data:

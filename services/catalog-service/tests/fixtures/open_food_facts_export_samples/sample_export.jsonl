@@ -1,0 +1,4 @@
+{"code": "5901234123457", "product_name": "Organic Oat Milk", "brands": "NatureFarm", "categories": "Beverages,Plant-based", "nutriments": {"energy-kcal_100g": 45, "proteins_100g": 1.0, "carbohydrates_100g": 6.5, "fat_100g": 1.5, "sugars_100g": 4.0, "fiber_100g": 0.4}, "allergens_tags": [], "labels_tags": ["en:vegan", "en:organic"], "quantity": "1 l"}
+{"code": "036000291452", "product_name": "Whole Wheat Bread", "brands": "BakeryCo", "categories": "Bakery,Bread", "nutriments": {"energy-kcal_100g": 250, "proteins_100g": 9, "carbohydrates_100g": 45, "fat_100g": 3.2, "fiber_100g": 6}, "allergens_tags": ["en:gluten"], "labels_tags": [], "quantity": "500 g"}
+{this is not valid json at all}
+{"product_name": "Mystery Item With No Identifier At All"}

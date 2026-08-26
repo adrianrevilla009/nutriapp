@@ -98,12 +98,17 @@ variable "jwt_signing_key_service_names" {
 
 variable "db_credential_service_names" {
   type    = list(string)
-  default = ["identity-service", "profile-service"]
+  default = ["identity-service", "profile-service", "catalog-service"]
 }
 
 variable "internal_reveal_credential_service_names" {
   type    = list(string)
   default = ["identity-service"]
+}
+
+variable "usda_fdc_api_key_service_names" {
+  type    = list(string)
+  default = ["catalog-service"]
 }
 
 # --- Scale-to-zero ---

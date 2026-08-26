@@ -1,0 +1,21 @@
+{
+  "totalHits": 3,
+  "currentPage": 2,
+  "totalPages": 2,
+  "pageList": [1, 2],
+  "foods": [
+    {
+      "fdcId": 1000003,
+      "description": "Peanut Butter",
+      "brandOwner": "NuttyCo",
+      "brandedFoodCategory": "Nut Butters",
+      "ingredients": "Roasted peanuts, salt.",
+      "foodNutrients": [
+        {"nutrientName": "Energy", "value": 590, "unitName": "KCAL"},
+        {"nutrientName": "Protein", "value": 25, "unitName": "G"},
+        {"nutrientName": "Carbohydrate, by difference", "value": 20, "unitName": "G"},
+        {"nutrientName": "Total lipid (fat)", "value": 50, "unitName": "G"}
+      ]
+    }
+  ]
+}
