@@ -1,0 +1,12 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+
+secretsManager:
+  dbCredentials: nutriapp/staging/diary-service/db-credentials
+
+dbProvision:
+  dbCredentialSecretArn: nutriapp/staging/diary-service/db-credentials

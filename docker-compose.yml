@@ -103,6 +103,59 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  diary-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DIARY_POSTGRES_DB:-diary_service}
+      POSTGRES_USER: ${DIARY_POSTGRES_USER:-diary_service}
+      POSTGRES_PASSWORD: ${DIARY_POSTGRES_PASSWORD:-diary_service}
+    ports:
+      - "5434:5432"
+    volumes:
+      - diary-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DIARY_POSTGRES_USER:-diary_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Own Redis instance for local dev parity with the shared ElastiCache
+  # cluster diary-service reuses in AWS via a `diary:*` key namespace
+  # (implementation plan section 7/terraform footprint) -- a dedicated
+  # local container is simpler than replicating key-namespacing locally.
+  diary-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  diary-service:
+    build:
+      # Build context is the repo root (not services/diary-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/diary-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8003:8000"
+    environment:
+      DIARY_SERVICE_REDIS_URL: redis://diary-redis:6379/0
+    depends_on:
+      diary-db:
+        condition: service_healthy
+      diary-redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
+  diary-db-data:

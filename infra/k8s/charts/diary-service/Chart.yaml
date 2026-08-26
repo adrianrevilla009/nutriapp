@@ -1,0 +1,10 @@
+apiVersion: v2
+name: diary-service
+description: NutriApp diary-service -- food logging, water intake, fasting windows, meal planning (full event sourcing + CQRS).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"

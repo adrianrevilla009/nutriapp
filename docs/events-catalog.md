@@ -77,26 +77,145 @@ yet implemented — the owning service doesn't exist yet).
 
 ### ProductAdded / ProductUpdated (v1)
 - Producer: catalog-service
-- Consumers: diary-service, food-recognition-service (for barcode/product
-  matching), recipe-service
+- Consumers: diary-service (documented future consumer -- deliberately
+  **not built** by `diary-service`'s reference implementation plan;
+  `FoodEntryLogged`/`MealPlanned`'s `source.snapshot` is a client-supplied,
+  point-in-time record of what the user logged, not a live mirror of the
+  catalog, so silently reconciling it against a later `ProductUpdated`
+  may be the wrong behavior, not merely a deferred one -- see
+  `/plans/diary-service/implementation-plan.md` section 9.4), food-recognition-service
+  (for barcode/product matching), recipe-service
 - Emitted when: a new product is added, or an existing product's data
   changes, via ingestion or manual curation.
 - Payload: `{ "product_id": "uuid", "name": "string", "barcode": "string | null",
   "nutrition_per_100g": { "...": "macro/micro fields" }, "source": "string" }`
 
-### FoodEntryLogged / FoodEntryCorrected / FoodEntryDeleted (v1)
+### FoodEntryLogged (v1)
+- Status: Active
 - Producer: diary-service
-- Consumers: nutrition-calculation-service, analytics-service,
-  nutrition-assistant-service (for retrieval indexing)
-- Emitted when: a user logs, corrects, or deletes a food entry.
-- Payload: `{ "entry_id": "uuid", "user_id": "uuid", "product_id": "uuid | null",
-  "detection_id": "uuid | null", "quantity_grams": "number", "meal_slot": "string",
+- Consumers: nutrition-calculation-service, analytics-service (both
+  documented, neither exists yet -- no live cross-service contract test
+  runs against them, only a payload-shape contract test against this
+  entry, per `/plans/diary-service/implementation-plan.md` section 5/6).
+- Emitted when: a user logs a food entry against a `catalog-service`
+  product reference or (reserved, not yet exercised) a `recipe`/
+  `ai_detected` source.
+- Aggregate: FoodEntry -- one instance per logged item (`aggregate_id =
+  entry_id`).
+- Payload: `{ "entry_id": "uuid", "user_id": "uuid",
+  "source": { "source_type": "catalog_product|recipe|ai_detected",
+  "source_reference_id": "string", "snapshot": { "name": "string",
+  "brand": "string | null", "quantity": "number", "unit": "g|ml|serving",
+  "macros_per_unit": { "calories_kcal": "number", "protein_g": "number",
+  "carbs_g": "number", "fat_g": "number" } } }, "meal_slot":
+  "breakfast|lunch|dinner|snack", "occurred_at": "timestamp",
+  "planned_from_entry_id": "uuid | null" }` -- `source` is a client-supplied,
+  point-in-time snapshot; diary-service makes no synchronous call to
+  `catalog-service` to validate it (settled scoping decision, plan
+  section 1). `planned_from_entry_id` is an additive, unused
+  forward-compatibility seam (plan section 9.3) for a future "log from
+  plan" workflow.
+
+### FoodEntryCorrected (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: nutrition-calculation-service, analytics-service (documented,
+  not yet existing).
+- Emitted when: a user corrects a previously logged food entry. Never
+  mutates the original `FoodEntryLogged` event -- a projector interprets
+  the pair (CLAUDE.md: corrections are new events, never edits to history).
+- Aggregate: FoodEntry.
+- Payload: same shape as `FoodEntryLogged`'s `source`/`meal_slot`/
+  `occurred_at` (full replacement of the correctable fields), plus
+  `corrected_at`: `{ "entry_id": "uuid", "user_id": "uuid", "source": {...},
+  "meal_slot": "string", "occurred_at": "timestamp", "corrected_at": "timestamp" }`
+
+### FoodEntryDeleted (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: nutrition-calculation-service, analytics-service (documented,
+  not yet existing).
+- Emitted when: a user deletes a previously logged food entry. Never a
+  destructive row delete -- a new event a projector interprets.
+- Aggregate: FoodEntry.
+- Payload: `{ "entry_id": "uuid", "user_id": "uuid", "deleted_at": "timestamp" }`
+
+### WaterIntakeLogged (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service (documented, not yet existing).
+- Emitted when: a user logs water intake.
+- Aggregate: WaterIntakeEntry -- one instance per logged item
+  (`aggregate_id = intake_id`).
+- Payload: `{ "intake_id": "uuid", "user_id": "uuid", "amount_ml": "number",
   "occurred_at": "timestamp" }`
 
-### WaterIntakeLogged / FastingWindowStarted / FastingWindowEnded / MealPlanned (v1)
+### WaterIntakeRemoved (v1)
+- Status: Active
 - Producer: diary-service
-- Consumers: analytics-service, notification-service (reminders)
-- Emitted when: the corresponding diary action happens.
+- Consumers: analytics-service (documented, not yet existing).
+- Emitted when: a user removes a previously logged water intake entry.
+  Never a destructive row delete.
+- Aggregate: WaterIntakeEntry.
+- Payload: `{ "intake_id": "uuid", "user_id": "uuid", "removed_at": "timestamp" }`
+
+### FastingWindowStarted (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service, notification-service (reminders) --
+  documented, not yet existing.
+- Emitted when: a user starts a fasting window. Rejected (no event
+  produced) if the user already has an open window --
+  `OverlappingFastingWindowError` (plan section 9.2's resolved simple
+  open-window check).
+- Aggregate: FastingWindow -- one instance **per user**, holding that
+  user's set of fasting windows as entities within the aggregate (the one
+  aggregate in this service requiring a cross-instance invariant,
+  `aggregate_id = user_id`).
+- Payload: `{ "window_id": "uuid", "user_id": "uuid", "started_at": "timestamp" }`
+
+### FastingWindowEnded (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service, notification-service (reminders) --
+  documented, not yet existing.
+- Emitted when: a user ends their open fasting window.
+- Aggregate: FastingWindow.
+- Payload: `{ "window_id": "uuid", "user_id": "uuid", "ended_at": "timestamp" }`
+
+### MealPlanned (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service (documented, not yet existing).
+- Emitted when: a user schedules a planned (future) meal entry -- distinct
+  from the as-eaten `FoodEntryLogged` log (weekly meal planning, plan
+  section 1).
+- Aggregate: MealPlanEntry -- one instance per planned item
+  (`aggregate_id = plan_entry_id`).
+- Payload: same `source`/`meal_slot` shape as `FoodEntryLogged`, plus
+  `planned_for` instead of `occurred_at`: `{ "plan_entry_id": "uuid",
+  "user_id": "uuid", "source": {...}, "meal_slot": "string",
+  "planned_for": "timestamp" }`
+
+### MealPlanUpdated (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service (documented, not yet existing).
+- Emitted when: a user updates a planned meal entry. Never mutates the
+  original `MealPlanned` event.
+- Aggregate: MealPlanEntry.
+- Payload: same shape as `MealPlanned` plus `updated_at`: `{ "plan_entry_id":
+  "uuid", "user_id": "uuid", "source": {...}, "meal_slot": "string",
+  "planned_for": "timestamp", "updated_at": "timestamp" }`
+
+### MealPlanRemoved (v1)
+- Status: Active
+- Producer: diary-service
+- Consumers: analytics-service (documented, not yet existing).
+- Emitted when: a user removes a planned meal entry. Never a destructive
+  row delete.
+- Aggregate: MealPlanEntry.
+- Payload: `{ "plan_entry_id": "uuid", "user_id": "uuid", "removed_at": "timestamp" }`
 
 ### ProfileCreated (v1)
 - Status: Active
