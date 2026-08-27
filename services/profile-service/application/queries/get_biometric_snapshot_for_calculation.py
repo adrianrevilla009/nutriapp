@@ -30,7 +30,8 @@ insufficient for repeatedly-callable Article 9 health data disclosure):
      this).
   4. A structured log line per call -- user_id, outcome, and (on success)
      the field NAMES revealed, never a numeric/enum VALUE (requirement 7,
-     tested by tests/integration/infrastructure/test_reveal_metrics_log_redaction.py).
+     tested by tests/contract/http/test_internal_reveal_metrics_routes.py's
+     log-redaction case).
 """
 
 from __future__ import annotations
