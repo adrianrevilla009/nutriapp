@@ -28,11 +28,11 @@ router = APIRouter(prefix="/api/v1/catalog", tags=["search"])
 async def search_products(
     session: Annotated[AsyncSession, Depends(get_session)],
     container: Annotated[Container, Depends(get_container)],
-    q: str | None = Query(default=None, description="Free-text search query"),
-    dietary_tags: list[str] = Query(default=[]),
-    exclude_allergens: list[str] = Query(default=[]),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    q: Annotated[str | None, Query(description="Free-text search query")] = None,
+    dietary_tags: Annotated[list[str], Query()] = [],  # noqa: B006 -- FastAPI reads this once at route setup, never mutated per-request
+    exclude_allergens: Annotated[list[str], Query()] = [],  # noqa: B006
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ProductSearchResponse | JSONResponse:
     _products_repo, _outbox_repo, search_read = build_repositories(session)
     handler = SearchProductsHandler(search_read, container.search_cache)
