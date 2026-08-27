@@ -48,3 +48,14 @@ an endpoint surface — enforced by `/implementation-review`.
 - Deprecated rows must include the `Sunset` date per `docs/api-standards.md`
   section 2, and stay in this table until actually removed, not just until
   deprecated.
+- `/internal/v1/profile/{user_id}/reveal-metrics` (`profile-service`,
+  implementation plan Addendum 2) is deliberately NOT a reuse of
+  `/internal/v1/auth/tokens/{reference_id}/reveal`'s single-shared-
+  credential/no-rate-limit/no-audit-trail design — a dedicated security
+  review found that insufficient for repeatedly-callable Article 9 health
+  data disclosure. It uses a distinct per-caller credential, app-level
+  rate limiting, a dedicated audit trail, and a dedicated NetworkPolicy on
+  its own port (never Kong, never on the public API's port). Response is
+  minimized to exactly `weight_kg, height_cm, age, sex, activity_level,
+  goal_type`. See `services/profile-service/README.md` and
+  `/plans/profile-service/implementation-plan.md` Addendum 2.

@@ -7,13 +7,18 @@ import structlog
 from fastapi import status
 from fastapi.responses import JSONResponse
 
-from application.errors import ProfileNotFoundError
+from application.errors import (
+    InvalidCallerCredentialError,
+    ProfileNotFoundError,
+    RevealRateLimitedError,
+)
 from domain.entities.profile import (
     ConsentRequiredError,
     GoalAlreadyExistsError,
     NoExistingGoalError,
     UnsupportedMetricTypeError,
 )
+from domain.ports.rate_limiter_port import RateLimiterUnavailableError
 from domain.services.goal_policy import MissingGoalTargetDateError
 from domain.value_objects.activity_level import InvalidActivityLevelError
 from domain.value_objects.age import InvalidAgeError
@@ -50,6 +55,13 @@ _MAPPING: list[tuple[type[Exception], int, str]] = [
     (InvalidActivityLevelError, status.HTTP_400_BAD_REQUEST, "INVALID_ACTIVITY_LEVEL"),
     (KmsCircuitOpenError, status.HTTP_503_SERVICE_UNAVAILABLE, "ENCRYPTION_UNAVAILABLE"),
     (KmsCallFailedError, status.HTTP_503_SERVICE_UNAVAILABLE, "ENCRYPTION_UNAVAILABLE"),
+    # Internal reveal-metrics endpoint only (implementation plan Addendum 2)
+    # -- never a differentiated message beyond these generic ones (no
+    # detail that would help an attacker distinguish failure modes, and
+    # never any biometric field value, per requirement 7).
+    (InvalidCallerCredentialError, status.HTTP_401_UNAUTHORIZED, "INVALID_CALLER_CREDENTIAL"),
+    (RevealRateLimitedError, status.HTTP_429_TOO_MANY_REQUESTS, "RATE_LIMITED"),
+    (RateLimiterUnavailableError, status.HTTP_503_SERVICE_UNAVAILABLE, "RATE_LIMITER_UNAVAILABLE"),
 ]
 
 

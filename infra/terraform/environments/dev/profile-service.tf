@@ -11,11 +11,19 @@
 # -- same _db-provision-job Helm-hook pattern as identity-service.tf (see
 # that file's header comment for the full rationale).
 #
-# No JWT signing key, no internal-reveal-credential container:
-# profile-service issues no tokens and exposes no internal, non-Kong-routed
-# endpoint (unlike identity-service). Its only synchronous external
-# dependency is AWS KMS, granted via IRSA (IAM), not a Secrets Manager
-# entry.
+# No JWT signing key. profile-service's only synchronous EXTERNAL
+# dependency is AWS KMS (granted via IRSA, not a Secrets Manager entry).
+#
+# implementation plan Addendum 2 additions: this file now also wires the
+# shared ElastiCache Redis cluster (reveal-metrics rate limiting, `profile:*`
+# key namespace -- same reuse pattern as diary-service.tf's
+# `DIARY_SERVICE_REDIS_URL`) and a NEW, distinct-per-caller internal reveal
+# credential secret (module.secrets.cross_service_reveal_credential_secret_arns,
+# NOT the generic internal_reveal_credential_secret_arns identity-service
+# uses) for the internal, non-Kong-routed `reveal-metrics` endpoint that
+# nutrition-calculation-service calls. That endpoint's NetworkPolicy
+# restriction (a second port, excluding Kong) lives in
+# infra/k8s/charts/profile-service/values.yaml, not here.
 
 locals {
   profile_service_name      = "profile-service"
@@ -90,6 +98,10 @@ resource "aws_iam_role_policy" "profile_service_kms_access" {
 locals {
   profile_service_db_credentials_secret_arn = module.secrets.db_credential_secret_arns[local.profile_service_name]
   profile_service_app_secrets_irsa_role_arn = module.secrets.app_secrets_irsa_role_arns[local.profile_service_name]
+  # implementation plan Addendum 2: the reveal-metrics endpoint's distinct,
+  # per-caller credential -- keyed "<owner_service>-<caller_service>" per
+  # modules/secrets' cross_service_reveal_credential_secret_arns output.
+  profile_service_reveal_credential_nutrition_calc_arn = module.secrets.cross_service_reveal_credential_secret_arns["${local.profile_service_name}-nutrition-calculation-service"]
 }
 
 # --- Helm release ---
@@ -109,9 +121,18 @@ resource "helm_release" "profile_service" {
       env = {
         AWS_REGION                 = var.aws_region
         PROFILE_SERVICE_KMS_KEY_ID = aws_kms_key.profile_service_data_key.key_id
+        # No auth token composed into this URL yet -- matches
+        # modules/elasticache/main.tf's own documented gap (see
+        # diary-service.tf's identical note). A cache-layer outage
+        # degrades the reveal-metrics rate limiter to fail-CLOSED
+        # (RedisRateLimiter's documented posture, deliberately the
+        # opposite of diary-service's fail-open cache) -- 503, never a
+        # silently-unlimited internal endpoint disclosing Article 9 data.
+        PROFILE_SERVICE_REDIS_URL = "redis://${module.elasticache.primary_endpoint_address}:${module.elasticache.port}/0"
       }
       secretsManager = {
-        dbCredentials = local.profile_service_db_credentials_secret_arn
+        dbCredentials                         = local.profile_service_db_credentials_secret_arn
+        internalRevealCredentialNutritionCalc = local.profile_service_reveal_credential_nutrition_calc_arn
       }
       serviceAccount = {
         irsaRoleArn = local.profile_service_app_secrets_irsa_role_arn
@@ -133,6 +154,7 @@ resource "helm_release" "profile_service" {
   depends_on = [
     module.eks,
     module.rds,
+    module.elasticache,
     module.secrets,
     aws_iam_role_policy.profile_service_kms_access,
   ]

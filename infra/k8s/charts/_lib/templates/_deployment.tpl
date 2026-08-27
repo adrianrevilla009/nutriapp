@@ -5,6 +5,16 @@ liveness+readiness probes, ServiceAccount with IRSA. `required` guards on
 image and resources fail the render (and thus `helm lint`/`helm
 template`/`helm install`) rather than silently deploying an unbounded
 or untraceable container.
+
+`.Values.service.additionalPorts` (optional, default none) — a list of
+`{name, port, targetPort}` entries, rendered as additional container ports
+on the SAME single container this chart already deploys (not a second
+container/sidecar). Added for profile-service's internal, non-Kong-routed
+reveal-metrics endpoint (implementation plan Addendum 2, requirement 3),
+which needs a genuinely distinct listening port so its NetworkPolicy can
+exclude Kong while still allowing a named peer service — see
+_networkpolicy.tpl and infra/k8s/charts/profile-service/values.yaml.
+Backward-compatible: omitted entirely, this renders exactly as before.
 */}}
 
 {{- define "nutriapp-lib.deployment" -}}
@@ -58,6 +68,11 @@ spec:
             - name: http
               containerPort: {{ $service.port | default 8000 }}
               protocol: TCP
+            {{- range $service.additionalPorts }}
+            - name: {{ required "service.additionalPorts[].name is required" .name }}
+              containerPort: {{ required "service.additionalPorts[].targetPort is required" .targetPort }}
+              protocol: TCP
+            {{- end }}
           {{- with .Values.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}

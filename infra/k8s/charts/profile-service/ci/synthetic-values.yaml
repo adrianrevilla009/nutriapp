@@ -17,6 +17,10 @@ serviceAccount:
 
 networkPolicy:
   enabled: true
+  # Mirrors base values.yaml's two-entry list exactly (Helm -f overlays
+  # REPLACE array values, never merge them) -- kept here too so CI's
+  # `helm template` actually renders and validates the internal
+  # reveal-metrics port's ingress rule (implementation plan Addendum 2).
   ingressRules:
     - from:
         - podSelector:
@@ -25,9 +29,17 @@ networkPolicy:
       ports:
         - protocol: TCP
           port: 8000
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nutrition-calculation-service
+      ports:
+        - protocol: TCP
+          port: 8001
 
 secretsManager:
   dbCredentials: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/profile-service/db-credentials-XyZ123"
+  internalRevealCredentialNutritionCalc: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/profile-service/internal-reveal-credential-nutrition-calculation-service-XyZ123"
 
 dbProvision:
   irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-profile-service-db-provision"
