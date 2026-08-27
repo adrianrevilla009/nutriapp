@@ -51,30 +51,28 @@ async def test_register_user__duplicate_email_case_insensitive__raises_and_persi
         )
     )
 
+    command = RegisterUserCommand(
+        email="DUP@Example.com",
+        password="An0ther!Passw0rd",
+        correlation_id="corr-2",
+        client_ip="1.2.3.4",
+    )
     with pytest.raises(EmailAlreadyRegisteredError):
-        await handler.handle(
-            RegisterUserCommand(
-                email="DUP@Example.com",
-                password="An0ther!Passw0rd",
-                correlation_id="corr-2",
-                client_ip="1.2.3.4",
-            )
-        )
+        await handler.handle(command)
 
     assert len(outbox.enqueued) == 1  # only the first registration
 
 
 async def test_register_user__weak_password__rejected_before_any_repository_call():
     handler, users, tokens, outbox, _ = make_handler()
+    command = RegisterUserCommand(
+        email="new@example.com",
+        password="weak",
+        correlation_id="corr-1",
+        client_ip="1.2.3.4",
+    )
     with pytest.raises(WeakPasswordError):
-        await handler.handle(
-            RegisterUserCommand(
-                email="new@example.com",
-                password="weak",
-                correlation_id="corr-1",
-                client_ip="1.2.3.4",
-            )
-        )
+        await handler.handle(command)
     assert await users.get_by_email(Email("new@example.com")) is None
     assert len(outbox.enqueued) == 0
 

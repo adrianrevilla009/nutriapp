@@ -48,22 +48,22 @@ class FoodEntry:
         return state
 
     def apply(self, event: DomainEvent) -> None:
-        handler = getattr(self, f"_apply_{event.event_type}", None)
+        handler = getattr(self, f"_apply_{event.handler_method_suffix}", None)
         if handler is not None:
             handler(event)
 
-    def _apply_FoodEntryLogged(self, event: DomainEvent) -> None:
+    def _apply_food_entry_logged(self, event: DomainEvent) -> None:
         self.user_id = uuid.UUID(event.payload["user_id"])
         self.source = FoodSource.from_dict(event.payload["source"])
         self.meal_slot = MealSlot.from_value(event.payload["meal_slot"])
         self.occurred_at = datetime.fromisoformat(event.payload["occurred_at"])
 
-    def _apply_FoodEntryCorrected(self, event: DomainEvent) -> None:
+    def _apply_food_entry_corrected(self, event: DomainEvent) -> None:
         self.source = FoodSource.from_dict(event.payload["source"])
         self.meal_slot = MealSlot.from_value(event.payload["meal_slot"])
         self.occurred_at = datetime.fromisoformat(event.payload["occurred_at"])
 
-    def _apply_FoodEntryDeleted(self, event: DomainEvent) -> None:
+    def _apply_food_entry_deleted(self, event: DomainEvent) -> None:
         self.deleted = True
 
     @classmethod

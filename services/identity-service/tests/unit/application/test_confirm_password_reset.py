@@ -79,42 +79,39 @@ async def test_confirm_password_reset__valid_token_and_strong_password__updates_
 async def test_confirm_password_reset__expired_token__rejected_and_audits_failure():
     handler, users, tokens, audit, user, token, secret, refresh = await setup(expired=True)
 
+    command = ConfirmPasswordResetCommand(
+        reference_id=str(token.reference_id),
+        secret=secret,
+        new_password="Str0ng!NewPassw0rd",
+        correlation_id="c1",
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            ConfirmPasswordResetCommand(
-                reference_id=str(token.reference_id),
-                secret=secret,
-                new_password="Str0ng!NewPassw0rd",
-                correlation_id="c1",
-            )
-        )
+        await handler.handle(command)
     assert audit.records[-1].outcome == "failure"
 
 
 async def test_confirm_password_reset__unknown_token__rejected():
     handler, users, tokens, audit, user, token, secret, refresh = await setup()
 
+    command = ConfirmPasswordResetCommand(
+        reference_id=str(uuid.uuid4()),
+        secret=secret,
+        new_password="Str0ng!NewPassw0rd",
+        correlation_id="c1",
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            ConfirmPasswordResetCommand(
-                reference_id=str(uuid.uuid4()),
-                secret=secret,
-                new_password="Str0ng!NewPassw0rd",
-                correlation_id="c1",
-            )
-        )
+        await handler.handle(command)
 
 
 async def test_confirm_password_reset__weak_password__rejected_before_touching_repository():
     handler, users, tokens, audit, user, token, secret, refresh = await setup()
 
+    command = ConfirmPasswordResetCommand(
+        reference_id=str(token.reference_id),
+        secret=secret,
+        new_password="weak",
+        correlation_id="c1",
+    )
     with pytest.raises(WeakPasswordError):
-        await handler.handle(
-            ConfirmPasswordResetCommand(
-                reference_id=str(token.reference_id),
-                secret=secret,
-                new_password="weak",
-                correlation_id="c1",
-            )
-        )
+        await handler.handle(command)
     assert tokens.secret_tokens[token.reference_id].used_at is None

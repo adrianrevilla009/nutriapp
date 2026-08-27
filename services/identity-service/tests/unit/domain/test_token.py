@@ -55,8 +55,9 @@ def test_refresh_token__is_expired__true_after_ttl():
 
 def test_refresh_token__ensure_usable_when_expired__raises_token_expired_error():
     token = make_refresh_token()
+    expired_at = NOW + timedelta(days=31)
     with pytest.raises(TokenExpiredError):
-        token.ensure_usable(NOW + timedelta(days=31))
+        token.ensure_usable(expired_at)
 
 
 def test_refresh_token__ensure_usable_when_revoked__raises_token_revoked_error():
@@ -93,8 +94,9 @@ def test_secret_token__verify_and_mark_used_then_reused__raises_token_already_us
 
 def test_secret_token__verify_expired_token__raises_token_expired_error():
     token = make_secret_token()
+    expired_at = NOW + timedelta(hours=25)
     with pytest.raises(TokenExpiredError):
-        token.verify_and_mark_used("secret-hash", NOW + timedelta(hours=25))
+        token.verify_and_mark_used("secret-hash", expired_at)
 
 
 def test_secret_token__verify_with_wrong_secret_hash__raises_token_secret_mismatch_error():
@@ -120,5 +122,6 @@ def test_secret_token__reveal_twice__raises_token_already_revealed_error():
 
 def test_secret_token__reveal_expired_token__raises_token_expired_error():
     token = make_secret_token()
+    expired_at = NOW + timedelta(hours=25)
     with pytest.raises(TokenExpiredError):
-        token.reveal(NOW + timedelta(hours=25))
+        token.reveal(expired_at)

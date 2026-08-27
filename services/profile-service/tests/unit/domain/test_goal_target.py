@@ -15,14 +15,16 @@ def test_future_target_date_accepted():
 
 def test_past_target_date_raises():
     now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    past_date = date(2026, 1, 1)
     with pytest.raises(InvalidGoalTargetError):
-        GoalTarget(target_value=65.0, target_date=date(2026, 1, 1), now=now)
+        GoalTarget(target_value=65.0, target_date=past_date, now=now)
 
 
 def test_today_target_date_raises():
     now = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    today = now.date()
     with pytest.raises(InvalidGoalTargetError):
-        GoalTarget(target_value=65.0, target_date=now.date(), now=now)
+        GoalTarget(target_value=65.0, target_date=today, now=now)
 
 
 def test_none_target_date_accepted():

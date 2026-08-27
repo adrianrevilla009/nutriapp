@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 
 import structlog
 
-from application.jobs.run_usda_fdc_ingestion import UsdaFdcCircuitOpenError
 from domain.ports.catalog_source_port import SourceBatch
 from domain.services.product_normalizer import (
     EmptyRawRecordError,
@@ -53,14 +52,13 @@ class UsdaFdcSourceAdapter:
         except UsdaFdcRateLimitedError:
             logger.warning("usda_fdc_rate_limited_backing_off", page=page_number)
             return SourceBatch(records=(), next_cursor=None, skipped_count=1)
-        except UsdaFdcCircuitOpenError:
-            # Propagated to the ingestion job, which treats it as this
-            # cycle's USDA phase being skipped entirely (implementation
-            # plan section 7's decoupled-fallback rule) — re-raised here
-            # rather than swallowed, since the job needs to distinguish
-            # "circuit open, skip this whole cycle" from "one page
-            # rate-limited, stop paging but keep what we got."
-            raise
+        # UsdaFdcCircuitOpenError is deliberately NOT caught here -- it
+        # propagates to the ingestion job, which treats it as this cycle's
+        # USDA phase being skipped entirely (implementation plan section
+        # 7's decoupled-fallback rule). The job needs to distinguish
+        # "circuit open, skip this whole cycle" from "one page
+        # rate-limited, stop paging but keep what we got," which only
+        # works if this adapter leaves it unhandled.
 
         observed_at = datetime.now(timezone.utc)
         foods = data.get("foods", [])

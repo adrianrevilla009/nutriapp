@@ -34,6 +34,13 @@ class OpenFoodFactsSourceAdapter:
         self._batch_size = batch_size
 
     async def fetch_batch(self, cursor: str | None) -> SourceBatch:
+        # No `await` in this body -- reading the local bulk export file is
+        # synchronous -- but `async def` is required by
+        # CatalogSourcePort's Protocol signature so every adapter stays
+        # interchangeable: callers uniformly `await adapter.fetch_batch(...)`
+        # regardless of which source is plugged in, and a plain `def`
+        # here would not be awaitable, breaking that polymorphism for the
+        # USDA FDC adapter's genuinely-async counterpart.
         offset = int(cursor) if cursor is not None else 0
         result = self._reader.read_batch(offset=offset, batch_size=self._batch_size)
 

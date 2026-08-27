@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/api/v1/catalog", tags=["products"])
     summary="Get a single catalogued product by id",
 )
 async def get_product(
-    product_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+    product_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> ProductResponse | JSONResponse:
     products_repo, _outbox_repo, _search_read = build_repositories(session)
     handler = GetProductByIdHandler(products_repo)

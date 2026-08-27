@@ -93,13 +93,13 @@ class _FakeHttpClient:
         return _FakeResponse(self.jwks_document)
 
 
-@pytest.fixture()
+@pytest.fixture
 def keypair():
     private_key = _generate_rsa_private_key()
     return private_key, "key-1"
 
 
-@pytest.fixture()
+@pytest.fixture
 def jwks_client(keypair):
     private_key, kid = keypair
     return _FakeHttpClient({"keys": [_jwk_from_private_key(private_key, kid)]})
@@ -157,16 +157,18 @@ async def test_jwt_verifier__tampered_payload__is_rejected(keypair, jwks_client)
     header, payload, signature = token.split(".")
     tampered = f"{header}.{payload}extra.{signature}"
 
+    verifier = make_verifier(jwks_client)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client).verify(tampered)
+        await verifier.verify(tampered)
 
 
 async def test_jwt_verifier__expired_token__is_rejected(keypair, jwks_client):
     private_key, kid = keypair
     token = _sign_token(private_key, kid, uuid.uuid4(), ttl=timedelta(seconds=-1))
 
+    verifier = make_verifier(jwks_client)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__token_signed_by_a_different_keypair__is_rejected(jwks_client):
@@ -175,24 +177,27 @@ async def test_jwt_verifier__token_signed_by_a_different_keypair__is_rejected(jw
     # by a DIFFERENT private key -- signature verification must fail.
     token = _sign_token(wrong_signer_key, "key-1", uuid.uuid4())
 
+    verifier = make_verifier(jwks_client)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__unknown_kid__is_rejected(keypair, jwks_client):
     private_key, _kid = keypair
     token = _sign_token(private_key, "some-other-kid", uuid.uuid4())
 
+    verifier = make_verifier(jwks_client)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__wrong_issuer__is_rejected(keypair, jwks_client):
     private_key, kid = keypair
     token = _sign_token(private_key, kid, uuid.uuid4(), issuer="some-other-issuer")
 
+    verifier = make_verifier(jwks_client, issuer=ISSUER)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client, issuer=ISSUER).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__missing_user_id_claim__is_rejected(keypair, jwks_client):
@@ -201,8 +206,9 @@ async def test_jwt_verifier__missing_user_id_claim__is_rejected(keypair, jwks_cl
     payload = {"roles": ["USER"], "iat": now, "exp": now + timedelta(minutes=15), "iss": ISSUER}
     token = jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": kid})
 
+    verifier = make_verifier(jwks_client)
     with pytest.raises(JwtVerificationError):
-        await make_verifier(jwks_client).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__jwks_fetch_failure__raises_typed_error(keypair):
@@ -210,8 +216,9 @@ async def test_jwt_verifier__jwks_fetch_failure__raises_typed_error(keypair):
     token = _sign_token(private_key, kid, uuid.uuid4())
     failing_client = _FakeHttpClient(mode="always_fail")
 
+    verifier = make_verifier(failing_client, overall_timeout_seconds=2.0)
     with pytest.raises(JwksFetchError):
-        await make_verifier(failing_client, overall_timeout_seconds=2.0).verify(token)
+        await verifier.verify(token)
 
 
 async def test_jwt_verifier__jwks_circuit_opens_after_consecutive_failures(keypair):

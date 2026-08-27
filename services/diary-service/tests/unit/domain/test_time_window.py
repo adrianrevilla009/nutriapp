@@ -10,8 +10,9 @@ NOW = datetime(2026, 8, 26, tzinfo=timezone.utc)
 
 
 def test_end_before_start_raises():
+    end = NOW - timedelta(hours=1)
     with pytest.raises(InvalidTimeWindowError):
-        TimeWindow(start=NOW, end=NOW - timedelta(hours=1))
+        TimeWindow(start=NOW, end=end)
 
 
 def test_end_absent_is_valid_open_state():

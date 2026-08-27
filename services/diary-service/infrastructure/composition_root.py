@@ -104,6 +104,11 @@ class Container:
             try:
                 await task
             except asyncio.CancelledError:
+                # Reaping a task WE just cancelled above, not our own
+                # cancellation -- swallowing it here is the standard
+                # asyncio idiom for "wait for this cancellation to
+                # finish"; re-raising would abort shutdown() itself and
+                # skip closing the rabbitmq/redis/engine resources below.
                 pass
             except Exception:
                 logger.exception("background_task_shutdown_error")

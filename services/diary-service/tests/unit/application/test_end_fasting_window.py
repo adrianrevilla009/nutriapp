@@ -48,9 +48,8 @@ async def test_end_fasting_window_for_another_users_window_id_raises_not_found()
     )
 
     end_handler = EndFastingWindowHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = EndFastingWindowCommand(
+        user_id=uuid.uuid4(), window_id=started.window_id, correlation_id="corr-2"
+    )
     with pytest.raises(WindowNotFoundError):
-        await end_handler.handle(
-            EndFastingWindowCommand(
-                user_id=uuid.uuid4(), window_id=started.window_id, correlation_id="corr-2"
-            )
-        )
+        await end_handler.handle(command)

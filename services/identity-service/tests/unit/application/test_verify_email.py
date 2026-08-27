@@ -48,21 +48,19 @@ async def test_verify_email__valid_token__activates_user_and_audits_success():
 
 async def test_verify_email__unknown_token__rejected_generic_error_and_audits_failure():
     handler, users, tokens, audit, user, token, secret = setup()
+    command = VerifyEmailCommand(reference_id=str(uuid.uuid4()), secret=secret, correlation_id="c1")
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            VerifyEmailCommand(reference_id=str(uuid.uuid4()), secret=secret, correlation_id="c1")
-        )
+        await handler.handle(command)
     assert audit.records[-1].outcome == "failure"
 
 
 async def test_verify_email__expired_token__rejected_generic_error_and_audits_failure():
     handler, users, tokens, audit, user, token, secret = setup(expired=True)
+    command = VerifyEmailCommand(
+        reference_id=str(token.reference_id), secret=secret, correlation_id="c1"
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            VerifyEmailCommand(
-                reference_id=str(token.reference_id), secret=secret, correlation_id="c1"
-            )
-        )
+        await handler.handle(command)
     assert audit.records[-1].outcome == "failure"
 
 
@@ -73,10 +71,9 @@ async def test_verify_email__already_used_token__rejected_generic_error():
     )
     # Second handler instance operating on a freshly-PENDING user simulates
     # a second redemption attempt of the same already-used token.
+    command = VerifyEmailCommand(
+        reference_id=str(token.reference_id), secret=secret, correlation_id="c2"
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            VerifyEmailCommand(
-                reference_id=str(token.reference_id), secret=secret, correlation_id="c2"
-            )
-        )
+        await handler.handle(command)
     assert audit.records[-1].outcome == "failure"

@@ -82,26 +82,26 @@ class Profile:
         return state
 
     def apply(self, event: DomainEvent) -> None:
-        handler = getattr(self, f"_apply_{event.event_type}", None)
+        handler = getattr(self, f"_apply_{event.handler_method_suffix}", None)
         if handler is not None:
             handler(event)
 
-    def _apply_ProfileCreated(self, event: DomainEvent) -> None:
+    def _apply_profile_created(self, event: DomainEvent) -> None:
         self.exists = True
 
-    def _apply_BiometricConsentGranted(self, event: DomainEvent) -> None:
+    def _apply_biometric_consent_granted(self, event: DomainEvent) -> None:
         self.consent_granted = True
 
-    def _apply_WeightRecorded(self, event: DomainEvent) -> None:
+    def _apply_weight_recorded(self, event: DomainEvent) -> None:
         self.weight_kg = float(event.payload["weight_kg"])
 
-    def _apply_BodyMetricRecorded(self, event: DomainEvent) -> None:
+    def _apply_body_metric_recorded(self, event: DomainEvent) -> None:
         self.body_metrics[event.payload["metric_type"]] = event.payload["value"]
 
-    def _apply_GoalSet(self, event: DomainEvent) -> None:
+    def _apply_goal_set(self, event: DomainEvent) -> None:
         self._apply_goal_payload(event)
 
-    def _apply_GoalUpdated(self, event: DomainEvent) -> None:
+    def _apply_goal_updated(self, event: DomainEvent) -> None:
         self._apply_goal_payload(event)
 
     def _apply_goal_payload(self, event: DomainEvent) -> None:

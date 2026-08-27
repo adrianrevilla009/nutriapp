@@ -61,12 +61,11 @@ async def test_remove_unknown_plan_entry_raises_not_found():
     event_store = FakeEventStore()
     outbox = FakeOutboxRepository()
     handler = RemoveMealPlanHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = RemoveMealPlanCommand(
+        plan_entry_id=uuid.uuid4(), user_id=uuid.uuid4(), correlation_id="corr-1"
+    )
     with pytest.raises(MealPlanEntryNotFoundError):
-        await handler.handle(
-            RemoveMealPlanCommand(
-                plan_entry_id=uuid.uuid4(), user_id=uuid.uuid4(), correlation_id="corr-1"
-            )
-        )
+        await handler.handle(command)
 
 
 async def test_remove_another_users_plan_entry_raises_access_denied():
@@ -75,9 +74,8 @@ async def test_remove_another_users_plan_entry_raises_access_denied():
     owner_id = uuid.uuid4()
     plan_entry_id = await _plan_meal(event_store, outbox, owner_id)
     handler = RemoveMealPlanHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = RemoveMealPlanCommand(
+        plan_entry_id=plan_entry_id, user_id=uuid.uuid4(), correlation_id="corr-2"
+    )
     with pytest.raises(MealPlanAccessDeniedError):
-        await handler.handle(
-            RemoveMealPlanCommand(
-                plan_entry_id=plan_entry_id, user_id=uuid.uuid4(), correlation_id="corr-2"
-            )
-        )
+        await handler.handle(command)

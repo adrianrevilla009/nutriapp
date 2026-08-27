@@ -56,11 +56,13 @@ async def test_login__wrong_password_and_unknown_email__produce_identical_error_
     handler, users, tokens, outbox, rl, audit = make_handler()
     await make_verified_user(users)
 
+    wrong_password_command = command(password="WrongPassword!1")
     with pytest.raises(InvalidCredentialsError) as wrong_password_exc:
-        await handler.handle(command(password="WrongPassword!1"))
+        await handler.handle(wrong_password_command)
 
+    unknown_email_command = command(email="nobody@example.com")
     with pytest.raises(InvalidCredentialsError) as unknown_email_exc:
-        await handler.handle(command(email="nobody@example.com"))
+        await handler.handle(unknown_email_command)
 
     assert str(wrong_password_exc.value) == str(unknown_email_exc.value)
 
@@ -70,8 +72,9 @@ async def test_login__unverified_account__rejected_generic_error_audit_has_speci
     user = User.register(Email("pending@example.com"), "hashed:Str0ng!Passw0rd")
     await users.save(user)
 
+    pending_command = command(email="pending@example.com")
     with pytest.raises(InvalidCredentialsError):
-        await handler.handle(command(email="pending@example.com"))
+        await handler.handle(pending_command)
 
     assert audit.records[-1].metadata["reason"] == "email_not_verified"
 
@@ -83,8 +86,9 @@ async def test_login__locked_account__rejected_generic_error_audit_has_specific_
         user.record_login_failure()
     await users.save(user)
 
+    locked_command = command(email="locked@example.com")
     with pytest.raises(InvalidCredentialsError):
-        await handler.handle(command(email="locked@example.com"))
+        await handler.handle(locked_command)
 
     assert audit.records[-1].metadata["reason"] == "account_locked"
 
@@ -93,8 +97,9 @@ async def test_login__rate_limit_exceeded__rejected_before_touching_repository()
     handler, users, tokens, outbox, rl, audit = make_handler()
     rl.should_exceed = True
 
+    login_command = command()
     with pytest.raises(RateLimitedError):
-        await handler.handle(command())
+        await handler.handle(login_command)
 
     assert audit.records[-1].metadata["reason"] == "rate_limited"
 

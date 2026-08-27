@@ -66,16 +66,15 @@ async def test_goal_failing_policy_rejected_before_any_repository_call():
     await event_store.append(encrypted_weight_event)
 
     handler = SetGoalHandler(event_store, outbox, snapshot, encryption, now_fn=_now)
+    command = SetGoalCommand(
+        user_id=user_id,
+        goal_type="LOSE",
+        target_value=90.0,  # not below latest weight (70.0) -- rejected
+        target_date=date(2026, 12, 1),
+        correlation_id="corr-1",
+    )
     with pytest.raises(InvalidGoalTargetError):
-        await handler.handle(
-            SetGoalCommand(
-                user_id=user_id,
-                goal_type="LOSE",
-                target_value=90.0,  # not below latest weight (70.0) -- rejected
-                target_date=date(2026, 12, 1),
-                correlation_id="corr-1",
-            )
-        )
+        await handler.handle(command)
 
     assert outbox.enqueued == []
     assert (await event_store.load(user_id))[-1].event_type == "WeightRecorded"

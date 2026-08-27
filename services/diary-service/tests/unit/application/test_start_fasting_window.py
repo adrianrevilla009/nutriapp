@@ -38,5 +38,6 @@ async def test_start_fasting_window_while_open_raises_overlap_error():
     user_id = uuid.uuid4()
     await handler.handle(StartFastingWindowCommand(user_id=user_id, correlation_id="corr-1"))
 
+    command = StartFastingWindowCommand(user_id=user_id, correlation_id="corr-2")
     with pytest.raises(OverlappingFastingWindowError):
-        await handler.handle(StartFastingWindowCommand(user_id=user_id, correlation_id="corr-2"))
+        await handler.handle(command)

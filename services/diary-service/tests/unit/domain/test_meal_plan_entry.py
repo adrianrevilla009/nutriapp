@@ -75,9 +75,10 @@ def test_update_and_remove_after_removal_raise():
     entry.remove(removed_at=NOW, correlation_id="corr-2")
     with pytest.raises(PlanEntryAlreadyRemovedError):
         entry.remove(removed_at=NOW, correlation_id="corr-3")
+    source = _source()
     with pytest.raises(PlanEntryAlreadyRemovedError):
         entry.update(
-            source=_source(),
+            source=source,
             meal_slot=MealSlot.LUNCH,
             planned_for=NOW,
             updated_at=NOW,

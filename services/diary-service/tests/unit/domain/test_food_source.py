@@ -29,8 +29,9 @@ def test_valid_catalog_product_source_accepted():
 
 
 def test_missing_source_reference_id_raises():
+    snapshot = _snapshot()
     with pytest.raises(InvalidFoodSourceError):
-        FoodSource(source_type="catalog_product", source_reference_id="", snapshot=_snapshot())
+        FoodSource(source_type="catalog_product", source_reference_id="", snapshot=snapshot)
 
 
 def test_snapshot_with_negative_macro_raises():

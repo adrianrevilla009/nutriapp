@@ -11,6 +11,7 @@ import asyncio
 import uuid
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -87,7 +88,7 @@ async def test_decrypt_with_a_different_users_key_fails(session_factory):
     ciphertext_a = await adapter.encrypt(user_a, "70.5")
     # user_b has never encrypted anything, so it gets its OWN fresh DEK --
     # decrypting user_a's ciphertext under user_b's key must not succeed.
-    with pytest.raises(Exception):  # noqa: B017 -- AEAD tag mismatch, cryptography's own type
+    with pytest.raises(InvalidTag):
         await adapter.decrypt(user_b, ciphertext_a)
 
 

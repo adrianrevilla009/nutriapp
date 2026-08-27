@@ -4,6 +4,8 @@ serialize the result (api-conventions SKILL.md)."""
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,13 +26,13 @@ router = APIRouter(prefix="/api/v1/catalog", tags=["search"])
     description="Postgres tsvector/GIN + pg_trgm search (ADR-0012) with dietary/allergen filters.",
 )
 async def search_products(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    container: Annotated[Container, Depends(get_container)],
     q: str | None = Query(default=None, description="Free-text search query"),
     dietary_tags: list[str] = Query(default=[]),
     exclude_allergens: list[str] = Query(default=[]),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    session: AsyncSession = Depends(get_session),
-    container: Container = Depends(get_container),
 ) -> ProductSearchResponse | JSONResponse:
     _products_repo, _outbox_repo, search_read = build_repositories(session)
     handler = SearchProductsHandler(search_read, container.search_cache)

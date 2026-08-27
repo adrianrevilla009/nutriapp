@@ -63,12 +63,11 @@ async def test_delete_unknown_entry_raises_not_found():
     event_store = FakeEventStore()
     outbox = FakeOutboxRepository()
     handler = DeleteFoodEntryHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = DeleteFoodEntryCommand(
+        entry_id=uuid.uuid4(), user_id=uuid.uuid4(), correlation_id="corr-1"
+    )
     with pytest.raises(FoodEntryNotFoundError):
-        await handler.handle(
-            DeleteFoodEntryCommand(
-                entry_id=uuid.uuid4(), user_id=uuid.uuid4(), correlation_id="corr-1"
-            )
-        )
+        await handler.handle(command)
 
 
 async def test_delete_another_users_entry_raises_access_denied():
@@ -77,7 +76,8 @@ async def test_delete_another_users_entry_raises_access_denied():
     owner_id = uuid.uuid4()
     entry_id = await _log_entry(event_store, outbox, owner_id)
     handler = DeleteFoodEntryHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = DeleteFoodEntryCommand(
+        entry_id=entry_id, user_id=uuid.uuid4(), correlation_id="corr-2"
+    )
     with pytest.raises(FoodEntryAccessDeniedError):
-        await handler.handle(
-            DeleteFoodEntryCommand(entry_id=entry_id, user_id=uuid.uuid4(), correlation_id="corr-2")
-        )
+        await handler.handle(command)

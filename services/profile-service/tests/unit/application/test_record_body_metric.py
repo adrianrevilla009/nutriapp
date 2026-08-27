@@ -72,10 +72,9 @@ async def test_consent_not_granted_rejected_for_body_metric():
     await _seed_profile(event_store, user_id, with_consent=False)
 
     handler = _handler(event_store, outbox, snapshot, evolution, encryption)
+    command = RecordBodyMetricCommand(
+        user_id=user_id, metric_type="height", value=175.0, correlation_id="corr-1"
+    )
     with pytest.raises(ConsentRequiredError):
-        await handler.handle(
-            RecordBodyMetricCommand(
-                user_id=user_id, metric_type="height", value=175.0, correlation_id="corr-1"
-            )
-        )
+        await handler.handle(command)
     assert outbox.enqueued == []

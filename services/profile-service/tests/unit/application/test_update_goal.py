@@ -84,16 +84,15 @@ async def test_update_goal_failing_policy_rejected_before_any_repository_call():
     await event_store.append(encrypted_weight_event)
 
     handler = UpdateGoalHandler(event_store, outbox, snapshot, encryption, now_fn=_now)
+    command = UpdateGoalCommand(
+        user_id=user_id,
+        goal_type="GAIN",
+        target_value=65.0,  # not above latest weight (70.0) -- rejected for GAIN
+        target_date=date(2026, 12, 1),
+        correlation_id="corr-3",
+    )
     with pytest.raises(InvalidGoalTargetError):
-        await handler.handle(
-            UpdateGoalCommand(
-                user_id=user_id,
-                goal_type="GAIN",
-                target_value=65.0,  # not above latest weight (70.0) -- rejected for GAIN
-                target_date=date(2026, 12, 1),
-                correlation_id="corr-3",
-            )
-        )
+        await handler.handle(command)
 
     assert len(outbox.enqueued) == 1  # unchanged -- still just the seeded GoalSet
     assert (await event_store.load(user_id))[-1].event_type == "WeightRecorded"
@@ -107,16 +106,15 @@ async def test_update_goal_for_unknown_user_raises_profile_not_found_and_writes_
     user_id = uuid.uuid4()  # never seeded -- empty event stream
 
     handler = UpdateGoalHandler(event_store, outbox, snapshot, encryption, now_fn=_now)
+    command = UpdateGoalCommand(
+        user_id=user_id,
+        goal_type="MAINTAIN",
+        target_value=None,
+        target_date=None,
+        correlation_id="corr-1",
+    )
     with pytest.raises(ProfileNotFoundError):
-        await handler.handle(
-            UpdateGoalCommand(
-                user_id=user_id,
-                goal_type="MAINTAIN",
-                target_value=None,
-                target_date=None,
-                correlation_id="corr-1",
-            )
-        )
+        await handler.handle(command)
 
     assert outbox.enqueued == []
     assert await event_store.load(user_id) == []
