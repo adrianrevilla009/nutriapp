@@ -56,6 +56,27 @@ testpaths = ["tests"]
 [tool.coverage.run]
 source = ["domain", "application", "infrastructure"]
 
+[tool.mutmut]
+# mutmut's own auto-guess for the source root fails in a monorepo layout
+# (it looks for a single top-level package matching the repo/dir name,
+# which doesn't exist here -- domain/application/infrastructure are
+# siblings, not one importable package). Without this, `mutmut results`
+# (run as a separate invocation from `mutmut run`, so the CLI's own
+# --paths-to-mutate flag doesn't carry over) can't load its config at all.
+source_paths = ["domain"]
+# tests/conftest.py imports infrastructure.persistence.models
+# unconditionally at module scope (needed by its testcontainers fixtures)
+# -- mutmut's sandbox only copies source_paths plus tests/ by default, so
+# without this the sandboxed pytest run can't even collect tests.
+also_copy = ["infrastructure", "application"]
+# Scoped to tests/unit deliberately: mutation testing here is about the
+# domain-layer formulas (CLAUDE.md section 3's "recommended for the
+# domain layer of any service whose correctness is ... sensitive"), and
+# unit tests are the only ones that don't need a live Postgres/Redis via
+# testcontainers -- running integration/contract tests against every
+# mutant would be both unnecessary for this goal and far slower.
+pytest_add_cli_args_test_selection = ["tests/unit"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

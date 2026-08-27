@@ -46,7 +46,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
@@ -65,7 +65,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       - name: mypy
         run: uv run mypy domain application infrastructure
 
@@ -93,7 +93,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       - name: Unit tests (domain + application, no I/O)
         run: uv run pytest tests/unit -q
 
@@ -110,7 +110,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       - name: pip-audit
         run: |
           # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
@@ -141,7 +141,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       # testcontainers pulls Postgres/Redis/RabbitMQ images at runtime —
       # the ubuntu-latest runner ships Docker already. The two source
       # adapters' tests never make a live HTTP call (see file header).
@@ -163,7 +163,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev --no-build
       # Per-layer thresholds (CLAUDE.md §3): domain >= 90%, application
       # >= 85%, infrastructure >= 70%.
       - name: Full suite (collects coverage for all three layers)
