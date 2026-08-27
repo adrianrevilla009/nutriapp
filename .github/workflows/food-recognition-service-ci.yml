@@ -168,6 +168,12 @@ jobs:
           version: "0.12.6"
       - name: Install dependencies
         run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      # Same runtime dependency as integration-and-contract-tests above --
+      # each GH Actions job runs on its own fresh runner with no shared
+      # state, so this step can't be skipped just because that job already
+      # installed it.
+      - name: Install libzbar0 (pyzbar's runtime dependency)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
       # Per-layer thresholds (CLAUDE.md §3, implementation plan section 1
       # acceptance criterion 7): domain >= 90%, application >= 85%,
       # infrastructure >= 70%.
@@ -209,6 +215,8 @@ jobs:
           version: "0.12.6"
       - name: Install dependencies (incl. mutmut)
         run: uv sync --frozen --extra dev && uv pip install mutmut  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: Install libzbar0 (pyzbar's runtime dependency)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
       - name: mutmut run (domain layer only -- the correctness-critical formulas)
         # mutmut 3.x dropped the --paths-to-mutate CLI flag entirely --
         # source_paths now comes only from pyproject.toml's [tool.mutmut]
