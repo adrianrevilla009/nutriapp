@@ -243,3 +243,24 @@ This is pinned down as a concrete rule for `/test-plan` to write cases against, 
 **§9.7 resolved.** `infra/terraform/environments/dev/main.tf` already provisions exactly one shared `module "elasticache"` cluster for the whole platform (confirmed by inspection — no per-service ElastiCache module exists for `identity-service` either). `catalog-service` reuses that same shared cluster in Terraform/prod, isolated purely by its `catalog:*` Redis key namespace — **no new ElastiCache cluster is provisioned**. For local `docker-compose` parity, add a dedicated `catalog-redis` container (mirroring `identity-redis`'s existing per-service-container convention for local dev, which is a dev-environment convenience and not indicative of the shared-cluster production topology).
 
 **Human authorization for straight-through execution.** The product owner approved this plan and the accompanying test plan together and authorized proceeding directly through `/implementation-execution` and `/test-execution` without an additional per-stage pause, to be reviewed as a completed body of work afterward. This does **not** waive CLAUDE.md §7: no `git push`, no PR, no merge, and no real bulk ingestion run happen as part of this authorization — the branch is left committed locally, unpushed, for human review.
+
+---
+
+## Addendum 2 — 2026-08-27, internal product-lookup endpoint (for `food-recognition-service`)
+
+**Trigger.** `food-recognition-service`'s implementation plan (`/plans/food-recognition-service/implementation-plan.md`) needs a synchronous, low-latency way to resolve a scanned barcode to a catalog product. `docs/api-catalog.md` already lists `/internal/v1/catalog/lookup` as a **planned** endpoint owned by `catalog-service`, consumed by `diary-service` and `food-recognition-service` — this addendum is that endpoint's implementation, scoped narrowly to what `food-recognition-service` needs today (barcode lookup). `diary-service`'s own eventual use of the same route is not implemented here — it still resolves catalog data via the existing public search/get-by-id endpoints, unchanged.
+
+**Scope.**
+1. `GetProductByBarcodeQuery`/`GetProductByBarcodeHandler` (`application/queries/`) — thin wrapper over the already-existing `ProductRepositoryPort.get_by_barcode()` (used today only by `product_deduplicator` during ingestion; this addendum is its first read-path consumer). Raises the existing `ProductNotFoundError` on a miss, exactly like `GetProductByIdHandler`.
+2. `GET /internal/v1/catalog/lookup?barcode={barcode}` — new internal-only route, added to the **same** app/port `catalog-service` already serves on (no second ASGI app/port). This mirrors `identity-service`'s `/internal/v1/auth/tokens/{reference_id}/reveal` precedent (single port, `X-Internal-Service-Credential` header checked against a configured value), **not** `profile-service`'s fully-segregated-port pattern from its reveal-metrics endpoint — that extra hardening was specifically justified by Article 9 special-category health data (CLAUDE.md §8); product nutrition-facts data is reference/catalog data, not personal data, so the lighter identity-service precedent is the correct-weight control here. Response body: the same product shape `GET /api/v1/catalog/products/{id}` already returns (reuse `product_to_response`), so callers don't need a second schema.
+3. `Settings.internal_lookup_credential` (new field, `CATALOG_INTERNAL_LOOKUP_CREDENTIAL` env var), read the same way as `identity-service`'s `internal_reveal_credential`. A separate Terraform-managed secret (`infra/terraform/modules/secrets`) scoped so only `food-recognition-service`'s IRSA role can read it — same `cross_service_reveal_credential` mechanism `profile-service`'s Addendum 2 introduced (module already exists, this just adds one more entry to its credential-pairs list).
+4. NetworkPolicy: no change needed (single port already Kong-fronted for the public routes) — instead, the internal route itself is excluded from Kong's routed paths at the Kong config level (consistent with how identity-service's internal route is already excluded), so it's only reachable from inside the cluster.
+5. `docs/api-catalog.md`: flip this row from `planned` to `active`.
+
+**Explicitly out of scope for this addendum:**
+- `diary-service` migrating to this endpoint — no change to `diary-service` in this addendum.
+- Any change to the public `/api/v1/catalog/*` routes.
+
+**Test plan addendum.** See `/plans/catalog-service/test-plan.md`'s matching Addendum 2.
+
+**Human authorization for straight-through execution.** Same authorization as this plan's original approval and Addendum 1 — approved together with `food-recognition-service`'s plan, proceed directly through implementation and test execution without an additional per-stage pause. No `git push`/PR/merge as part of this authorization.
