@@ -4,6 +4,8 @@ Open Host Service pattern. Every other service fetches and caches this
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends
 
 from infrastructure.composition_root import Container
@@ -18,5 +20,5 @@ router = APIRouter(tags=["jwks"])
     description="Public key material only (RFC 7517). No synchronous call back to "
     "identity-service is needed to validate a token once this is cached.",
 )
-async def jwks(container: Container = Depends(get_container)) -> dict:
+async def jwks(container: Container = Depends(get_container)) -> dict[str, Any]:
     return container.token_issuer.get_jwks()

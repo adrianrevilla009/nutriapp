@@ -17,7 +17,7 @@ from application.errors import InvalidCredentialsError, RateLimitedError
 from application.security.token_generation import generate_opaque_secret, hash_secret
 from domain.entities.audit_record import AuditRecord
 from domain.entities.token import RefreshToken
-from domain.entities.user import AccountLockedError, EmailNotVerifiedError
+from domain.entities.user import AccountLockedError, EmailNotVerifiedError, User
 from domain.events.new_device_login_detected import build_new_device_login_detected_event
 from domain.ports.audit_repository_port import AuditRepositoryPort
 from domain.ports.outbox_repository_port import OutboxRepositoryPort
@@ -162,7 +162,9 @@ class LoginHandler:
             user_id=user.user_id,
         )
 
-    async def _audit_failure(self, command: LoginCommand, *, reason: str, user=None) -> None:
+    async def _audit_failure(
+        self, command: LoginCommand, *, reason: str, user: User | None = None
+    ) -> None:
         await self._audit.record(
             AuditRecord(
                 action="login",
