@@ -29,7 +29,10 @@ async def search_products(
     session: Annotated[AsyncSession, Depends(get_session)],
     container: Annotated[Container, Depends(get_container)],
     q: Annotated[str | None, Query(description="Free-text search query")] = None,
-    dietary_tags: Annotated[list[str], Query()] = [],  # noqa: B006 -- FastAPI reads this once at route setup, never mutated per-request
+    # Mutable defaults are safe here: FastAPI reads them once at route
+    # setup time to build the parameter's schema, never mutates them
+    # per-request.
+    dietary_tags: Annotated[list[str], Query()] = [],  # noqa: B006
     exclude_allergens: Annotated[list[str], Query()] = [],  # noqa: B006
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
