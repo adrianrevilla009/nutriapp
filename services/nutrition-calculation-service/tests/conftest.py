@@ -24,7 +24,7 @@ def postgres_async_url(postgres_container) -> str:
     return sync_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
 
 
-@pytest.fixture()
+@pytest.fixture
 async def db_engine(postgres_async_url):
     # Function-scoped deliberately: asyncpg pools are bound to the event
     # loop they were created on, and pytest-asyncio creates a fresh loop
@@ -45,7 +45,7 @@ def redis_container():
         yield redis_c
 
 
-@pytest.fixture()
+@pytest.fixture
 def redis_url(redis_container) -> str:
     host = redis_container.get_container_host_ip()
     port = redis_container.get_exposed_port(6379)

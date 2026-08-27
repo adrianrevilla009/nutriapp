@@ -12,7 +12,7 @@ from infrastructure.caching.redis_current_total_cache import RedisCurrentTotalCa
 MACROS = {"calories_kcal": 200.0, "protein_g": 10.0, "carbs_g": 20.0, "fat_g": 5.0}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def redis_client(redis_url):
     client = Redis.from_url(redis_url)
     yield client

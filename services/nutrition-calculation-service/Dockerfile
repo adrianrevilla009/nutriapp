@@ -13,7 +13,7 @@ WORKDIR /repo
 COPY packages/shared-contracts/ packages/shared-contracts/
 COPY services/nutrition-calculation-service/pyproject.toml services/nutrition-calculation-service/uv.lock services/nutrition-calculation-service/
 WORKDIR /repo/services/nutrition-calculation-service
-RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
+RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev
 
 FROM python:3.12-slim AS runtime
 RUN useradd --uid 1000 --create-home app

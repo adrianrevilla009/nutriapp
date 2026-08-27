@@ -20,7 +20,7 @@ def rabbitmq_container():
         yield container
 
 
-@pytest.fixture()
+@pytest.fixture
 def rabbitmq_url(rabbitmq_container) -> str:
     host = rabbitmq_container.get_container_host_ip()
     port = rabbitmq_container.get_exposed_port(5672)

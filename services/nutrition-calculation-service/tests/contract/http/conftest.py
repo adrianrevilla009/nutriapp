@@ -38,7 +38,7 @@ class _FakeContainer:
         self.current_total_cache = FakeCurrentTotalCache()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(target_router)

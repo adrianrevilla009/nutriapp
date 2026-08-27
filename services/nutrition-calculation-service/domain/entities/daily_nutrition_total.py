@@ -12,7 +12,7 @@ contributing entry's own `NutrientTotalLine` (keyed by `entry_id`) so a
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date
 
 from domain.services.nutrient_total_calculator import calculate_day_nutrient_total
@@ -30,12 +30,16 @@ class DailyNutritionTotal:
     ) -> DailyNutritionTotal:
         new_entries = dict(self.entries)
         new_entries[entry_id] = line
-        return replace(self, entries=new_entries)
+        return DailyNutritionTotal(
+            user_id=self.user_id, total_date=self.total_date, entries=new_entries
+        )
 
     def with_entry_removed(self, entry_id: uuid.UUID) -> DailyNutritionTotal:
         new_entries = dict(self.entries)
         new_entries.pop(entry_id, None)
-        return replace(self, entries=new_entries)
+        return DailyNutritionTotal(
+            user_id=self.user_id, total_date=self.total_date, entries=new_entries
+        )
 
     def compute_total(self) -> NutrientTotalLine:
         return calculate_day_nutrient_total(self.entries.values())

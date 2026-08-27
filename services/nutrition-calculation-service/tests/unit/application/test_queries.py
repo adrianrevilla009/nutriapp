@@ -59,8 +59,9 @@ def _make_target() -> NutritionTarget:
 async def test_get_current_nutrition_target_not_found_raises():
     repo = FakeNutritionTargetRepository()
     handler = GetCurrentNutritionTargetHandler(repo)
+    query = GetCurrentNutritionTargetQuery(user_id=USER_ID)
     with pytest.raises(NutritionTargetNotFoundError):
-        await handler.handle(GetCurrentNutritionTargetQuery(user_id=USER_ID))
+        await handler.handle(query)
 
 
 async def test_get_current_nutrition_target_returns_dto():
@@ -78,10 +79,9 @@ async def test_get_current_nutrition_target_returns_dto():
 async def test_get_current_daily_total_not_found_raises():
     repo = FakeDailyNutritionTotalRepository()
     handler = GetCurrentDailyTotalHandler(repo)
+    query = GetCurrentDailyTotalQuery(user_id=USER_ID, total_date=date(2026, 8, 25))
     with pytest.raises(DailyNutritionTotalNotFoundError):
-        await handler.handle(
-            GetCurrentDailyTotalQuery(user_id=USER_ID, total_date=date(2026, 8, 25))
-        )
+        await handler.handle(query)
 
 
 async def test_get_current_daily_total_returns_dto():

@@ -14,7 +14,7 @@ from domain.value_objects.sex import CalculationSexConstant
 from infrastructure.caching.redis_current_target_cache import RedisCurrentTargetCache
 
 
-@pytest.fixture()
+@pytest.fixture
 async def redis_client(redis_url):
     client = Redis.from_url(redis_url)
     yield client

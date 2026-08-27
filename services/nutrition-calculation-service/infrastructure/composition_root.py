@@ -154,13 +154,18 @@ class Container:
     async def shutdown(self) -> None:
         for task in self._background_tasks:
             task.cancel()
-        for task in self._background_tasks:
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                logger.exception("background_task_shutdown_error")
+        if self._background_tasks:
+            # gather(..., return_exceptions=True) waits for each cancelled
+            # task to actually finish without re-raising into this coroutine
+            # -- avoids a bare `except asyncio.CancelledError: pass`, which
+            # would also silently swallow an external cancellation of
+            # shutdown() itself if one arrived at the same time.
+            results = await asyncio.gather(*self._background_tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(
+                    result, asyncio.CancelledError
+                ):
+                    logger.exception("background_task_shutdown_error", exc_info=result)
         if self._rabbitmq_connection is not None:
             await self._rabbitmq_connection.close()
         await self.profile_reveal_client.aclose()
