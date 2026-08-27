@@ -1,0 +1,269 @@
+name: food-recognition-service-ci
+
+on:
+  pull_request:
+    paths:
+      - "services/food-recognition-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/food-recognition-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/food-recognition-service-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/food-recognition-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/food-recognition-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/food-recognition-service-ci.yml"
+
+defaults:
+  run:
+    working-directory: services/food-recognition-service
+
+# Stage order per ci-cd-conventions SKILL.md: lint -> type-check ->
+# secret-scan -> unit -> dep-vuln-scan -> integration -> contract ->
+# coverage-gate -> mutation-testing (advisory) -> build-image -> image-scan
+# -> push -> deploy-dev -> smoke-e2e -> promote-staging -> manual-approval
+# -> promote-prod. This workflow covers lint through coverage-gate +
+# mutation-testing + build/scan; deploy stages are devops-agent/CI infra
+# follow-up, same as catalog-service-ci.yml/diary-service-ci.yml.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  type-check:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: mypy
+        run: uv run mypy domain application infrastructure
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, type-check]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: Unit tests (domain + application, no I/O)
+        run: uv run pytest tests/unit -q
+
+  dep-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: pip-audit
+        run: |
+          # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
+          # they're not published to PyPI, so pip-audit's strict mode errors
+          # out entirely ("Dependency not found on PyPI") rather than just
+          # skipping them, which used to abort the scan before it audited
+          # anything else in this file's real third-party dependencies.
+          uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts$' > /tmp/requirements-audit.txt
+          # PYSEC-2026-3447 (setuptools <83.0.0): a MANIFEST.in exclude-pattern
+          # Unicode-normalization bypass affecting building a source distribution
+          # on macOS APFS/HFS+ -- inapplicable here (this is a Linux runtime
+          # dependency pulled in only so purgatory-circuitbreaker's import-time
+          # `import pkg_resources` succeeds; this service never builds an sdist).
+          # Upgrading past setuptools 81 breaks that import outright (pkg_resources
+          # was removed in 81) -- see pyproject.toml's setuptools constraint comment.
+          uvx --no-build pip-audit==2.10.1 --strict --ignore-vuln PYSEC-2026-3447 -r /tmp/requirements-audit.txt
+
+  integration-and-contract-tests:
+    runs-on: ubuntu-latest
+    needs: dep-vuln-scan
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      # pyzbar (infrastructure/recognition/pyzbar_barcode_decoder.py) loads
+      # libzbar via ctypes at import time -- never bundled in the wheel on
+      # Linux (implementation plan section 1's technology choice). Same
+      # package this service's own Dockerfile installs in its runtime
+      # stage.
+      - name: Install libzbar0 (pyzbar's runtime dependency)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
+      # testcontainers pulls Postgres/RabbitMQ images at runtime — the
+      # ubuntu-latest runner ships Docker already. ClaudeVisionAdapter's
+      # and CatalogLookupClient's tests never make a live HTTP call
+      # (httpx.MockTransport only, per test-plan section 2's explicit
+      # "never a live call" requirement).
+      - name: Integration tests (testcontainers + httpx.MockTransport, never live)
+        run: uv run pytest tests/integration -q
+      - name: Contract tests (HTTP + event schemas)
+        run: uv run pytest tests/contract -q
+
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: integration-and-contract-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      # Per-layer thresholds (CLAUDE.md §3, implementation plan section 1
+      # acceptance criterion 7): domain >= 90%, application >= 85%,
+      # infrastructure >= 70%.
+      - name: Full suite (collects coverage for all three layers)
+        run: |
+          uv run pytest tests/unit tests/contract tests/integration \
+            --cov=domain --cov=application --cov=infrastructure \
+            --cov-report=term-missing
+      - name: Enforce domain coverage >= 90% (hard floor)
+        run: uv run coverage report --include="domain/*" --fail-under=90
+      - name: Enforce application coverage >= 85%
+        run: uv run coverage report --include="application/*" --fail-under=85
+      - name: Enforce infrastructure coverage >= 70%
+        run: uv run coverage report --include="infrastructure/*" --fail-under=70
+
+  mutation-testing:
+    # Advisory only, kept deliberately even though this service's domain
+    # layer is simpler than e.g. nutrition-calculation-service's formulas
+    # (CLAUDE.md section 3's mutation-testing recommendation is not
+    # restricted to arithmetic-heavy domains): `ConfidenceScore`'s and
+    # `PortionRangeGrams`'s boundary validation is exactly the kind of
+    # off-by-one/operator-flip logic a mutant can silently break while
+    # every existing unit test still passes, and this service's core
+    # value proposition (never presenting a false-precision estimate) is
+    # entirely enforced by that validation. `continue-on-error` so a low
+    # mutation score surfaces for human review without failing the
+    # pipeline.
+    runs-on: ubuntu-latest
+    needs: coverage-gate
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.6"
+      - name: Install dependencies (incl. mutmut)
+        run: uv sync --frozen --extra dev && uv pip install mutmut  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
+      - name: mutmut run (domain layer only -- the correctness-critical formulas)
+        # mutmut 3.x dropped the --paths-to-mutate CLI flag entirely --
+        # source_paths now comes only from pyproject.toml's [tool.mutmut]
+        # (needed anyway: `mutmut results` below is a separate process
+        # that has no CLI flags of its own, so config is the only way it
+        # can agree with `run` on what was mutated).
+        run: uv run mutmut run || true
+      - name: mutmut results
+        run: uv run mutmut results
+
+  build-and-scan-image:
+    runs-on: ubuntu-latest
+    needs: coverage-gate
+    # Overrides the workflow-level default working-directory: the build
+    # context must be the repo root, not services/food-recognition-service,
+    # since this service depends on packages/shared-contracts as a local
+    # path dependency -- see services/food-recognition-service/Dockerfile's
+    # own comment. Mirrors diary-service-ci.yml's identical job.
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image
+        run: docker build -f services/food-recognition-service/Dockerfile -t food-recognition-service:${{ github.sha }} .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: food-recognition-service:${{ github.sha }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: "true"
+
+  helm-lint-and-template:
+    # Not part of the lint->...->coverage-gate->build chain above (this
+    # validates infra/k8s/charts/, not services/food-recognition-service/'s
+    # own code) — runs independently so a chart-only change doesn't need
+    # to wait on/duplicate the Python stages, same as catalog-service-ci.yml.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/k8s/charts/food-recognition-service
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+        with:
+          version: "v3.16.2"
+      - name: helm dependency update (vendors _lib)
+        run: helm dependency update .
+      - name: helm lint (dev values + checked-in CI fixture)
+        run: helm lint . -f values-dev.yaml -f ci/synthetic-values.yaml
+      - name: helm template (fails on any render error)
+        run: helm template food-recognition-service . -f values-dev.yaml -f ci/synthetic-values.yaml > /dev/null
+
+  # push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
+  # promote-prod: follow-up once infra/terraform's platform-infra plan is
+  # applied and an ECR repo + EKS cluster exist (docs/ci-cd-strategy.md).

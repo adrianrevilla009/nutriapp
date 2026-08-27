@@ -1,0 +1,10 @@
+{
+  "candidates": [
+    {
+      "name": "mixed casserole",
+      "portion_range_min_g": 150,
+      "portion_range_max_g": 300,
+      "confidence": 0.35
+    }
+  ]
+}

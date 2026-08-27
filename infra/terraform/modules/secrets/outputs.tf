@@ -39,3 +39,8 @@ output "usda_fdc_api_key_secret_arns" {
   description = "Map of service name -> Secrets Manager ARN holding {api_key}, a third-party USDA FoodData Central API key populated manually, out-of-band (e.g. catalog-service's USDA FDC ingestion adapter)."
   value       = { for k, v in aws_secretsmanager_secret.usda_fdc_api_key : k => v.arn }
 }
+
+output "anthropic_api_key_secret_arns" {
+  description = "Map of service name -> Secrets Manager ARN holding {api_key}, a metered third-party Anthropic API key populated manually, out-of-band (e.g. food-recognition-service's ClaudeVisionAdapter)."
+  value       = { for k, v in aws_secretsmanager_secret.anthropic_api_key : k => v.arn }
+}

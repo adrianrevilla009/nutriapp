@@ -84,10 +84,19 @@ yet implemented — the owning service doesn't exist yet).
   point-in-time record of what the user logged, not a live mirror of the
   catalog, so silently reconciling it against a later `ProductUpdated`
   may be the wrong behavior, not merely a deferred one -- see
-  `/plans/diary-service/implementation-plan.md` section 9.4),
-  food-recognition-service (for barcode/product matching), recipe-service
-  — none exist as live consumers yet, so no live integration breaks;
-  this payload shape is their future contract.
+  `/plans/diary-service/implementation-plan.md` section 9.4), recipe-service
+  — neither exists as a live consumer yet, so no live integration breaks;
+  this payload shape is their future contract. **Correction (superseding
+  the earlier placeholder note that listed food-recognition-service
+  here):** food-recognition-service does NOT consume this event.
+  Barcode-to-product resolution needs to be synchronous and low-latency
+  (a user is waiting on a scan result), so
+  `/plans/food-recognition-service/implementation-plan.md` resolves it via
+  a direct, circuit-breaker-guarded call to catalog-service's internal
+  `GET /internal/v1/catalog/lookup?barcode={barcode}` endpoint instead
+  (`/plans/catalog-service/implementation-plan.md` Addendum 2) -- eventual
+  consistency via this event was judged the wrong shape for that use
+  case, not merely deferred.
 - Emitted when: a new product (by dedup key — barcode when present,
   otherwise `(source, source_product_id)`) is first written to
   `products`, regardless of which source triggered it.
@@ -108,8 +117,9 @@ yet implemented — the owning service doesn't exist yet).
 ### ProductUpdated (v1)
 - Status: Active
 - Producer: catalog-service
-- Consumers: diary-service, food-recognition-service, recipe-service
-  (same as `ProductCatalogued`, none live yet).
+- Consumers: diary-service, recipe-service (same as `ProductCatalogued`,
+  neither live yet). Not food-recognition-service -- see
+  `ProductCatalogued`'s correction note above.
 - Emitted when: an already-catalogued product's data changes on a
   subsequent ingestion pass (the same source re-syncing, or a second
   source's data reconciling into the row per the dedup/conflict-
@@ -319,12 +329,28 @@ yet implemented — the owning service doesn't exist yet).
   "set_at": "timestamp", "previous_goal_type": "LOSE|MAINTAIN|GAIN" }`
 
 ### FoodPhotoAnalyzed (v1)
+- Status: Active
 - Producer: food-recognition-service
-- Consumers: diary-service (to pre-fill an entry for user confirmation)
-- Emitted when: an uploaded food photo or barcode scan has been processed.
-- Payload: `{ "detection_id": "uuid", "user_id": "uuid",
-  "detected_items": [ { "product_id": "uuid | null", "label": "string",
-  "confidence": "number" } ] }`
+- Consumers: diary-service (documented, to pre-fill an entry for user
+  confirmation; not a live consumer yet -- no live integration breaks from
+  this shape, food-recognition-service's implementation plan is this
+  payload's first concrete definition, superseding the earlier
+  placeholder shape below).
+- Emitted when: an uploaded food photo has been analyzed, via the Outbox,
+  after **every** analysis attempt -- including failed/unavailable ones
+  (an audit trail of the failure itself is a useful signal). Barcode scans
+  publish no event (food-recognition-service implementation plan section
+  1, acceptance criterion 4 -- either the barcode matched a catalog
+  product or it didn't, no ambiguity for a downstream consumer to
+  resolve).
+- Payload: `{ "analysis_id": "uuid", "candidates": [ { "name": "string",
+  "portion_range_min_g": "number", "portion_range_max_g": "number",
+  "confidence": "number" } ] (max 3 items), "model_version": "string",
+  "status": "detected | uncertain | unavailable" }`. `user_id` is carried
+  in the envelope's `metadata.user_id`, not the payload itself. Every
+  portion estimate is a genuine range (`min_g < max_g`), never a single
+  precise number (media-recognition-conventions SKILL.md). See
+  `packages/shared-contracts/schemas/food_photo_analyzed.v1.json`.
 
 ### NutritionValueRecomputed (v1)
 - Status: Active

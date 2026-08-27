@@ -1,0 +1,76 @@
+{{/*
+Narrow egress restriction for this service's outbound call to
+catalog-service's internal lookup endpoint (implementation plan section
+6(c)): this service's pods may reach OTHER PODS in the namespace ONLY via
+catalog-service's pod selector -- never arbitrary lateral movement to any
+other service's pods. Declared as its own plain NetworkPolicy resource
+(not via the shared `_lib` `_networkpolicy.tpl`, which only renders
+`policyTypes: [Ingress]` today), mirroring
+nutrition-calculation-service's identical
+networkpolicy-egress-profile-reveal.yaml precedent.
+
+Unlike that precedent, catalog-service's internal lookup route is NOT on
+a separate internal port -- per
+`/plans/catalog-service/implementation-plan.md` Addendum 2, it is added to
+the SAME single port catalog-service already serves its public routes on
+(excluded from Kong's routed paths at the Kong config level instead of a
+NetworkPolicy port split). So this policy targets catalog-service's normal
+service port, not a second one.
+
+Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
+Kubernetes default-denies ALL egress from it except what some policy
+explicitly allows (the union across every such policy) -- so this
+resource also allows the narrow, PORT-scoped (not destination-scoped)
+egress this service genuinely needs for its own external dependencies
+(the shared RDS Postgres instance, RabbitMQ) and DNS, plus HTTPS egress to
+the Anthropic API (a genuine third-party destination, not an in-cluster
+pod -- see the `anthropicApiEgress` values below). Same documented,
+port-scoped-not-destination-scoped gap as
+nutrition-calculation-service's identical resource -- not resolved here,
+not silently worked around.
+*/}}
+{{- if .Values.catalogLookupEgress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nutriapp-lib.fullname" . }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nutriapp-lib.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nutriapp-lib.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS -- otherwise this pod cannot resolve any hostname at all,
+    # including catalog-service's own ClusterIP DNS name or
+    # api.anthropic.com.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The one narrow, pod-selector-scoped allowance this resource exists
+    # for: catalog-service's normal service port, nothing else of
+    # catalog-service's and no other in-cluster service at all.
+    - to:
+        - podSelector:
+            {{- toYaml .Values.catalogLookupEgress.catalogServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.catalogLookupEgress.catalogServicePort }}
+    # This service's own external dependencies -- port-scoped, not
+    # destination-scoped (documented gap above): shared RDS Postgres,
+    # RabbitMQ, and outbound HTTPS to the Anthropic API.
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.catalogLookupEgress.rdsPort }}
+        - protocol: TCP
+          port: {{ .Values.catalogLookupEgress.rabbitmqPort }}
+        - protocol: TCP
+          port: {{ .Values.catalogLookupEgress.anthropicApiPort }}
+{{- end }}

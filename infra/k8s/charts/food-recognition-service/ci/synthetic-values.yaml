@@ -1,0 +1,51 @@
+# infra/k8s/charts/food-recognition-service/ci/synthetic-values.yaml
+#
+# Checked-in fixture used ONLY by
+# .github/workflows/food-recognition-service-ci.yml's
+# helm-lint-and-template job to fill the fields Terraform normally injects
+# at deploy time (food-recognition-service.tf) -- ARNs/hosts/roles below
+# are syntactically valid but point at nothing real. Never use these
+# values outside CI (same pattern/rationale as every other service's own
+# ci/synthetic-values.yaml).
+
+image:
+  repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/food-recognition-service"
+  tag: "ci-fixture"
+
+serviceAccount:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-food-recognition-service-app-secrets"
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+catalogLookupEgress:
+  enabled: true
+  catalogServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-service
+  catalogServicePort: 8000
+  rdsPort: 5432
+  rabbitmqPort: 5672
+  anthropicApiPort: 443
+
+secretsManager:
+  dbCredentials: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/food-recognition-service/db-credentials-XyZ123"
+  anthropicApiKey: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/food-recognition-service/anthropic-api-key-AbCdEf"
+  catalogLookupCredential: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/catalog-service/internal-reveal-credential-food-recognition-service-GhIjKl"
+
+dbProvision:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-food-recognition-service-db-provision"
+  rdsHost: "nutriapp-dev-postgres.abc123.us-east-1.rds.amazonaws.com"
+  rdsMasterSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:rds!db-abc123"
+  dbCredentialSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/food-recognition-service/db-credentials-XyZ123"
+  image:
+    repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/db-provision"
+    tag: "ci-fixture"

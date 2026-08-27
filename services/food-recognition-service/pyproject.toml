@@ -1,0 +1,110 @@
+[project]
+name = "food-recognition-service"
+version = "0.1.0"
+description = "NutriApp food-recognition-service: photo-based AI food detection (Claude vision) and barcode-based product detection, pending diary-service confirmation."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic[email]>=2.9",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
+    "asyncpg>=0.29",
+    "psycopg2-binary>=2.9", # sync driver Alembic needs (migrations/env.py) — the app itself uses asyncpg only
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "python-multipart>=0.0.12", # required by FastAPI's UploadFile/File() multipart parsing (recognition_routes.py)
+    "faststream[rabbit]>=0.5",
+    "aio-pika>=9.4",
+    "purgatory-circuitbreaker>=0.7",
+    "setuptools>=70,<81", # purgatory-circuitbreaker's __init__.py imports pkg_resources at import time; removed in setuptools>=81
+    "tenacity>=9.0",
+    "structlog>=24.4",
+    "prometheus-client>=0.20",
+    "opentelemetry-sdk>=1.27",
+    "punq>=0.7",
+    "shared-contracts",
+    # 0.x line deliberately -- uses the standard `httpx.AsyncClient` for its
+    # transport (verified against installed versions during this service's
+    # implementation), so `httpx.MockTransport` fixtures work exactly like
+    # every other outbound-HTTP adapter in this repo. A >=1.0 release
+    # vendors its own forked HTTP stack for this SDK version and would
+    # break that mocking convention -- do not bump past 1.0 without
+    # re-verifying the test strategy in tests/integration/infrastructure/test_claude_vision_adapter.py.
+    "anthropic>=0.39,<1.0",
+    "pyzbar>=0.1.9",
+    "pillow>=10.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "testcontainers[postgres,rabbitmq]>=4.8",
+    "factory_boy>=3.3",
+    "httpx>=0.27",
+    "jsonschema>=4.23",
+    "python-barcode>=0.15", # regenerating tests/fixtures/barcode_images/*.png only, see tests/fixtures/generate_barcode_images.py
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.uv.sources]
+# NOT editable: this must resolve to a self-contained install inside
+# .venv/site-packages, since the Docker runtime stage only copies .venv
+# (not the packages/shared-contracts source tree) -- see
+# services/food-recognition-service/Dockerfile's comment. Local dev picks
+# up shared-contracts changes via `uv sync` re-running, same as any other
+# pinned dependency.
+shared-contracts = { path = "../../packages/shared-contracts" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["domain", "application", "infrastructure"]
+
+[tool.mutmut]
+# mutmut's own auto-guess for the source root fails in a monorepo layout
+# (it looks for a single top-level package matching the repo/dir name,
+# which doesn't exist here -- domain/application/infrastructure are
+# siblings, not one importable package). Without this, `mutmut results`
+# (run as a separate invocation from `mutmut run`, so the CLI's own
+# --paths-to-mutate flag doesn't carry over) can't load its config at all.
+source_paths = ["domain"]
+# tests/conftest.py imports infrastructure.persistence.models
+# unconditionally at module scope (needed by its testcontainers fixtures)
+# -- mutmut's sandbox only copies source_paths plus tests/ by default, so
+# without this the sandboxed pytest run can't even collect tests.
+also_copy = ["infrastructure", "application"]
+# Scoped to tests/unit deliberately: mutation testing here is about the
+# domain-layer value objects (CLAUDE.md section 3's "recommended for the
+# domain layer of any service whose correctness is ... sensitive" --
+# confidence/portion-range validation is exactly the kind of boundary
+# logic a mutant can silently break), and unit tests are the only ones
+# that don't need a live Postgres/RabbitMQ via testcontainers.
+pytest_add_cli_args_test_selection = ["tests/unit"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+[tool.ruff.lint.per-file-ignores]
+"infrastructure/http/routes/*.py" = ["B008"]
+"tests/*" = ["RUF059", "C408"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+exclude = ["tests"]
+
+[[tool.mypy.overrides]]
+# pyzbar ships no py.typed marker / stub package (implementation plan
+# section 1's technology choice) -- confined to this one import site
+# (infrastructure/recognition/pyzbar_barcode_decoder.py), never widened to
+# the whole infrastructure package.
+module = "pyzbar.*"
+ignore_missing_imports = true
