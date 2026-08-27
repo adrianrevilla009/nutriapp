@@ -18,9 +18,14 @@ from infrastructure.persistence.models import (
     EmailVerificationTokenModel,
     PasswordResetTokenModel,
     RefreshTokenModel,
+    _SecretTokenModelMixin,
 )
 
-_SECRET_TOKEN_MODELS = {
+# Both concrete models share every column via _SecretTokenModelMixin -- typed
+# against the mixin (not the common `Base`, which mypy would otherwise widen
+# this dict's value type to) so `.user_id`/`.created_at`/etc. stay visible on
+# whichever concrete class this dict actually looks up.
+_SECRET_TOKEN_MODELS: dict[SecretTokenKind, type[_SecretTokenModelMixin]] = {
     SecretTokenKind.EMAIL_VERIFICATION: EmailVerificationTokenModel,
     SecretTokenKind.PASSWORD_RESET: PasswordResetTokenModel,
 }
@@ -37,7 +42,7 @@ def _refresh_to_domain(row: RefreshTokenModel) -> RefreshToken:
     )
 
 
-def _secret_to_domain(row, kind: SecretTokenKind) -> SecretReferenceToken:
+def _secret_to_domain(row: _SecretTokenModelMixin, kind: SecretTokenKind) -> SecretReferenceToken:
     return SecretReferenceToken(
         reference_id=row.reference_id,
         user_id=row.user_id,
@@ -92,7 +97,10 @@ class PostgresTokenRepository:
         model_cls = _SECRET_TOKEN_MODELS[token.kind]
         row = await self._session.get(model_cls, token.reference_id)
         if row is None:
-            row = model_cls(reference_id=token.reference_id)
+            # Both concrete subclasses generate a mapped __init__ accepting
+            # every mixin column as a kwarg -- mypy can't see that through
+            # the mixin-typed `model_cls` alone.
+            row = model_cls(reference_id=token.reference_id)  # type: ignore[call-arg]
             self._session.add(row)
         row.user_id = token.user_id
         row.secret_hash = token.secret_hash

@@ -136,7 +136,14 @@ class Container:
         return self.audit_session_factory()
 
 
-def build_repositories(session: AsyncSession, audit_session: AsyncSession):
+def build_repositories(
+    session: AsyncSession, audit_session: AsyncSession
+) -> tuple[
+    PostgresUserRepository,
+    PostgresTokenRepository,
+    PostgresOutboxRepository,
+    PostgresAuditRepository,
+]:
     """Convenience bundle of the four repository adapters. Users/tokens/
     outbox share one AsyncSession (and therefore one DB transaction) for
     outbox atomicity. `audit_session` is deliberately a separate session
