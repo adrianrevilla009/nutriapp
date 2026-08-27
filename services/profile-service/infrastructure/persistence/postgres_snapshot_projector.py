@@ -15,7 +15,7 @@ projector-replay integration test.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +38,9 @@ class PostgresSnapshotProjector:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def _get_or_create_row(self, user_id: uuid.UUID, occurred_at) -> ProfileSnapshotModel:
+    async def _get_or_create_row(
+        self, user_id: uuid.UUID, occurred_at: datetime
+    ) -> ProfileSnapshotModel:
         row = await self._session.get(ProfileSnapshotModel, user_id)
         if row is None:
             row = ProfileSnapshotModel(

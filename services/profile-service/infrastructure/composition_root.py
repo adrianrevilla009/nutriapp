@@ -194,7 +194,7 @@ class Container:
         self._event_publisher: RabbitMqEventPublisher | None = None
         self._user_registered_consumer: UserRegisteredConsumer | None = None
         self._outbox_relay_worker: OutboxRelayWorker | None = None
-        self._background_tasks: list[asyncio.Task] = []
+        self._background_tasks: list[asyncio.Task[None]] = []
 
     async def startup(self) -> None:
         self._rabbitmq_connection = await aio_pika.connect_robust(self.settings.rabbitmq_url)

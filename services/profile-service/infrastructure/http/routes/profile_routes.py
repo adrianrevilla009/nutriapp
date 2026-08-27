@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,7 +67,7 @@ async def record_weight(
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     event_store = PostgresEventStore(session)
     outbox = PostgresOutboxRepository(session)
     snapshot_projector = PostgresSnapshotProjector(session)
@@ -99,7 +100,7 @@ async def record_body_metric(
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     event_store = PostgresEventStore(session)
     outbox = PostgresOutboxRepository(session)
     snapshot_projector = PostgresSnapshotProjector(session)
@@ -135,7 +136,7 @@ async def set_goal(
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     event_store = PostgresEventStore(session)
     outbox = PostgresOutboxRepository(session)
     snapshot_projector = PostgresSnapshotProjector(session)
@@ -173,7 +174,7 @@ async def update_goal(
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     event_store = PostgresEventStore(session)
     outbox = PostgresOutboxRepository(session)
     snapshot_projector = PostgresSnapshotProjector(session)
@@ -211,7 +212,7 @@ async def get_profile(
     session: AsyncSession = Depends(get_session),
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
-):
+) -> Any:
     snapshot_projector = PostgresSnapshotProjector(session)
     handler = GetProfileSnapshotHandler(snapshot_projector, container.encryption)
     try:
@@ -246,7 +247,7 @@ async def get_evolution(
     session: AsyncSession = Depends(get_session),
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     container: Container = Depends(get_container),
-):
+) -> Any:
     evolution_projector = PostgresEvolutionProjector(session)
     handler = GetEvolutionTimelineHandler(evolution_projector, container.encryption)
     entries = await handler.handle(

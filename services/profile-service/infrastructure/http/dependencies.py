@@ -36,7 +36,8 @@ _BEARER_PREFIX = "Bearer "
 
 
 def get_container(request: Request) -> Container:
-    return request.app.state.container
+    container: Container = request.app.state.container
+    return container
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:

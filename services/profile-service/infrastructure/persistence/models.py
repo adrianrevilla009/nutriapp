@@ -38,8 +38,8 @@ class ProfileEventModel(Base):
     aggregate_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[int] = mapped_column(nullable=False)
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(nullable=False)
 
     __table_args__ = (Index("ix_profile_events_aggregate_sequence", "aggregate_id", "sequence"),)
@@ -52,8 +52,8 @@ class OutboxModel(Base):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[int] = mapped_column(nullable=False)
     aggregate_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
