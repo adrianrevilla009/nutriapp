@@ -58,18 +58,18 @@ class FastingWindow:
         return state
 
     def apply(self, event: DomainEvent) -> None:
-        handler = getattr(self, f"_apply_{event.event_type}", None)
+        handler = getattr(self, f"_apply_{event.handler_method_suffix}", None)
         if handler is not None:
             handler(event)
 
-    def _apply_FastingWindowStarted(self, event: DomainEvent) -> None:
+    def _apply_fasting_window_started(self, event: DomainEvent) -> None:
         window_id = uuid.UUID(event.payload["window_id"])
         self.windows[window_id] = Window(
             window_id=window_id,
             started_at=datetime.fromisoformat(event.payload["started_at"]),
         )
 
-    def _apply_FastingWindowEnded(self, event: DomainEvent) -> None:
+    def _apply_fasting_window_ended(self, event: DomainEvent) -> None:
         window_id = uuid.UUID(event.payload["window_id"])
         window = self.windows.get(window_id)
         if window is not None:

@@ -67,10 +67,9 @@ async def test_consent_not_granted_rejected_nothing_persisted():
     await _seed_profile(event_store, user_id, with_consent=False)
 
     handler = _handler(event_store, outbox, snapshot, evolution, encryption)
+    command = RecordWeightCommand(user_id=user_id, weight_kg=70.0, correlation_id="corr-1")
     with pytest.raises(ConsentRequiredError):
-        await handler.handle(
-            RecordWeightCommand(user_id=user_id, weight_kg=70.0, correlation_id="corr-1")
-        )
+        await handler.handle(command)
 
     assert outbox.enqueued == []
     assert evolution.entries == []

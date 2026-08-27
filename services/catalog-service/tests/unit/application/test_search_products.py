@@ -45,5 +45,6 @@ async def test_unsupported_dietary_filter_raises_application_error():
     cache = FakeSearchCache()
     handler = SearchProductsHandler(read_model, cache)
 
+    command = SearchProductsCommand(text=None, dietary_tags=("not-a-real-tag",))
     with pytest.raises(UnsupportedSearchFilterError):
-        await handler.handle(SearchProductsCommand(text=None, dietary_tags=("not-a-real-tag",)))
+        await handler.handle(command)

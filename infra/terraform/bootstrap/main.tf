@@ -31,7 +31,7 @@ locals {
   lock_table_name   = "nutriapp-tfstate-lock"
 }
 
-resource "aws_s3_bucket" "state" {
+resource "aws_s3_bucket" "state" { # NOSONAR: access logging deliberately omitted, same rationale as CKV_AWS_18 below
   bucket = local.state_bucket_name
 
   # Deliberately no `force_destroy` — losing this bucket orphans every

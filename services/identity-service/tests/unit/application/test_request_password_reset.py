@@ -62,11 +62,10 @@ async def test_request_password_reset__rate_limit_exceeded__rejected_before_toke
     handler, users, tokens, outbox, rl = make_handler()
     rl.should_exceed = True
 
+    command = RequestPasswordResetCommand(
+        email="user@example.com", correlation_id="c1", client_ip="1.2.3.4"
+    )
     with pytest.raises(RateLimitedError):
-        await handler.handle(
-            RequestPasswordResetCommand(
-                email="user@example.com", correlation_id="c1", client_ip="1.2.3.4"
-            )
-        )
+        await handler.handle(command)
 
     assert len(tokens.secret_tokens) == 0

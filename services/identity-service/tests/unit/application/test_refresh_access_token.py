@@ -47,11 +47,13 @@ async def test_refresh__valid_token__issues_new_access_token_without_rotating_re
 
 async def test_refresh__revoked_token__raises_token_revoked_error():
     handler, secret = await setup(revoked=True)
+    command = RefreshAccessTokenCommand(refresh_token=secret, correlation_id="c1")
     with pytest.raises(TokenRevokedError):
-        await handler.handle(RefreshAccessTokenCommand(refresh_token=secret, correlation_id="c1"))
+        await handler.handle(command)
 
 
 async def test_refresh__expired_token__raises_token_expired_error():
     handler, secret = await setup(expired=True)
+    command = RefreshAccessTokenCommand(refresh_token=secret, correlation_id="c1")
     with pytest.raises(TokenExpiredError):
-        await handler.handle(RefreshAccessTokenCommand(refresh_token=secret, correlation_id="c1"))
+        await handler.handle(command)

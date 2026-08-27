@@ -39,5 +39,6 @@ async def test_existing_profile_returns_decrypted_snapshot_dto():
 
 async def test_unknown_user_id_raises_not_found():
     handler = GetProfileSnapshotHandler(FakeSnapshotProjector(), FakeDataEncryption())
+    query = GetProfileSnapshotQuery(user_id=uuid.uuid4())
     with pytest.raises(ProfileNotFoundError):
-        await handler.handle(GetProfileSnapshotQuery(user_id=uuid.uuid4()))
+        await handler.handle(query)

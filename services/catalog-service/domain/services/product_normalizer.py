@@ -35,7 +35,7 @@ from domain.value_objects.nutrient_panel import (
     InvalidNutrientPanelError,
     NutrientPanel,
 )
-from domain.value_objects.package_size import InvalidPackageSizeError, PackageSize
+from domain.value_objects.package_size import PackageSize
 from domain.value_objects.price import Price
 from domain.value_objects.source_reference import SourceName
 
@@ -108,7 +108,7 @@ def _parse_quantity_string(raw_value: Any) -> PackageSize | None:
     try:
         value = float(parts[0])
         return PackageSize.from_raw(value, parts[1])
-    except (ValueError, InvalidPackageSizeError):
+    except ValueError:  # InvalidPackageSizeError is itself a ValueError
         return None
 
 

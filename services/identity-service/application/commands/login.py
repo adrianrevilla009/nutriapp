@@ -34,6 +34,7 @@ LOGIN_RATE_LIMIT = 10
 LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60
 # A fixed, never-matching hash used to keep verify() timing similar whether
 # or not the email exists — avoids a trivial user-enumeration timing oracle.
+_INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 _DUMMY_PASSWORD_HASH = (
     "$argon2id$v=19$m=65536,t=3,p=4$"
     "AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -93,28 +94,28 @@ class LoginHandler:
         except InvalidEmailError:
             self._password_hasher.verify(command.password, _DUMMY_PASSWORD_HASH)
             await self._audit_failure(command, reason="unknown_email")
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
 
         user = await self._users.get_by_email(email)
         if user is None:
             self._password_hasher.verify(command.password, _DUMMY_PASSWORD_HASH)
             await self._audit_failure(command, reason="unknown_email")
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
 
         try:
             user.ensure_can_attempt_login()
         except AccountLockedError:
             await self._audit_failure(command, reason="account_locked", user=user)
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
         except EmailNotVerifiedError:
             await self._audit_failure(command, reason="email_not_verified", user=user)
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
 
         if not self._password_hasher.verify(command.password, user.password_hash):
             user.record_login_failure()
             await self._users.save(user)
             await self._audit_failure(command, reason="wrong_password", user=user)
-            raise InvalidCredentialsError("Invalid email or password.")
+            raise InvalidCredentialsError(_INVALID_CREDENTIALS_MESSAGE)
 
         fingerprint = DeviceFingerprint.from_request_context(command.user_agent, command.client_ip)
         is_first_login = user.is_first_login()

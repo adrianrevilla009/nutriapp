@@ -12,7 +12,7 @@ from tests.fixtures.factories import make_raw_record
 pytestmark = pytest.mark.usefixtures("db_engine")
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_factory() as s:
@@ -59,7 +59,8 @@ async def test_two_products_with_no_barcode_never_collide(session):
     assert product_a.product_id != product_b.product_id
     fetched_a = await repo.get_by_id(product_a.product_id)
     fetched_b = await repo.get_by_id(product_b.product_id)
-    assert fetched_a is not None and fetched_b is not None
+    assert fetched_a is not None
+    assert fetched_b is not None
     assert fetched_a.product_id != fetched_b.product_id
 
 

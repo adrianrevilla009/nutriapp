@@ -74,17 +74,16 @@ async def test_correct_unknown_entry_raises_not_found():
     outbox = FakeOutboxRepository()
     handler = CorrectFoodEntryHandler(event_store, outbox, now_fn=lambda: NOW)
 
+    command = CorrectFoodEntryCommand(
+        entry_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        source=_source(),
+        meal_slot=MealSlot.LUNCH,
+        occurred_at=NOW,
+        correlation_id="corr-2",
+    )
     with pytest.raises(FoodEntryNotFoundError):
-        await handler.handle(
-            CorrectFoodEntryCommand(
-                entry_id=uuid.uuid4(),
-                user_id=uuid.uuid4(),
-                source=_source(),
-                meal_slot=MealSlot.LUNCH,
-                occurred_at=NOW,
-                correlation_id="corr-2",
-            )
-        )
+        await handler.handle(command)
 
 
 async def test_correct_another_users_entry_raises_access_denied():
@@ -94,14 +93,13 @@ async def test_correct_another_users_entry_raises_access_denied():
     entry_id = await _log_entry(event_store, outbox, owner_id)
 
     handler = CorrectFoodEntryHandler(event_store, outbox, now_fn=lambda: NOW)
+    command = CorrectFoodEntryCommand(
+        entry_id=entry_id,
+        user_id=uuid.uuid4(),
+        source=_source(),
+        meal_slot=MealSlot.LUNCH,
+        occurred_at=NOW,
+        correlation_id="corr-2",
+    )
     with pytest.raises(FoodEntryAccessDeniedError):
-        await handler.handle(
-            CorrectFoodEntryCommand(
-                entry_id=entry_id,
-                user_id=uuid.uuid4(),
-                source=_source(),
-                meal_slot=MealSlot.LUNCH,
-                occurred_at=NOW,
-                correlation_id="corr-2",
-            )
-        )
+        await handler.handle(command)

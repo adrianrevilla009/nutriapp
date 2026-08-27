@@ -58,41 +58,38 @@ async def test_reveal__second_attempt_on_same_reference_id__rejected_replay_defe
         )
     )
 
+    replay_command = RevealTokenSecretCommand(
+        reference_id=str(token.reference_id),
+        caller_service_credential=CREDENTIAL,
+        correlation_id="c2",
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            RevealTokenSecretCommand(
-                reference_id=str(token.reference_id),
-                caller_service_credential=CREDENTIAL,
-                correlation_id="c2",
-            )
-        )
+        await handler.handle(replay_command)
     assert audit.records[-1].outcome == "failure"
 
 
 async def test_reveal__expired_reference_id__rejected():
     handler, tokens, audit, token = setup(expired=True)
 
+    command = RevealTokenSecretCommand(
+        reference_id=str(token.reference_id),
+        caller_service_credential=CREDENTIAL,
+        correlation_id="c1",
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            RevealTokenSecretCommand(
-                reference_id=str(token.reference_id),
-                caller_service_credential=CREDENTIAL,
-                correlation_id="c1",
-            )
-        )
+        await handler.handle(command)
 
 
 async def test_reveal__caller_without_valid_credentials__rejected_and_audited():
     handler, tokens, audit, token = setup()
 
+    command = RevealTokenSecretCommand(
+        reference_id=str(token.reference_id),
+        caller_service_credential="wrong-credential",
+        correlation_id="c1",
+    )
     with pytest.raises(InvalidCallerCredentialError):
-        await handler.handle(
-            RevealTokenSecretCommand(
-                reference_id=str(token.reference_id),
-                caller_service_credential="wrong-credential",
-                correlation_id="c1",
-            )
-        )
+        await handler.handle(command)
     assert audit.records[-1].outcome == "failure"
     assert audit.records[-1].metadata["reason"] == "invalid_caller_credential"
 
@@ -110,12 +107,11 @@ async def test_reveal__every_attempt_success_or_not__writes_an_audit_record():
     )
     assert len(audit.records) == 1
 
+    second_command = RevealTokenSecretCommand(
+        reference_id=str(token.reference_id),
+        caller_service_credential=CREDENTIAL,
+        correlation_id="c2",
+    )
     with pytest.raises(InvalidTokenError):
-        await handler.handle(
-            RevealTokenSecretCommand(
-                reference_id=str(token.reference_id),
-                caller_service_credential=CREDENTIAL,
-                correlation_id="c2",
-            )
-        )
+        await handler.handle(second_command)
     assert len(audit.records) == 2

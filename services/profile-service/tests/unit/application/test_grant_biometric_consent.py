@@ -59,7 +59,6 @@ async def test_grant_consent_for_unknown_profile_raises():
     handler = GrantBiometricConsentHandler(
         FakeEventStore(), FakeOutboxRepository(), FakeSnapshotProjector(), now_fn=NOW
     )
+    command = GrantBiometricConsentCommand(user_id=uuid.uuid4(), correlation_id="corr-1")
     with pytest.raises(ProfileNotFoundError):
-        await handler.handle(
-            GrantBiometricConsentCommand(user_id=uuid.uuid4(), correlation_id="corr-1")
-        )
+        await handler.handle(command)

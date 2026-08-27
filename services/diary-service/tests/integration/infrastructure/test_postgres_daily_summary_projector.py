@@ -27,7 +27,7 @@ from infrastructure.persistence.projectors.daily_summary_projector import (
 NOW = datetime(2026, 8, 26, 8, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s

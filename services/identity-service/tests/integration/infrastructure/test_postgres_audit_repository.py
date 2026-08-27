@@ -132,7 +132,6 @@ async def test_audit_repository__connection_actually_restricted_to_audit_writer_
     )
     await repo.record(entry)
 
+    stmt = text("UPDATE audit_log SET outcome = 'success' WHERE target_id = 'u-update-check'")
     with pytest.raises(DBAPIError, match="permission denied"):
-        await audit_writer_session.execute(
-            text("UPDATE audit_log SET outcome = 'success' WHERE target_id = 'u-update-check'")
-        )
+        await audit_writer_session.execute(stmt)

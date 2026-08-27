@@ -23,5 +23,6 @@ async def test_get_nonexistent_product_raises_not_found():
     products = FakeProductRepository()
     handler = GetProductByIdHandler(products)
 
+    query = GetProductByIdQuery(product_id=uuid.uuid4())
     with pytest.raises(ProductNotFoundError):
-        await handler.handle(GetProductByIdQuery(product_id=uuid.uuid4()))
+        await handler.handle(query)

@@ -78,10 +78,8 @@ async def test_container__new_audit_session__insert_succeeds(real_container):
 
 async def test_container__new_audit_session__update_is_denied_by_postgres(real_container):
     async with real_container.new_audit_session() as audit_session:
+        stmt = text(
+            "UPDATE audit_log SET outcome = 'tampered' WHERE target_id = 'u-container-check'"
+        )
         with pytest.raises(DBAPIError, match="permission denied"):
-            await audit_session.execute(
-                text(
-                    "UPDATE audit_log SET outcome = 'tampered' "
-                    "WHERE target_id = 'u-container-check'"
-                )
-            )
+            await audit_session.execute(stmt)

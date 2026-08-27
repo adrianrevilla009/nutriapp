@@ -46,16 +46,16 @@ class WaterIntakeEntry:
         return state
 
     def apply(self, event: DomainEvent) -> None:
-        handler = getattr(self, f"_apply_{event.event_type}", None)
+        handler = getattr(self, f"_apply_{event.handler_method_suffix}", None)
         if handler is not None:
             handler(event)
 
-    def _apply_WaterIntakeLogged(self, event: DomainEvent) -> None:
+    def _apply_water_intake_logged(self, event: DomainEvent) -> None:
         self.user_id = uuid.UUID(event.payload["user_id"])
         self.amount_ml = float(event.payload["amount_ml"])
         self.occurred_at = datetime.fromisoformat(event.payload["occurred_at"])
 
-    def _apply_WaterIntakeRemoved(self, event: DomainEvent) -> None:
+    def _apply_water_intake_removed(self, event: DomainEvent) -> None:
         self.removed = True
 
     @classmethod

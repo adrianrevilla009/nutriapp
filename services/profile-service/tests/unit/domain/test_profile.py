@@ -48,8 +48,9 @@ def _profile_created_event():
 
 def test_record_weight_before_consent_raises_and_produces_no_event():
     profile = _create_profile()
+    weight = WeightKg(70.0)
     with pytest.raises(ConsentRequiredError):
-        profile.record_weight(WeightKg(70.0), NOW, correlation_id="corr-3")
+        profile.record_weight(weight, NOW, correlation_id="corr-3")
 
 
 def test_record_weight_after_consent_produces_event_and_updates_state():
@@ -108,8 +109,9 @@ def test_set_goal_on_profile_with_existing_goal_raises():
     profile = _create_profile()
     target = GoalTarget(target_value=65.0, target_date=date(2026, 12, 1), now=NOW)
     profile.set_goal(GoalType.LOSE, target, NOW, correlation_id="corr-5")
+    empty_target = GoalTarget()
     with pytest.raises(GoalAlreadyExistsError):
-        profile.set_goal(GoalType.MAINTAIN, GoalTarget(), NOW, correlation_id="corr-6")
+        profile.set_goal(GoalType.MAINTAIN, empty_target, NOW, correlation_id="corr-6")
 
 
 def test_update_goal_on_profile_with_existing_goal_carries_previous_goal_type():
@@ -125,8 +127,9 @@ def test_update_goal_on_profile_with_existing_goal_carries_previous_goal_type():
 
 def test_update_goal_on_profile_with_no_goal_raises():
     profile = _create_profile()
+    empty_target = GoalTarget()
     with pytest.raises(NoExistingGoalError):
-        profile.update_goal(GoalType.MAINTAIN, GoalTarget(), NOW, correlation_id="corr-6")
+        profile.update_goal(GoalType.MAINTAIN, empty_target, NOW, correlation_id="corr-6")
 
 
 def test_full_replay_yields_latest_weight_and_goal():

@@ -29,8 +29,9 @@ def test_start_window_while_open_window_exists_raises_no_event_produced():
     first_started = aggregate.start_window(uuid.uuid4(), NOW, "corr-1")
 
     rebuilt = FastingWindow.rebuild(user_id, [first_started])
+    window_id, started_at = uuid.uuid4(), NOW + timedelta(hours=1)
     with pytest.raises(OverlappingFastingWindowError):
-        rebuilt.start_window(uuid.uuid4(), NOW + timedelta(hours=1), "corr-2")
+        rebuilt.start_window(window_id, started_at, "corr-2")
     # No new window was added as a side effect of the rejected attempt.
     assert len(rebuilt.windows) == 1
 
@@ -65,8 +66,9 @@ def test_end_window_on_already_ended_window_raises():
     started_1 = aggregate.start_window(w1, NOW, "corr-1")
     ended_1 = aggregate.end_window(w1, NOW + timedelta(hours=16), "corr-2")
     rebuilt = FastingWindow.rebuild(user_id, [started_1, ended_1])
+    ended_at = NOW + timedelta(hours=20)
     with pytest.raises(WindowAlreadyEndedError):
-        rebuilt.end_window(w1, NOW + timedelta(hours=20), "corr-3")
+        rebuilt.end_window(w1, ended_at, "corr-3")
 
 
 def test_end_window_for_unknown_window_id_raises():

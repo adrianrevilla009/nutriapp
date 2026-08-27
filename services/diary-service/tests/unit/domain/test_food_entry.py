@@ -101,9 +101,10 @@ def test_delete_produces_deleted_event_and_rebuild_yields_deleted_true():
 def test_correct_after_deletion_raises():
     entry, _logged_event, _entry_id, _user_id = _logged_entry()
     entry.delete(deleted_at=NOW, correlation_id="corr-2")
+    source = _source()
     with pytest.raises(EntryAlreadyDeletedError):
         entry.correct(
-            source=_source(),
+            source=source,
             meal_slot=MealSlot.LUNCH,
             occurred_at=NOW,
             corrected_at=NOW,

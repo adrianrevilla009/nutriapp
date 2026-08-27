@@ -50,11 +50,11 @@ def validate(
     if latest_weight_kg is None:
         return
 
-    if goal_type == GoalType.LOSE and not (goal_target.target_value < latest_weight_kg):
+    if goal_type == GoalType.LOSE and goal_target.target_value >= latest_weight_kg:
         raise InvalidGoalTargetError(
             "target_value must be strictly less than the latest recorded weight for a LOSE goal."
         )
-    if goal_type == GoalType.GAIN and not (goal_target.target_value > latest_weight_kg):
+    if goal_type == GoalType.GAIN and goal_target.target_value <= latest_weight_kg:
         raise InvalidGoalTargetError(
             "target_value must be strictly greater than the latest recorded weight for a GAIN goal."
         )
