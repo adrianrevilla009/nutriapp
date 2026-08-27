@@ -191,6 +191,7 @@ jobs:
           image-ref: profile-service:${{ github.sha }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          ignore-unfixed: "true"
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this

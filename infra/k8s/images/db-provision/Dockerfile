@@ -14,11 +14,22 @@
 FROM python:3.12-slim AS runtime
 
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir awscli~=1.34 \
-    && useradd --uid 1000 --create-home --shell /usr/sbin/nologin dbprovision
+    && useradd --uid 1000 --create-home --shell /usr/sbin/nologin dbprovision \
+    # pip itself (and its vendored msgpack/pkg_resources copies, each with
+    # known HIGH-severity CVEs) is build-time-only here -- provision.sh
+    # only ever calls psql/aws/python3, never pip -- so it's removed once
+    # awscli is installed, the same real-fix rationale as the other
+    # services' Dockerfiles. perl-base is NOT removed here (unlike the
+    # other services' Dockerfiles) -- postgresql-client genuinely depends
+    # on it transitively (verified: removing it cascades apt into also
+    # removing postgresql-client itself, breaking psql).
+    && rm -rf /usr/local/lib/python3.12/site-packages/pip \
+              /usr/local/lib/python3.12/site-packages/pip-*.dist-info
 
 USER dbprovision
 WORKDIR /home/dbprovision
