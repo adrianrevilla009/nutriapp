@@ -1,0 +1,136 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Mirrors infra/k8s/charts/catalog-service/values.yaml's
+# structure (this service's closest conventional-persistence precedent).
+
+nameOverride: nutrition-calculation-service
+fullnameOverride: nutrition-calculation-service
+
+image:
+  repository: nutrition-calculation-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (nutrition-calculation-service.tf)
+  # with the IRSA role ARN granting access to this service's own Secrets
+  # Manager entries PLUS the one narrow, human-approved exception:
+  # profile-service's per-caller reveal-metrics credential (implementation
+  # plan Addendum 1, security sub-addendum requirement 2) -- never
+  # profile-service's db-credentials or KMS key.
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's only public HTTP surface is /api/v1/nutrition/* via
+  # Kong. Bare podSelector (no namespaceSelector) scopes to the shared
+  # namespace, same convention as catalog-service's/diary-service's charts.
+  #
+  # NOTE (same known _lib-level gap those charts document): _lib only
+  # renders `policyTypes: [Ingress]` here -- egress (to the shared RDS
+  # instance, RabbitMQ, ElastiCache) is unrestricted by THIS policy. The
+  # Addendum-1-mandated egress restriction to profile-service's internal
+  # port specifically is a SEPARATE, additional NetworkPolicy resource
+  # (templates/networkpolicy-egress-profile-reveal.yaml), not expressed
+  # via this shared library template.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# profileRevealEgress: the Addendum-1-mandated narrow egress rule -- this
+# service's pods may reach OTHER PODS ONLY via profile-service's pod
+# selector, on its internal, non-public reveal port (distinct from
+# profile-service's public Kong-routed port) -- never lateral movement to
+# any other in-cluster service (implementation plan Addendum 1, security
+# sub-addendum requirement 3). Also allows this service's own external
+# dependencies by port (RDS/Redis/RabbitMQ) -- see
+# templates/networkpolicy-egress-profile-reveal.yaml's header comment for
+# why those three are port-scoped rather than CIDR/pod-selector-scoped
+# today (a documented follow-up, not a silent gap).
+profileRevealEgress:
+  enabled: true
+  profileServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: profile-service
+  profileServiceInternalPort: 8001
+  rdsPort: 5432
+  redisPort: 6379
+  rabbitmqPort: 5672
+
+# _db-provision-job.tpl input (implementation plan section 7): creates
+# this service's own logical database + role inside the shared RDS
+# instance as a pre-install/pre-upgrade Helm hook, idempotent on every
+# upgrade.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: nutrition_calculation_service
+  roleName: nutrition_calculation_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["nutrition-calculation-service"]
+
+env:
+  AWS_REGION: us-east-1
+  # NUTRITION_CALCULATION_SERVICE_REDIS_URL: set by Terraform (nutrition-calculation-service.tf)
+  # from the shared ElastiCache module's host:port -- reuses the single
+  # shared cluster via a `nutrition:*` key namespace (RedisCurrentTargetCache/
+  # RedisCurrentTotalCache), no new ElastiCache cluster provisioned.
+  NUTRITION_CALCULATION_SERVICE_PROFILE_SERVICE_BASE_URL: "http://profile-service:8001"
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (nutrition-calculation-service.tf) at deploy time.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  profileRevealCredential: "" # set by Terraform: module.secrets.profile_reveal_credential_secret_arns["nutrition-calculation-service"] (Addendum 1)

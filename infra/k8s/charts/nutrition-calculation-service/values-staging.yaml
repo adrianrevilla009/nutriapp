@@ -1,0 +1,14 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/nutrition-calculation-service/db-credentials
+  profileRevealCredential: nutriapp/staging/profile-service/internal-reveal-credential-nutrition-calculation-service
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/nutrition-calculation-service/db-credentials

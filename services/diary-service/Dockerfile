@@ -36,8 +36,8 @@ RUN apt-get update \
     && apt-get remove -y --purge --allow-remove-essential perl-base \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /usr/local/lib/python3.12/site-packages/pip \
-              /usr/local/lib/python3.12/site-packages/pip-*.dist-info
-RUN useradd --uid 1000 --create-home app
+              /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
+    && useradd --uid 1000 --create-home app
 WORKDIR /app
 COPY --from=builder /repo/services/diary-service/.venv /app/.venv
 COPY services/diary-service/domain/ domain/

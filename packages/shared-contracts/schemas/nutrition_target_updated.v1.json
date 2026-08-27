@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/nutrition_target_updated.v1.json",
+  "title": "NutritionTargetUpdated",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "NutritionTargetUpdated" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": [
+        "user_id", "bmr_kcal", "tdee_kcal", "calorie_target_kcal", "macro_targets",
+        "goal_type", "activity_level", "activity_adjustment_kcal", "clamped",
+        "clamp_reason", "formula_version", "reason", "effective_from"
+      ],
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "bmr_kcal": { "type": "number" },
+        "tdee_kcal": { "type": "number" },
+        "calorie_target_kcal": { "type": "number" },
+        "macro_targets": {
+          "type": "object",
+          "required": ["protein_g_min", "protein_g_max", "fat_g_min", "carbs_g"],
+          "properties": {
+            "protein_g_min": { "type": "number" },
+            "protein_g_max": { "type": "number" },
+            "fat_g_min": { "type": "number" },
+            "carbs_g": { "type": "number" }
+          },
+          "additionalProperties": false
+        },
+        "goal_type": { "enum": ["LOSE", "MAINTAIN", "GAIN"] },
+        "activity_level": { "enum": ["SEDENTARY", "LIGHT", "MODERATE", "ACTIVE", "VERY_ACTIVE"] },
+        "activity_adjustment_kcal": { "type": ["number", "null"] },
+        "clamped": { "type": "boolean" },
+        "clamp_reason": { "type": ["string", "null"] },
+        "formula_version": { "type": "string" },
+        "reason": {
+          "enum": ["weight_recorded", "body_metric_recorded", "goal_set", "goal_updated", "formula_correction"]
+        },
+        "effective_from": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,77 @@
+{{/*
+Addendum-1-mandated narrow egress restriction (implementation plan
+Addendum 1, security sub-addendum requirement 3 / implementation plan
+section 3's "NetworkPolicy must additionally allow egress to
+profile-service's internal port only ... not a blanket cluster-wide
+egress rule"): this service's pods may reach OTHER PODS in the namespace
+ONLY via profile-service's pod selector, on its internal, non-Kong-routed
+reveal port -- never arbitrary lateral movement to any other service's
+pods. Declared as its own plain NetworkPolicy resource (not via the
+shared `_lib` `_networkpolicy.tpl`, which only renders
+`policyTypes: [Ingress]` today -- see infra/k8s/charts/_lib/README.md's
+documented gap, restated in this chart's values.yaml) so this service is
+the first to actually restrict its own egress, without changing that
+shared library template's contract for every other service.
+
+Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
+Kubernetes default-denies ALL egress from it except what some policy
+explicitly allows (the union across every such policy) -- so this
+resource also allows the narrow, PORT-scoped (not destination-scoped)
+egress this service genuinely needs for its own external dependencies
+(the shared RDS Postgres instance, the shared ElastiCache Redis cluster,
+RabbitMQ) and DNS. Those three are "broad by destination, narrow by
+port" -- a real gap flagged explicitly, not silently pretended to be
+CIDR/pod-selector-scoped: no other chart in this repo threads RDS/
+ElastiCache/RabbitMQ's actual reachable CIDRs into Helm values today, and
+guessing at one here risked a silently-broken (not merely
+weaker-than-ideal) deployment. Tightening this to explicit CIDR/pod
+selectors is a documented follow-up once those values are wired through
+Terraform, not a blocker for this service's own blast-radius requirement
+around profile-service specifically, which this resource does fully
+satisfy today (profile-service is the only pod-selector destination
+allowed at all -- no lateral movement to any other in-cluster service).
+*/}}
+{{- if .Values.profileRevealEgress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nutriapp-lib.fullname" . }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nutriapp-lib.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nutriapp-lib.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS -- otherwise this pod cannot resolve any hostname at all,
+    # including profile-service's own ClusterIP DNS name.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The one narrow, pod-selector-scoped allowance this resource exists
+    # for: profile-service's internal reveal port, nothing else of
+    # profile-service's and no other in-cluster service at all.
+    - to:
+        - podSelector:
+            {{- toYaml .Values.profileRevealEgress.profileServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.profileRevealEgress.profileServiceInternalPort }}
+    # This service's own external dependencies -- port-scoped, not
+    # destination-scoped (documented gap above): shared RDS Postgres,
+    # shared ElastiCache Redis, RabbitMQ.
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.profileRevealEgress.rdsPort }}
+        - protocol: TCP
+          port: {{ .Values.profileRevealEgress.redisPort }}
+        - protocol: TCP
+          port: {{ .Values.profileRevealEgress.rabbitmqPort }}
+{{- end }}

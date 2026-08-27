@@ -326,13 +326,50 @@ yet implemented — the owning service doesn't exist yet).
   "detected_items": [ { "product_id": "uuid | null", "label": "string",
   "confidence": "number" } ] }`
 
-### NutritionTargetUpdated / NutritionValueRecomputed (v1)
+### NutritionValueRecomputed (v1)
+- Status: Active
 - Producer: nutrition-calculation-service
-- Consumers: analytics-service, nutrition-assistant-service
-- Emitted when: a user's calculated calorie/macro target or a nutrient
-  total changes.
-- Payload: `{ "user_id": "uuid", "value": "...", "reason": "string",
-  "effective_from": "timestamp" }`
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  neither exists yet -- no live cross-service contract test runs against
+  them, only a payload-shape contract test against this entry).
+- Emitted when: a user's per-entry or per-day nutrient total changes,
+  triggered by `FoodEntryLogged`/`FoodEntryCorrected`/`FoodEntryDeleted`
+  (diary-service) or (reserved, not built this pass) a formula correction.
+  `confidence_range` is always `null` this pass (reserved seam for
+  food-recognition-service's AI-estimated confidence range, implementation
+  plan section 1).
+- Payload: `{ "user_id": "uuid", "scope": "entry | day", "entry_id": "uuid | null",
+  "date": "date | null", "macros": { "calories_kcal": "number", "protein_g": "number",
+  "carbs_g": "number", "fat_g": "number" }, "micronutrients": { "...": "number | null" } | null,
+  "micronutrients_status": "available | partial | unavailable", "is_estimated": "boolean",
+  "confidence_range": { "min": "number", "max": "number" } | null, "formula_version": "string",
+  "reason": "food_entry_logged | food_entry_corrected | food_entry_deleted | formula_correction",
+  "recomputed_at": "timestamp" }`. See
+  `packages/shared-contracts/schemas/nutrition_value_recomputed.v1.json`.
+
+### NutritionTargetUpdated (v1)
+- Status: Active
+- Producer: nutrition-calculation-service
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  neither exists yet -- no live cross-service contract test runs against
+  them, only a payload-shape contract test against this entry).
+- Emitted when: a user's calculated calorie/macro target changes,
+  triggered by `WeightRecorded`/`BodyMetricRecorded`/`GoalSet`/`GoalUpdated`
+  (profile-service, via the internal reveal endpoint per implementation
+  plan Addendum 1 -- these trigger events are never decrypted by
+  nutrition-calculation-service itself) or (reserved, not built this pass)
+  a formula correction. `activity_adjustment_kcal` is always `null` this
+  pass (reserved seam for activity-service).
+- Payload: `{ "user_id": "uuid", "bmr_kcal": "number", "tdee_kcal": "number",
+  "calorie_target_kcal": "number", "macro_targets": { "protein_g_min": "number",
+  "protein_g_max": "number", "fat_g_min": "number", "carbs_g": "number" },
+  "goal_type": "LOSE | MAINTAIN | GAIN",
+  "activity_level": "SEDENTARY | LIGHT | MODERATE | ACTIVE | VERY_ACTIVE",
+  "activity_adjustment_kcal": "number | null", "clamped": "boolean",
+  "clamp_reason": "string | null", "formula_version": "string",
+  "reason": "weight_recorded | body_metric_recorded | goal_set | goal_updated | formula_correction",
+  "effective_from": "timestamp" }`. See
+  `packages/shared-contracts/schemas/nutrition_target_updated.v1.json`.
 
 ### ExerciseLogged / WearableActivitySynced (v1)
 - Producer: activity-service

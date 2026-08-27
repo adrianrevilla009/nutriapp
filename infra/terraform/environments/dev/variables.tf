@@ -98,12 +98,23 @@ variable "jwt_signing_key_service_names" {
 
 variable "db_credential_service_names" {
   type    = list(string)
-  default = ["identity-service", "profile-service", "catalog-service"]
+  default = ["identity-service", "profile-service", "catalog-service", "nutrition-calculation-service"]
 }
 
 variable "internal_reveal_credential_service_names" {
   type    = list(string)
   default = ["identity-service"]
+}
+
+variable "cross_service_reveal_credentials" {
+  description = "Per-(owner_service, caller_service) pairs needing a distinct internal reveal credential + narrow caller IRSA grant (see modules/secrets/variables.tf's fuller description). profile-service's reveal-metrics endpoint, called only by nutrition-calculation-service (profile-service implementation plan Addendum 2 / nutrition-calculation-service implementation plan Addendum 1)."
+  type = list(object({
+    owner_service  = string
+    caller_service = string
+  }))
+  default = [
+    { owner_service = "profile-service", caller_service = "nutrition-calculation-service" },
+  ]
 }
 
 variable "usda_fdc_api_key_service_names" {

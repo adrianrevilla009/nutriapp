@@ -41,7 +41,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
@@ -60,7 +60,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       - name: mypy
         run: uv run mypy domain application infrastructure
 
@@ -88,7 +88,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       - name: Unit tests (domain + application, no I/O)
         run: uv run pytest tests/unit -q
 
@@ -105,7 +105,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       - name: pip-audit
         run: |
           # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
@@ -129,7 +129,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       # testcontainers pulls Postgres/RabbitMQ images at runtime -- the
       # ubuntu-latest runner ships Docker already. KMS is faked in-process
       # (infrastructure/security tests inject a fake KMS client), no AWS
@@ -152,7 +152,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
       # Per-layer thresholds (CLAUDE.md section 3): domain >= 90%,
       # application >= 85%, infrastructure >= 70%. One full-suite run
       # collects a single .coverage data file; `coverage report
