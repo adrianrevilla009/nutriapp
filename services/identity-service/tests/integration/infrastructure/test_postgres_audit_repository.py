@@ -66,7 +66,9 @@ async def test_audit_repository__record__is_persisted_and_readable(session):
     )
     await repo.record(entry)
 
-    result = await session.execute(select(AuditLogModel).where(AuditLogModel.audit_id == entry.audit_id))
+    result = await session.execute(
+        select(AuditLogModel).where(AuditLogModel.audit_id == entry.audit_id)
+    )
     row = result.scalar_one()
     assert row.action == "login"
     assert row.outcome == "success"
@@ -94,7 +96,10 @@ async def test_audit_repository__connection_actually_restricted_to_audit_writer_
 ):
     repo = PostgresAuditRepository(audit_writer_session)
     entry = AuditRecord(
-        action="login", target_type="user", target_id="u-role-check", outcome="success",
+        action="login",
+        target_type="user",
+        target_id="u-role-check",
+        outcome="success",
         correlation_id="c-role-check",
     )
     await repo.record(entry)  # must not raise — INSERT is granted
@@ -119,7 +124,10 @@ async def test_audit_repository__connection_actually_restricted_to_audit_writer_
     # repository's own code path).
     repo = PostgresAuditRepository(session)
     entry = AuditRecord(
-        action="login", target_type="user", target_id="u-update-check", outcome="failure",
+        action="login",
+        target_type="user",
+        target_id="u-update-check",
+        outcome="failure",
         correlation_id="c-update-check",
     )
     await repo.record(entry)

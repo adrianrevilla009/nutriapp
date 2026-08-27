@@ -1,6 +1,7 @@
 """Maps application/domain exceptions to the standard NutriApp error shape
 (api-conventions SKILL.md): {"error": "...", "code": "..."}.
 """
+
 from __future__ import annotations
 
 import structlog

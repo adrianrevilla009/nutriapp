@@ -2,6 +2,7 @@
 (hexagonal-architecture SKILL.md: "Application: unit tests using
 fake/in-memory implementations of ports, not the real adapters").
 """
+
 from __future__ import annotations
 
 import uuid
@@ -65,9 +66,7 @@ class FakeTokenRepository:
         self, user_id: uuid.UUID, kind: SecretTokenKind
     ) -> SecretReferenceToken | None:
         candidates = [
-            t
-            for t in self.secret_tokens.values()
-            if t.user_id == user_id and t.kind == kind
+            t for t in self.secret_tokens.values() if t.user_id == user_id and t.kind == kind
         ]
         return max(candidates, key=lambda t: t.created_at, default=None)
 

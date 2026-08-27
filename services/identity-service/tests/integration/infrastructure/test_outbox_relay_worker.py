@@ -1,6 +1,7 @@
 """OutboxRelayWorker end-to-end: Postgres outbox row -> relayed onto
 RabbitMQ -> marked published, not republished on a second relay pass.
 """
+
 from __future__ import annotations
 
 import asyncio

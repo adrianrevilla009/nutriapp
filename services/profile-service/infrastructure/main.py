@@ -5,6 +5,7 @@ SKILL.md, messaging-conventions SKILL.md).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
@@ -21,7 +22,7 @@ logger = structlog.get_logger()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     container = Container(Settings.from_env())
     await container.startup()
     app.state.container = container

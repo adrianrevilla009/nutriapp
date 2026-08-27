@@ -2,6 +2,7 @@
 
 Pure domain code — no framework imports (ADR-0001).
 """
+
 from __future__ import annotations
 
 import re

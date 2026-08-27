@@ -1,6 +1,7 @@
 """GET /.well-known/jwks.json — public key distribution per ADR-0022's
 Open Host Service pattern. Every other service fetches and caches this
 (with rotation in mind) to verify access tokens locally."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

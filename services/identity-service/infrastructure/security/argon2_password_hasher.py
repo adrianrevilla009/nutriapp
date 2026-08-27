@@ -4,6 +4,7 @@ argon2-cffi only, per docs/security-and-compliance.md ("Password hashing
 via argon2 (preferred) or bcrypt. Never a custom scheme."). Never logs the
 plaintext or the resulting hash.
 """
+
 from __future__ import annotations
 
 from argon2 import PasswordHasher as Argon2Lib

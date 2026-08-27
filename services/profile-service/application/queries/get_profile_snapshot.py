@@ -58,12 +58,12 @@ class GetProfileSnapshotHandler:
         return ProfileSnapshotDTO(
             user_id=query.user_id,
             consent_granted=bool(row.get("consent_granted", False)),
-            weight_kg=decrypted["weight_kg"],
-            height_cm=decrypted["height_cm"],
-            age=decrypted["age"],
-            sex=decrypted["sex"],
-            activity_level=decrypted["activity_level"],
+            weight_kg=decrypted["weight_kg"],  # type: ignore[arg-type]
+            height_cm=decrypted["height_cm"],  # type: ignore[arg-type]
+            age=decrypted["age"],  # type: ignore[arg-type]
+            sex=decrypted["sex"],  # type: ignore[arg-type]
+            activity_level=decrypted["activity_level"],  # type: ignore[arg-type]
             goal_type=row.get("goal_type"),
-            goal_target_value=decrypted["goal_target_value"],
+            goal_target_value=decrypted["goal_target_value"],  # type: ignore[arg-type]
             goal_target_date=date.fromisoformat(goal_target_date) if goal_target_date else None,
         )

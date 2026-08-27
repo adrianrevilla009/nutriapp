@@ -4,6 +4,7 @@ Persisted append-only (INSERT-only DB role) per
 .claude/skills/observability-audit/SKILL.md. Never includes a password,
 raw token, or password hash in `metadata`.
 """
+
 from __future__ import annotations
 
 import uuid

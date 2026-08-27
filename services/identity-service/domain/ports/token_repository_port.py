@@ -19,9 +19,7 @@ class TokenRepositoryPort(Protocol):
     # Secret-reference tokens (email verification / password reset)
     async def save_secret_token(self, token: SecretReferenceToken) -> None: ...
 
-    async def get_secret_token(
-        self, reference_id: uuid.UUID
-    ) -> SecretReferenceToken | None: ...
+    async def get_secret_token(self, reference_id: uuid.UUID) -> SecretReferenceToken | None: ...
 
     async def get_latest_secret_token_for_user(
         self, user_id: uuid.UUID, kind: SecretTokenKind

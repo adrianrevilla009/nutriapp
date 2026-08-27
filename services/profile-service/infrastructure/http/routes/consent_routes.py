@@ -5,6 +5,7 @@ can be written."""
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +39,7 @@ async def grant_consent(
     session: AsyncSession = Depends(get_session),
     user_id: uuid.UUID = Depends(get_authenticated_user_id),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     event_store = PostgresEventStore(session)
     outbox = PostgresOutboxRepository(session)
     snapshot_projector = PostgresSnapshotProjector(session)

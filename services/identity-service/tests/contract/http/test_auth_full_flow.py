@@ -5,6 +5,7 @@ plus the password-reset variant. This is the fixture referenced in the
 test plan section 4 for reuse once catalog/diary/nutrition-calculation
 services exist.
 """
+
 from __future__ import annotations
 
 from sqlalchemy import select

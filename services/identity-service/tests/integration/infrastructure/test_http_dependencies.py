@@ -1,6 +1,7 @@
 """Pure-logic infra helpers — cheap to test without any real I/O, and
 they contain real branching worth covering (X-Forwarded-For parsing,
 correlation id passthrough vs. generation)."""
+
 from __future__ import annotations
 
 from starlette.requests import Request

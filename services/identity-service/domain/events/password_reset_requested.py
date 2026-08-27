@@ -1,4 +1,5 @@
 """PasswordResetRequested (v1, new) — see docs/events-catalog.md."""
+
 from __future__ import annotations
 
 import uuid

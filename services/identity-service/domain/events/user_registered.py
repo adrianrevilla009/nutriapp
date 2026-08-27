@@ -4,6 +4,7 @@ Additive change in this plan: payload gains
 `email_verification_token_reference_id` (reference id only, never the raw
 verification secret — implementation plan section 5).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -30,9 +31,7 @@ def build_user_registered_event(
             "user_id": str(user_id),
             "email": email,
             "registered_at": registered_at_iso,
-            "email_verification_token_reference_id": str(
-                email_verification_token_reference_id
-            ),
+            "email_verification_token_reference_id": str(email_verification_token_reference_id),
         },
         metadata=EventMetadata(correlation_id=correlation_id, user_id=str(user_id)),
     )

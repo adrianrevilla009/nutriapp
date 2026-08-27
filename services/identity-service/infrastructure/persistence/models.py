@@ -4,6 +4,7 @@ Mirrors migrations/versions/0001_create_identity_tables.py. The domain
 layer never imports this module (ADR-0001); mapping to/from domain
 objects happens in the Postgres*Repository adapters.
 """
+
 from __future__ import annotations
 
 import uuid
