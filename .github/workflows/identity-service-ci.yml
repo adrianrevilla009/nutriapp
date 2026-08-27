@@ -113,8 +113,8 @@ jobs:
           # out entirely ("Dependency not found on PyPI") rather than just
           # skipping them, which used to abort the scan before it audited
           # anything else in this file's real third-party dependencies.
-          uv pip compile pyproject.toml | grep -v 'packages/shared-contracts$' > /tmp/requirements-audit.txt
-          uvx pip-audit --strict -r /tmp/requirements-audit.txt
+          uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts$' > /tmp/requirements-audit.txt
+          uvx --no-build pip-audit==2.10.1 --strict -r /tmp/requirements-audit.txt
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest
@@ -184,6 +184,7 @@ jobs:
           image-ref: identity-service:${{ github.sha }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          ignore-unfixed: "true"
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this

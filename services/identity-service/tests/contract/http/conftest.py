@@ -37,7 +37,7 @@ class _FakeContainer:
         self.settings = _FakeSettings()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(auth_router)

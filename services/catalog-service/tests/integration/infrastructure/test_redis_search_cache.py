@@ -7,7 +7,7 @@ from infrastructure.caching.redis_search_cache import RedisSearchCache
 from tests.fixtures.factories import make_raw_record
 
 
-@pytest.fixture()
+@pytest.fixture
 async def redis_client(redis_url):
     client = Redis.from_url(redis_url)
     yield client

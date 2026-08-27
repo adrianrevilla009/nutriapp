@@ -13,13 +13,13 @@ from infrastructure.persistence.postgres_user_repository import PostgresUserRepo
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s
 
 
-@pytest.fixture()
+@pytest.fixture
 async def existing_user(session):
     users = PostgresUserRepository(session)
     user = User.register(Email("tokenowner@example.com"), "hashed")

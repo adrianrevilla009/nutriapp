@@ -21,7 +21,7 @@ from infrastructure.persistence.postgres_audit_repository import PostgresAuditRe
 from infrastructure.security.jwt_token_issuer import generate_rsa_key_pair
 
 
-@pytest.fixture()
+@pytest.fixture
 async def real_container(db_engine, postgres_async_url):
     # Simulates infra/k8s/charts/_lib/templates/_db-provision-job.tpl's
     # audit-writer role creation (idempotent — the underlying container

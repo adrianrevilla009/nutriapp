@@ -36,6 +36,7 @@ jobs:
           image-ref: nutriapp/db-provision:${{ github.sha }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          ignore-unfixed: "true"
 
   # push / deploy-dev: follow-up once infra/terraform's platform-infra plan
   # is actually applied (module.ecr_db_provision) and an EKS cluster

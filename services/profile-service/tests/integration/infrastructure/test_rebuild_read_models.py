@@ -19,7 +19,7 @@ from infrastructure.persistence.postgres_snapshot_projector import PostgresSnaps
 from scripts.rebuild_read_models import rebuild_read_models
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s
