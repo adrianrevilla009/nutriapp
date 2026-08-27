@@ -5,6 +5,7 @@ information useful for enumeration (CLAUDE.md / implementation plan
 acceptance criterion 3: no user-enumeration signal). The *specific* reason
 is only ever written to the audit trail, never returned to the caller.
 """
+
 from __future__ import annotations
 
 

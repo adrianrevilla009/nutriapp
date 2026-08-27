@@ -2,6 +2,7 @@
 command DTO, call the application handler, serialize the result
 (api-conventions SKILL.md). No business logic here.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Response
@@ -174,7 +175,9 @@ async def refresh(
     handler = RefreshAccessTokenHandler(tokens, users, container.token_issuer)
     try:
         result = await handler.handle(
-            RefreshAccessTokenCommand(refresh_token=body.refresh_token, correlation_id=correlation_id)
+            RefreshAccessTokenCommand(
+                refresh_token=body.refresh_token, correlation_id=correlation_id
+            )
         )
         await session.commit()
     except Exception as exc:  # noqa: BLE001

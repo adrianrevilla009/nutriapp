@@ -2,6 +2,7 @@
 validate against packages/shared-contracts/schemas/*.json, the single
 source of truth also referenced by docs/events-catalog.md.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,15 @@ from domain.events.password_reset_requested import build_password_reset_requeste
 from domain.events.user_registered import build_user_registered_event
 
 SCHEMAS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "..", "..", "packages", "shared-contracts", "schemas"
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "..",
+    "..",
+    "packages",
+    "shared-contracts",
+    "schemas",
 )
 
 
@@ -59,7 +68,12 @@ def test_new_device_login_detected__wire_shape__matches_shared_contracts_schema(
 
 
 @pytest.mark.parametrize(
-    "schema_file", ["user_registered.v1.json", "password_reset_requested.v1.json", "new_device_login_detected.v1.json"]
+    "schema_file",
+    [
+        "user_registered.v1.json",
+        "password_reset_requested.v1.json",
+        "new_device_login_detected.v1.json",
+    ],
 )
 def test_schema_file__is_itself_valid_json_schema(schema_file):
     schema = load_schema(schema_file)

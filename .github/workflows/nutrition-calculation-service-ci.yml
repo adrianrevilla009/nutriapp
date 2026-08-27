@@ -107,7 +107,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
       - name: pip-audit
-        run: uvx pip-audit --strict -r <(uv pip compile pyproject.toml)
+        run: |
+          # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
+          # they're not published to PyPI, so pip-audit's strict mode errors
+          # out entirely ("Dependency not found on PyPI") rather than just
+          # skipping them, which used to abort the scan before it audited
+          # anything else in this file's real third-party dependencies.
+          uv pip compile pyproject.toml | grep -v '^shared-contracts' > /tmp/requirements-audit.txt
+          uvx pip-audit --strict -r /tmp/requirements-audit.txt
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest

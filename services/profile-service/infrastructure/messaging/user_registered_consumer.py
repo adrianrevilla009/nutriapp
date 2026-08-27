@@ -110,7 +110,9 @@ class UserRegisteredConsumer:
     async def _retry_or_dead_letter(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
         assert self._channel is not None
         headers = dict(message.headers or {})
-        attempt = int(headers.get(RETRY_HEADER, 0)) + 1
+        # headers are dynamically typed on the wire -- this service only
+        # ever writes an int here (below), so the narrow cast is safe.
+        attempt = int(headers.get(RETRY_HEADER, 0)) + 1  # type: ignore[arg-type]
 
         if attempt > self._max_attempts:
             target_queue_name = DLQ_NAME

@@ -3,6 +3,7 @@
 No rotation-on-use for v1 (approved test-plan assumption) — the refresh
 token itself is not reissued, only a new access token.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -43,9 +44,7 @@ class RefreshAccessTokenHandler:
         self._now_fn = now_fn
 
     async def handle(self, command: RefreshAccessTokenCommand) -> RefreshAccessTokenResult:
-        token = await self._tokens.get_refresh_token_by_hash(
-            hash_secret(command.refresh_token)
-        )
+        token = await self._tokens.get_refresh_token_by_hash(hash_secret(command.refresh_token))
         if token is None:
             raise TokenRevokedError("Refresh token is invalid.")
 

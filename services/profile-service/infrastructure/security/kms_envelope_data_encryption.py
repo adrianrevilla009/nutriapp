@@ -61,7 +61,9 @@ import asyncio
 import base64
 import os
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import Any
 
 import pybreaker
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -93,8 +95,8 @@ class KmsEnvelopeDataEncryption:
 
     def __init__(
         self,
-        session_factory,
-        kms_client,
+        session_factory: Callable[[], AsyncSession],
+        kms_client: Any,
         kms_key_id: str,
         fail_max: int = DEFAULT_FAIL_MAX,
         reset_timeout_seconds: int = DEFAULT_RESET_TIMEOUT_SECONDS,
@@ -199,19 +201,19 @@ class KmsEnvelopeDataEncryption:
 
     async def _kms_generate_data_key(self) -> tuple[bytes, bytes]:
         response = await self._call_kms(self._raw_generate_data_key)
-        return response["Plaintext"], response["CiphertextBlob"]
+        return bytes(response["Plaintext"]), bytes(response["CiphertextBlob"])
 
     async def _kms_decrypt(self, ciphertext_blob: bytes) -> bytes:
         response = await self._call_kms(self._raw_decrypt, ciphertext_blob)
-        return response["Plaintext"]
+        return bytes(response["Plaintext"])
 
-    def _raw_generate_data_key(self):
-        return self._kms.generate_data_key(KeyId=self._kms_key_id, KeySpec=DEK_SPEC)
+    def _raw_generate_data_key(self) -> dict[str, Any]:
+        return self._kms.generate_data_key(KeyId=self._kms_key_id, KeySpec=DEK_SPEC)  # type: ignore[no-any-return]
 
-    def _raw_decrypt(self, ciphertext_blob: bytes):
-        return self._kms.decrypt(CiphertextBlob=ciphertext_blob, KeyId=self._kms_key_id)
+    def _raw_decrypt(self, ciphertext_blob: bytes) -> dict[str, Any]:
+        return self._kms.decrypt(CiphertextBlob=ciphertext_blob, KeyId=self._kms_key_id)  # type: ignore[no-any-return]
 
-    async def _call_kms(self, fn, *args):
+    async def _call_kms(self, fn: Callable[..., dict[str, Any]], *args: bytes) -> dict[str, Any]:
         try:
             protected = self._breaker(_retrying(fn))
             return await asyncio.wait_for(
@@ -225,14 +227,14 @@ class KmsEnvelopeDataEncryption:
             raise KmsCallFailedError(f"KMS call failed: {exc}") from exc
 
 
-def _retrying(fn):
+def _retrying(fn: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=0.1, max=1.0),
         retry=retry_if_exception_type(Exception),
         reraise=True,
     )
-    def wrapped(*args):
+    def wrapped(*args: bytes) -> dict[str, Any]:
         return fn(*args)
 
     return wrapped

@@ -7,6 +7,7 @@ strings (refresh tokens, email-verification/password-reset secrets), for
 which a fast cryptographic hash (SHA-256) is the correct, standard choice
 for at-rest storage of the comparison hash.
 """
+
 from __future__ import annotations
 
 import hashlib

@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies: request-scoped DB session, correlation id,
 client context (api-conventions SKILL.md: every request propagates or
 generates X-Correlation-Id)."""
+
 from __future__ import annotations
 
 import uuid

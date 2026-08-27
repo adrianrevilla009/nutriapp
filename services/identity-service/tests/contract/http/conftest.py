@@ -4,6 +4,7 @@ dependency overrides so these tests exercise real HTTP routing/
 serialization against a real DB without needing Redis/RabbitMQ running
 (testing-strategy SKILL.md).
 """
+
 from __future__ import annotations
 
 import httpx

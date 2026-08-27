@@ -5,6 +5,7 @@ Each event is published and marked-published individually so a crash
 mid-relay never loses an event (it simply stays unpublished and is
 retried on the next poll) and never republishes an already-published row.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -16,6 +16,7 @@ Revises:
 Create Date: 2026-08-24
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

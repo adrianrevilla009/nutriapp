@@ -47,7 +47,9 @@ async def test_redis_rate_limiter__resets_after_window(redis_client):
     import asyncio
 
     await asyncio.sleep(1.2)
-    await limiter.check_and_increment("k3", limit=1, window_seconds=1)  # window reset, allowed again
+    await limiter.check_and_increment(
+        "k3", limit=1, window_seconds=1
+    )  # window reset, allowed again
 
 
 async def test_redis_rate_limiter__connection_failure__fails_closed():

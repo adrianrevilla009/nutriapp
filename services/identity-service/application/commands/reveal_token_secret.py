@@ -7,6 +7,7 @@ secret so it can build the link in the outbound email. Never routed
 through Kong (implementation plan section 6). The caller wraps this call
 in a circuit breaker on its own side.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -103,6 +104,4 @@ class RevealTokenSecretHandler:
                 actor_id=str(token.user_id),
             )
         )
-        return RevealTokenSecretResult(
-            secret=secret, user_id=token.user_id, kind=token.kind
-        )
+        return RevealTokenSecretResult(secret=secret, user_id=token.user_id, kind=token.kind)

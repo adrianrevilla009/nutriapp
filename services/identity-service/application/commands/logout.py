@@ -1,4 +1,5 @@
 """LogoutCommand + handler. Idempotent: safe to call twice."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -34,9 +35,7 @@ class LogoutHandler:
         self._now_fn = now_fn
 
     async def handle(self, command: LogoutCommand) -> LogoutResult:
-        token = await self._tokens.get_refresh_token_by_hash(
-            hash_secret(command.refresh_token)
-        )
+        token = await self._tokens.get_refresh_token_by_hash(hash_secret(command.refresh_token))
         if token is None:
             # Unknown token: idempotent success, nothing to revoke, nothing to audit.
             return LogoutResult(revoked=False)

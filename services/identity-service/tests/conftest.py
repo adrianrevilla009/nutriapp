@@ -2,6 +2,7 @@
 contract tests (testing-strategy SKILL.md: "Use testcontainers to spin up
 real Postgres/RabbitMQ/Redis instances scoped to the test session").
 """
+
 from __future__ import annotations
 
 import pytest

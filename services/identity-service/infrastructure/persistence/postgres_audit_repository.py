@@ -6,6 +6,7 @@ observability-audit SKILL.md). Commits independently of the caller's main
 transaction so an audit record survives even if the triggering operation
 is subsequently rolled back by the caller.
 """
+
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession

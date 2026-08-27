@@ -4,6 +4,7 @@ Naming convention (messaging-conventions SKILL.md):
 `{producing_service}.{aggregate}.{event_type_snake_case}`, published to a
 topic exchange per producing service (`identity.events`).
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,9 @@ class RabbitMqEventPublisher:
         self._exchange = exchange
 
     @classmethod
-    async def create(cls, connection: aio_pika.abc.AbstractRobustConnection) -> RabbitMqEventPublisher:
+    async def create(
+        cls, connection: aio_pika.abc.AbstractRobustConnection
+    ) -> RabbitMqEventPublisher:
         channel = await connection.channel()
         exchange = await channel.declare_exchange(
             EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True

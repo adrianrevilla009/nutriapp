@@ -2,6 +2,7 @@
 ports they satisfy (hexagonal-architecture SKILL.md). Route handlers and
 the outbox relay worker depend on this module, never the reverse.
 """
+
 from __future__ import annotations
 
 import os
@@ -99,9 +100,7 @@ class Container:
         # (RedisRateLimiter) on any RedisError, including a timeout, so a
         # slow-but-not-dead Redis should fail fast rather than hold up
         # register/login/password-reset-request.
-        self.redis = Redis.from_url(
-            settings.redis_url, socket_connect_timeout=2, socket_timeout=2
-        )
+        self.redis = Redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
         self.password_hasher = Argon2PasswordHasher()
         self.token_issuer = JwtTokenIssuer(
             private_key_pem=settings.jwt_private_key_pem,

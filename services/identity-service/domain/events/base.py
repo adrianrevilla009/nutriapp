@@ -4,6 +4,7 @@ Matches the schema documented in docs/events-catalog.md's "Format per
 entry" section: event_id, aggregate_id, event_type, version, occurred_at,
 payload, metadata (correlation_id, causation_id, user_id).
 """
+
 from __future__ import annotations
 
 import uuid

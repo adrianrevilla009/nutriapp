@@ -4,6 +4,7 @@ Issues short-lived RS256 access tokens carrying only `user_id` + `roles`
 claims, and exposes the public key as a JWK Set for
 `/.well-known/jwks.json`. Only identity-service ever holds the private key.
 """
+
 from __future__ import annotations
 
 import base64

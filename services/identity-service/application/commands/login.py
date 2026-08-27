@@ -5,6 +5,7 @@ refresh token (ADR-0022). Rejects with a single generic error shape for
 every failure reason (no user-enumeration signal) while writing the
 specific reason to the audit trail only.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -115,9 +116,7 @@ class LoginHandler:
             await self._audit_failure(command, reason="wrong_password", user=user)
             raise InvalidCredentialsError("Invalid email or password.")
 
-        fingerprint = DeviceFingerprint.from_request_context(
-            command.user_agent, command.client_ip
-        )
+        fingerprint = DeviceFingerprint.from_request_context(command.user_agent, command.client_ip)
         is_first_login = user.is_first_login()
         is_known_device = user.is_known_device(fingerprint.hash_value)
         user.record_login_success()

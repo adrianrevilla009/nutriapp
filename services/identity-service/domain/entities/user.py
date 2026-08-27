@@ -4,6 +4,7 @@ Zero framework imports (ADR-0001). Password hashing itself is an
 infrastructure concern (PasswordHasherPort); this aggregate only ever
 holds/compares already-computed hashes, never plaintext.
 """
+
 from __future__ import annotations
 
 import uuid

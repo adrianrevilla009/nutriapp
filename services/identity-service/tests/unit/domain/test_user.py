@@ -1,4 +1,3 @@
-
 import pytest
 
 from domain.entities.user import (

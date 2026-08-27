@@ -3,6 +3,7 @@
 Tokens carry roles, never raw permissions. Fine-grained per-resource
 authorization stays in each owning service.
 """
+
 from __future__ import annotations
 
 from enum import Enum

@@ -2,6 +2,7 @@
 the outbox relay worker (observability-audit SKILL.md, messaging-
 conventions SKILL.md).
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager

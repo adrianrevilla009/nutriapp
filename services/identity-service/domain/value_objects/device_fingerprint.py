@@ -4,6 +4,7 @@ Simple heuristic per the implementation plan §9.4: hash(User-Agent + IP).
 Not a strong anti-fraud signal — good enough for a "new device" nudge
 email, nothing more.
 """
+
 from __future__ import annotations
 
 import hashlib

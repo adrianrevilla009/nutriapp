@@ -69,3 +69,12 @@ target-version = "py310"
 python_version = "3.12"
 strict = true
 exclude = ["tests"]
+
+# boto3/botocore ship no inline types and no stub-only package is installed
+# (adding boto3-stubs is a separate, deliberate dependency decision, not
+# bundled into this CI-fix pass) -- this is the standard mypy idiom for a
+# third-party library with no stubs, scoped to exactly these two packages,
+# not a blanket suppression.
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true

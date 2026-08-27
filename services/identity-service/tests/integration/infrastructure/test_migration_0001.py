@@ -3,6 +3,7 @@ Postgres (database-migrations SKILL.md: "Migrations are tested against a
 real, containerized Postgres instance, not mocked") and asserts the
 append-only audit_log role grants it creates.
 """
+
 from __future__ import annotations
 
 import os
