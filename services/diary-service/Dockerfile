@@ -18,10 +18,7 @@ WORKDIR /repo
 COPY packages/shared-contracts/ packages/shared-contracts/
 COPY services/diary-service/pyproject.toml services/diary-service/uv.lock services/diary-service/
 WORKDIR /repo/services/diary-service
-# `uv sync` below builds packages/shared-contracts, a local first-party
-# path dependency (not a third-party sdist) -- --no-build cannot be
-# added without breaking this install.
-RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev  # NOSONAR
+RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev  # NOSONAR: builds packages/shared-contracts, a local first-party path dependency; --no-build cannot be added without breaking this install
 
 FROM python:3.12-slim AS runtime
 # The runtime image never invokes system python/pip -- it only ever runs
