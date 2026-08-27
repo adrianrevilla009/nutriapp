@@ -12,12 +12,28 @@
 # service issues no tokens and exposes no internal, non-Kong-routed
 # endpoint of its own. It DOES need read access to a NEW secret it does
 # not own -- profile-service's per-caller reveal-metrics credential
-# (implementation plan Addendum 1, security sub-addendum requirements 1/2)
-# -- provisioned by modules/secrets'
-# `profile_reveal_credential_caller_service_names` (this module's own
-# addition, reviewed alongside profile-service's coordinated reveal-
-# endpoint sub-plan per Addendum 1 item 12) and granted to exactly this
-# service's app_secrets IRSA role, nothing else of profile-service's.
+# (implementation plan Addendum 1, security sub-addendum requirements 1/2).
+#
+# That secret is provisioned by modules/secrets' `cross_service_reveal_credentials`
+# mechanism, owned by profile-service's coordinated reveal-endpoint
+# sub-plan (profile-service implementation-plan Addendum 2) -- this file
+# only consumes the resulting `cross_service_reveal_credential_secret_arns`
+# output, it does not (re)define the secret itself. Reconciled at
+# /implementation-review (Addendum 1 item 12) after two independently-built
+# worktrees briefly diverged on how this grant should be shaped.
+#
+# Grant shape: profile-service's module addition also creates a dedicated
+# `cross_service_reveal_credential_caller` IAM role trusting only this
+# service's ServiceAccount -- but a K8s ServiceAccount can only carry one
+# `eks.amazonaws.com/role-arn` IRSA annotation, and this service's
+# ServiceAccount already needs its own `app_secrets` role for its own
+# db-credentials. So instead of assuming that second role, this file
+# attaches ONE additional, separately-auditable inline policy directly to
+# this service's *existing* `app_secrets` role, scoped to exactly the one
+# `cross_service_reveal_credential` ARN below -- never profile-service's
+# db-credentials or KMS key (the narrow, human-approved exception to
+# CLAUDE.md section 2.9 stays exactly as narrow as originally approved,
+# just attached via a different, equally-scoped mechanism).
 #
 # Redis: reuses the single shared infra/terraform/modules/elasticache
 # cluster (same resolution as catalog-service.tf/diary-service.tf), isolated
@@ -49,9 +65,34 @@ module "ecr_nutrition_calculation_service" {
 locals {
   nutrition_calculation_service_db_credentials_secret_arn = module.secrets.db_credential_secret_arns[local.nutrition_calculation_service_name]
   nutrition_calculation_service_app_secrets_irsa_role_arn = module.secrets.app_secrets_irsa_role_arns[local.nutrition_calculation_service_name]
+  nutrition_calculation_service_app_secrets_irsa_role_name = regex(
+    "role/(.+)$",
+    local.nutrition_calculation_service_app_secrets_irsa_role_arn,
+  )[0]
   # NEW, narrow exception (Addendum 1 security sub-addendum requirement 2):
-  # exactly this ARN, never profile-service's db-credentials or KMS key.
-  nutrition_calculation_service_profile_reveal_credential_arn = module.secrets.profile_reveal_credential_secret_arns[local.nutrition_calculation_service_name]
+  # exactly this ARN, never profile-service's db-credentials or KMS key --
+  # see profile-service.tf for the owning side of this same pairing.
+  nutrition_calculation_service_profile_reveal_credential_arn = module.secrets.cross_service_reveal_credential_secret_arns["profile-service-nutrition-calculation-service"]
+}
+
+# Separate, narrowly-scoped inline policy -- not folded into the general
+# app_secrets policy document -- granting read on exactly the one
+# cross_service_reveal_credential ARN above. Attached to the SAME role
+# this service's pod already assumes (see the header comment for why: one
+# ServiceAccount, one IRSA role).
+resource "aws_iam_role_policy" "nutrition_calculation_service_profile_reveal_credential_read" {
+  name = "profile-reveal-credential-read"
+  role = local.nutrition_calculation_service_app_secrets_irsa_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ReadExactlyOneCrossServiceRevealCredential"
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = local.nutrition_calculation_service_profile_reveal_credential_arn
+    }]
+  })
 }
 
 # --- Helm release ---

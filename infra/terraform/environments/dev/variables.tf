@@ -106,10 +106,15 @@ variable "internal_reveal_credential_service_names" {
   default = ["identity-service"]
 }
 
-variable "profile_reveal_credential_caller_service_names" {
-  description = "Callers of profile-service's internal reveal-metrics endpoint (nutrition-calculation-service implementation plan Addendum 1)."
-  type        = list(string)
-  default     = ["nutrition-calculation-service"]
+variable "cross_service_reveal_credentials" {
+  description = "Per-(owner_service, caller_service) pairs needing a distinct internal reveal credential + narrow caller IRSA grant (see modules/secrets/variables.tf's fuller description). profile-service's reveal-metrics endpoint, called only by nutrition-calculation-service (profile-service implementation plan Addendum 2 / nutrition-calculation-service implementation plan Addendum 1)."
+  type = list(object({
+    owner_service  = string
+    caller_service = string
+  }))
+  default = [
+    { owner_service = "profile-service", caller_service = "nutrition-calculation-service" },
+  ]
 }
 
 variable "usda_fdc_api_key_service_names" {

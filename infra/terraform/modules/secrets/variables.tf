@@ -57,14 +57,17 @@ variable "internal_reveal_credential_service_names" {
   default     = []
 }
 
-variable "usda_fdc_api_key_service_names" {
-  description = "Service names that need a Secrets Manager container for a third-party USDA FoodData Central API key (e.g. [\"catalog-service\"]). Unlike the JWT signing key/internal-reveal-credential above, this value cannot be Terraform-generated -- it is obtained externally (a free registered key from https://fdc.nal.usda.gov/api-key-signup.html) and written into the placeholder container manually, out-of-band, the same way _db-provision-job populates db_credentials at deploy time rather than Terraform apply time."
-  type        = list(string)
-  default     = []
+variable "cross_service_reveal_credentials" {
+  description = "Per-(owner_service, caller_service) pairs that need a DISTINCT, Terraform-generated (random_password) bearer credential for one service's internal, non-Kong-routed endpoint to be called by exactly one named other service -- e.g. [{owner_service = \"profile-service\", caller_service = \"nutrition-calculation-service\"}] for the reveal-metrics endpoint (profile-service implementation plan Addendum 2). Distinct from internal_reveal_credential_service_names above: that one is a single per-service secret with no caller-specific IRSA grant; this one creates both the secret AND a narrow IRSA role scoped to read exactly that secret, trusting only the named caller_service's ServiceAccount. Never share one entry's credential across a different caller."
+  type = list(object({
+    owner_service  = string
+    caller_service = string
+  }))
+  default = []
 }
 
-variable "profile_reveal_credential_caller_service_names" {
-  description = "Service names authorized to call profile-service's internal `/internal/v1/profile/{user_id}/reveal-metrics` endpoint (nutrition-calculation-service implementation plan Addendum 1, security sub-addendum requirement 1: e.g. [\"nutrition-calculation-service\"]). Each caller gets its OWN, distinct, Terraform-generated (random_password) Secrets Manager container named `nutriapp/{environment}/profile-service/internal-reveal-credential-{caller}` -- deliberately NOT reusing `internal_reveal_credential_service_names` above, which is a single shared-bearer-credential-per-owning-service shape the security-agent review rejected for this specific integration (no per-caller distinction). profile-service itself verifies the presented credential via `hmac.compare_digest`; granting profile-service's own audit/rate-limit machinery read access to these containers is out of this module's scope (profile-service's own Terraform)."
+variable "usda_fdc_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a third-party USDA FoodData Central API key (e.g. [\"catalog-service\"]). Unlike the JWT signing key/internal-reveal-credential above, this value cannot be Terraform-generated -- it is obtained externally (a free registered key from https://fdc.nal.usda.gov/api-key-signup.html) and written into the placeholder container manually, out-of-band, the same way _db-provision-job populates db_credentials at deploy time rather than Terraform apply time."
   type        = list(string)
   default     = []
 }

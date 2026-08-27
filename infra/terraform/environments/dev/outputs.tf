@@ -90,8 +90,8 @@ output "internal_reveal_credential_secret_arns" {
   value = module.secrets.internal_reveal_credential_secret_arns
 }
 
-output "profile_reveal_credential_secret_arns" {
-  value = module.secrets.profile_reveal_credential_secret_arns
+output "cross_service_reveal_credential_secret_arns" {
+  value = module.secrets.cross_service_reveal_credential_secret_arns
 }
 
 output "scale_to_zero_lambda_arn" {

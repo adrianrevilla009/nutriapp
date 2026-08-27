@@ -107,41 +107,144 @@ resource "aws_secretsmanager_secret_version" "internal_reveal_credential" {
   })
 }
 
-# --- profile-service reveal-metrics credential (per CALLER, not per owning
-# service) -----------------------------------------------------------------
-# nutrition-calculation-service implementation plan Addendum 1, security
-# sub-addendum requirement 1: a distinct credential per caller of
-# profile-service's internal `/internal/v1/profile/{user_id}/reveal-metrics`
-# endpoint -- rejected the `internal_reveal_credential` shape above
-# (one shared bearer credential, no per-caller distinction) specifically
-# for this integration. Named `.../profile-service/internal-reveal-
-# credential-{caller}` so a future second caller gets its own, independent
-# container rather than reusing this one.
+# --- Cross-service internal reveal credential (per named-caller pair) ----
+# Distinct from `internal_reveal_credential` above (a single per-service
+# shared secret, read only by the OWNING service itself -- no caller-side
+# IRSA grant exists for it anywhere in this module). This section
+# provisions a SEPARATE credential per (owner_service, caller_service)
+# PAIR, each with its own Terraform `random_password` and its own narrow
+# IRSA role scoped to read exactly that one secret. Required whenever an
+# internal endpoint discloses Article 9 health data cross-service
+# (profile-service's `reveal-metrics` endpoint, security-agent review,
+# profile-service implementation plan Addendum 2) and a single shared
+# secret / no-caller-specific-grant design is judged insufficient — never
+# broadened into a generic "any internal caller may read any owner's
+# credential" mechanism.
 
-resource "random_password" "profile_reveal_credential" {
-  for_each = toset(var.profile_reveal_credential_caller_service_names)
+locals {
+  cross_service_reveal_credentials_by_key = {
+    for c in var.cross_service_reveal_credentials :
+    "${c.owner_service}-${c.caller_service}" => c
+  }
+}
+
+resource "random_password" "cross_service_reveal_credential" {
+  for_each = local.cross_service_reveal_credentials_by_key
   length   = 32
   special  = false
 }
 
-resource "aws_secretsmanager_secret" "profile_reveal_credential" {
+resource "aws_secretsmanager_secret" "cross_service_reveal_credential" {
   # checkov:skip=CKV2_AWS_57:Same manual-rotation posture as internal_reveal_credential above -- no AWS-native rotation Lambda template for an application-defined shared bearer credential, until volume justifies building a custom one.
-  for_each   = toset(var.profile_reveal_credential_caller_service_names)
-  name       = "nutriapp/${var.environment}/profile-service/internal-reveal-credential-${each.value}"
+  for_each   = local.cross_service_reveal_credentials_by_key
+  name       = "nutriapp/${var.environment}/${each.value.owner_service}/internal-reveal-credential-${each.value.caller_service}"
   kms_key_id = var.secrets_kms_key_id
 
   tags = merge(local.base_tags, {
-    Name = "profile-service-internal-reveal-credential-${each.value}"
+    Name = "${each.value.owner_service}-internal-reveal-credential-${each.value.caller_service}"
   })
 }
 
-resource "aws_secretsmanager_secret_version" "profile_reveal_credential" {
-  for_each  = toset(var.profile_reveal_credential_caller_service_names)
-  secret_id = aws_secretsmanager_secret.profile_reveal_credential[each.value].id
+resource "aws_secretsmanager_secret_version" "cross_service_reveal_credential" {
+  for_each  = local.cross_service_reveal_credentials_by_key
+  secret_id = aws_secretsmanager_secret.cross_service_reveal_credential[each.key].id
   secret_string = jsonencode({
-    credential = random_password.profile_reveal_credential[each.value].result
-    note       = "Per-caller credential for ${each.value} to call profile-service's internal reveal-metrics endpoint. profile-service verifies it via hmac.compare_digest; granting profile-service's own read access to this ARN is that service's own Terraform, out of this module's scope."
+    credential = random_password.cross_service_reveal_credential[each.key].result
+    note       = "Per-caller bearer credential: ${each.value.owner_service}'s internal reveal endpoint, presented only by ${each.value.caller_service}. Never shared with any other caller or reused across another owner service's endpoint."
   })
+}
+
+# Owner service reads this credential to verify a presented value. A
+# narrow, ADDITIVE statement attached directly to that service's
+# already-existing app_secrets role (by reconstructed name, same pattern
+# environments/dev/profile-service.tf already uses for its KMS grant) --
+# deliberately not folded into the generic `app_secrets` for_each policy
+# document above, which every `db_credential_service_names` member shares
+# the *shape* of but not this specific resource.
+data "aws_iam_policy_document" "cross_service_reveal_credential_owner_read" {
+  for_each = local.cross_service_reveal_credentials_by_key
+
+  statement {
+    sid    = "ReadOwnCrossServiceRevealCredential"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+    ]
+    resources = [aws_secretsmanager_secret.cross_service_reveal_credential[each.key].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "cross_service_reveal_credential_owner_read" {
+  for_each = local.cross_service_reveal_credentials_by_key
+  name     = "internal-reveal-credential-${each.value.caller_service}-owner-read"
+  role     = "nutriapp-${var.environment}-${each.value.owner_service}-app-secrets"
+  policy   = data.aws_iam_policy_document.cross_service_reveal_credential_owner_read[each.key].json
+}
+
+# Caller service's IRSA role -- a NEW, narrowly-scoped role dedicated to
+# exactly this one grant (NOT the caller's own app_secrets role, which, if
+# it exists at all, is defined in that service's own Terraform file --
+# potentially a concurrently-developed, not-yet-reconciled plan/worktree,
+# exactly like identity-service.tf/platform-infra's documented output-name
+# reconciliation precedent). Trusts only the caller's own ServiceAccount
+# name in the shared namespace. The caller's own chart/Terraform wires
+# this role's ARN in directly, OR — at /implementation-review reconciliation
+# — this single statement is merged into whatever role that service's own
+# app pod already assumes, so a ServiceAccount only ever needs exactly one
+# IRSA role annotation.
+data "aws_iam_policy_document" "cross_service_reveal_credential_caller_assume" {
+  for_each = local.cross_service_reveal_credentials_by_key
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider_url_no_scheme}:sub"
+      values   = ["system:serviceaccount:${var.namespace}:${each.value.caller_service}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_provider_url_no_scheme}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "cross_service_reveal_credential_caller" {
+  for_each           = local.cross_service_reveal_credentials_by_key
+  name               = "nutriapp-${var.environment}-${each.value.caller_service}-read-${each.value.owner_service}-reveal-credential"
+  assume_role_policy = data.aws_iam_policy_document.cross_service_reveal_credential_caller_assume[each.key].json
+
+  tags = local.base_tags
+}
+
+data "aws_iam_policy_document" "cross_service_reveal_credential_caller_read" {
+  for_each = local.cross_service_reveal_credentials_by_key
+
+  statement {
+    sid    = "ReadExactlyOneCrossServiceRevealCredential"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+    ]
+    resources = [aws_secretsmanager_secret.cross_service_reveal_credential[each.key].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "cross_service_reveal_credential_caller_read" {
+  for_each = local.cross_service_reveal_credentials_by_key
+  name     = "read-reveal-credential"
+  role     = aws_iam_role.cross_service_reveal_credential_caller[each.key].id
+  policy   = data.aws_iam_policy_document.cross_service_reveal_credential_caller_read[each.key].json
 }
 
 # --- USDA FoodData Central API key (per service) --------------------------
@@ -303,12 +406,6 @@ data "aws_iam_policy_document" "app_secrets" {
       contains(var.jwt_signing_key_service_names, each.value) ? aws_secretsmanager_secret.jwt_signing_key[each.value].arn : "",
       contains(var.internal_reveal_credential_service_names, each.value) ? aws_secretsmanager_secret.internal_reveal_credential[each.value].arn : "",
       contains(var.usda_fdc_api_key_service_names, each.value) ? aws_secretsmanager_secret.usda_fdc_api_key[each.value].arn : "",
-      # Narrow, human-approved exception to "no service reads another
-      # service's secrets" (CLAUDE.md section 2.9): exactly this one ARN,
-      # never profile-service's db-credentials or KMS key (nutrition-
-      # calculation-service implementation plan Addendum 1, security
-      # sub-addendum requirement 2).
-      contains(var.profile_reveal_credential_caller_service_names, each.value) ? aws_secretsmanager_secret.profile_reveal_credential[each.value].arn : "",
     ])
   }
 }
