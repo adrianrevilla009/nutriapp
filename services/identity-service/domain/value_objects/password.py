@@ -4,6 +4,7 @@ Holds plaintext only transiently, in memory, for the duration of
 registration/change-password validation and hashing. Never persisted,
 never logged (CLAUDE.md rule: never log passwords, tokens, or hashes).
 """
+
 from __future__ import annotations
 
 import re
@@ -34,9 +35,7 @@ class Password:
 
     def __post_init__(self) -> None:
         if len(self.plaintext) < _MIN_LENGTH:
-            raise WeakPasswordError(
-                f"Password must be at least {_MIN_LENGTH} characters long."
-            )
+            raise WeakPasswordError(f"Password must be at least {_MIN_LENGTH} characters long.")
         classes_present = sum(
             1
             for pattern in (_HAS_UPPER, _HAS_LOWER, _HAS_DIGIT, _HAS_SYMBOL)
@@ -44,8 +43,7 @@ class Password:
         )
         if classes_present < 3:
             raise WeakPasswordError(
-                "Password must contain at least 3 of: uppercase, lowercase, "
-                "digit, symbol."
+                "Password must contain at least 3 of: uppercase, lowercase, digit, symbol."
             )
 
     def __repr__(self) -> str:

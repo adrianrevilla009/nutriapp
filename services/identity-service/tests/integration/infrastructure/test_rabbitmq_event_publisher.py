@@ -1,6 +1,7 @@
 """RabbitMqEventPublisher: publishes to the correct exchange/routing key
 per messaging-conventions SKILL.md naming, consumable by a test subscriber.
 """
+
 from __future__ import annotations
 
 import asyncio

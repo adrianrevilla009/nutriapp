@@ -1,4 +1,5 @@
 """ConfirmPasswordResetCommand + handler."""
+
 from __future__ import annotations
 
 import uuid
@@ -52,9 +53,7 @@ class ConfirmPasswordResetHandler:
         self._audit = audit_repository
         self._now_fn = now_fn
 
-    async def handle(
-        self, command: ConfirmPasswordResetCommand
-    ) -> ConfirmPasswordResetResult:
+    async def handle(self, command: ConfirmPasswordResetCommand) -> ConfirmPasswordResetResult:
         # Weak password is rejected before any repository call.
         new_password = Password(command.new_password)
 

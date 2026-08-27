@@ -1,6 +1,7 @@
 """Pydantic v2 request/response models for /api/v1/auth (api-conventions
 SKILL.md). Never include password_hash or a raw token outside its one
 intended field."""
+
 from __future__ import annotations
 
 import uuid

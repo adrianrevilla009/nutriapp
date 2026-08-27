@@ -7,6 +7,7 @@ request via the composition root, so `session.flush()` here participates
 in that same transaction; the caller commits once, at the end of the
 request.
 """
+
 from __future__ import annotations
 
 import uuid

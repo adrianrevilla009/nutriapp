@@ -7,6 +7,7 @@ Zero framework imports (ADR-0001). Clocks are always passed in explicitly
 (never `datetime.now()` inside these methods) so tests can control time
 without real sleeping, per the approved test plan.
 """
+
 from __future__ import annotations
 
 import uuid

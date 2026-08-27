@@ -3,6 +3,7 @@
 No user-enumeration signal: the response is identical in shape whether or
 not the email exists, and no token/event is created for an unknown email.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -52,9 +53,7 @@ class RequestPasswordResetHandler:
         self._rate_limiter = rate_limiter
         self._now_fn = now_fn
 
-    async def handle(
-        self, command: RequestPasswordResetCommand
-    ) -> RequestPasswordResetResult:
+    async def handle(self, command: RequestPasswordResetCommand) -> RequestPasswordResetResult:
         try:
             await self._rate_limiter.check_and_increment(
                 key=f"identity:ratelimit:password-reset:{command.client_ip}",

@@ -10,6 +10,7 @@ security trade-off (implementation plan section 7), confirmed over the
 Key namespace: `identity:ratelimit:{endpoint}:{ip_or_user}`, TTL = 60s
 (caching-strategy SKILL.md TTL table).
 """
+
 from __future__ import annotations
 
 import redis.exceptions

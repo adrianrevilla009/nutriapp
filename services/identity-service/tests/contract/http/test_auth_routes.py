@@ -1,6 +1,7 @@
 """Contract tests: happy path + error path per endpoint, against the real
 FastAPI/OpenAPI-generated routes and a real (testcontainers) Postgres.
 """
+
 from __future__ import annotations
 
 from tests.contract.http.conftest import INTERNAL_CREDENTIAL

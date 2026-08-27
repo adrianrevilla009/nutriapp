@@ -1,6 +1,7 @@
 """Asserts the FastAPI app assembled by infrastructure/main.py exposes the
 expected routes (composition-level smoke test — Settings.from_env() is
 never invoked here since app creation is lazy about it, per main.py)."""
+
 from __future__ import annotations
 
 from infrastructure.main import create_app

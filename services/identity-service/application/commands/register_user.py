@@ -5,6 +5,7 @@ password hashing -> persistence -> email-verification token issuance ->
 UserRegistered enqueued to the outbox, all in the application layer,
 depending only on domain objects and ports (hexagonal-architecture SKILL.md).
 """
+
 from __future__ import annotations
 
 import uuid

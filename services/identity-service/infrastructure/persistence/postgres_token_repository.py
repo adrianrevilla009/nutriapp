@@ -4,6 +4,7 @@ Refresh tokens live in `refresh_tokens`; secret-reference tokens
 (email verification / password reset) live in two kind-specific tables
 per the implementation plan's migration file list.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -102,9 +103,7 @@ class PostgresTokenRepository:
         row.used_at = token.used_at
         await self._session.flush()
 
-    async def get_secret_token(
-        self, reference_id: uuid.UUID
-    ) -> SecretReferenceToken | None:
+    async def get_secret_token(self, reference_id: uuid.UUID) -> SecretReferenceToken | None:
         for kind, model_cls in _SECRET_TOKEN_MODELS.items():
             row = await self._session.get(model_cls, reference_id)
             if row is not None:

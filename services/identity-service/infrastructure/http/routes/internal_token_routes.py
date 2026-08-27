@@ -4,6 +4,7 @@ notification-service to retrieve the raw verification/reset secret. The
 caller wraps this call in a circuit breaker on its own side
 (resilience-patterns SKILL.md).
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header
@@ -42,9 +43,7 @@ async def reveal_token(
     x_internal_service_credential: str = Header(default=""),
 ):
     _users, tokens, _outbox, audit = build_repositories(session, audit_session)
-    handler = RevealTokenSecretHandler(
-        tokens, audit, container.settings.internal_reveal_credential
-    )
+    handler = RevealTokenSecretHandler(tokens, audit, container.settings.internal_reveal_credential)
     try:
         result = await handler.handle(
             RevealTokenSecretCommand(
@@ -57,6 +56,4 @@ async def reveal_token(
     except Exception as exc:  # noqa: BLE001
         await session.rollback()
         return map_exception(exc)
-    return RevealTokenResponse(
-        secret=result.secret, user_id=result.user_id, kind=result.kind.value
-    )
+    return RevealTokenResponse(secret=result.secret, user_id=result.user_id, kind=result.kind.value)
