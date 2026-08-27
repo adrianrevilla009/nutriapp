@@ -38,7 +38,7 @@ class _FakeContainer:
         self.jwt_verifier = build_test_jwt_verifier(_TEST_PRIVATE_KEY)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(profile_router)
@@ -60,7 +60,7 @@ async def app_client(db_engine: AsyncEngine):
         yield client
 
 
-@pytest.fixture()
+@pytest.fixture
 async def seeded_user(db_engine: AsyncEngine):
     """A user_id with an already-created (but not yet consented) profile --
     mirrors what the UserRegistered consumer would have produced."""

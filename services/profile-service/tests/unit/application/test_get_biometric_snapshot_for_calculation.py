@@ -121,12 +121,11 @@ async def test_wrong_credential_rejected_with_one_failure_audit_record_and_no_da
     await _seed_full_snapshot(snapshot, encryption, user_id)
     handler = _make_handler(snapshot=snapshot, encryption=encryption, audit=audit)
 
+    query = GetBiometricSnapshotForCalculationQuery(
+        user_id=user_id, caller_service_credential="wrong", correlation_id="corr-2"
+    )
     with pytest.raises(InvalidCallerCredentialError):
-        await handler.handle(
-            GetBiometricSnapshotForCalculationQuery(
-                user_id=user_id, caller_service_credential="wrong", correlation_id="corr-2"
-            )
-        )
+        await handler.handle(query)
 
     assert len(audit.records) == 1
     record = audit.records[0]
@@ -140,12 +139,11 @@ async def test_wrong_credential_rejected_with_one_failure_audit_record_and_no_da
 async def test_missing_credential_rejected():
     handler = _make_handler()
     user_id = uuid.uuid4()
+    query = GetBiometricSnapshotForCalculationQuery(
+        user_id=user_id, caller_service_credential="", correlation_id="corr-3"
+    )
     with pytest.raises(InvalidCallerCredentialError):
-        await handler.handle(
-            GetBiometricSnapshotForCalculationQuery(
-                user_id=user_id, caller_service_credential="", correlation_id="corr-3"
-            )
-        )
+        await handler.handle(query)
 
 
 async def test_rate_limit_exceeded_raises_and_never_invokes_the_encryption_port():
@@ -186,12 +184,11 @@ async def test_rate_limiter_unavailable_propagates_and_never_invokes_the_encrypt
     await _seed_full_snapshot(snapshot, encryption, user_id)
     handler = _make_handler(snapshot=snapshot, encryption=encryption, rate_limiter=rate_limiter)
 
+    query = GetBiometricSnapshotForCalculationQuery(
+        user_id=user_id, caller_service_credential=VALID_CREDENTIAL, correlation_id="corr-5"
+    )
     with pytest.raises(RateLimiterUnavailableError):
-        await handler.handle(
-            GetBiometricSnapshotForCalculationQuery(
-                user_id=user_id, caller_service_credential=VALID_CREDENTIAL, correlation_id="corr-5"
-            )
-        )
+        await handler.handle(query)
     assert encryption.decrypt_calls == []
 
 
@@ -200,12 +197,11 @@ async def test_unknown_profile_raises_not_found_and_writes_failure_audit_record(
     handler = _make_handler(audit=audit)
     user_id = uuid.uuid4()
 
+    query = GetBiometricSnapshotForCalculationQuery(
+        user_id=user_id, caller_service_credential=VALID_CREDENTIAL, correlation_id="corr-6"
+    )
     with pytest.raises(ProfileNotFoundError):
-        await handler.handle(
-            GetBiometricSnapshotForCalculationQuery(
-                user_id=user_id, caller_service_credential=VALID_CREDENTIAL, correlation_id="corr-6"
-            )
-        )
+        await handler.handle(query)
 
     assert len(audit.records) == 1
     assert audit.records[0].outcome == "failure"

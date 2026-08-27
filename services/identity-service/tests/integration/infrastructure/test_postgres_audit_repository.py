@@ -9,13 +9,13 @@ from infrastructure.persistence.models import AuditLogModel
 from infrastructure.persistence.postgres_audit_repository import PostgresAuditRepository
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s
 
 
-@pytest.fixture()
+@pytest.fixture
 async def audit_writer_session(db_engine, postgres_async_url):
     """A session whose underlying connection is genuinely restricted to
     AUDIT_WRITER_ROLE via `SET ROLE` at connect time (the same mechanism

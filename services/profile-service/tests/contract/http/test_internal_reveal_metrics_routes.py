@@ -43,7 +43,7 @@ class _FakeContainer:
         self.settings = _FakeSettings()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def internal_app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(internal_reveal_metrics_router)
@@ -69,7 +69,7 @@ async def internal_app_client(db_engine: AsyncEngine):
         yield client
 
 
-@pytest.fixture()
+@pytest.fixture
 async def seeded_snapshot_user(db_engine: AsyncEngine):
     """Seeds a profile_snapshot row directly (this suite tests the
     reveal-metrics route/query, not the projector -- projector-replay

@@ -12,7 +12,7 @@ def redis_container():
         yield container
 
 
-@pytest.fixture()
+@pytest.fixture
 async def redis_client(redis_container):
     client = Redis(
         host=redis_container.get_container_host_ip(),

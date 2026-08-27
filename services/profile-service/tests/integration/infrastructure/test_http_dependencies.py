@@ -39,13 +39,13 @@ def _build_app(jwt_verifier: JwtVerifier) -> FastAPI:
     return app
 
 
-@pytest.fixture()
+@pytest.fixture
 def keypair():
     private_key = generate_test_rsa_key_pair()
     return private_key, "test-key-1"
 
 
-@pytest.fixture()
+@pytest.fixture
 async def client(keypair):
     private_key, kid = keypair
     verifier = JwtVerifier(
