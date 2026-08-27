@@ -41,7 +41,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       - name: Ruff lint
         run: uv run ruff check .
       - name: Ruff format check
@@ -60,7 +60,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       - name: mypy
         run: uv run mypy domain application infrastructure
 
@@ -88,7 +88,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       - name: Unit tests (domain + application, no I/O)
         run: uv run pytest tests/unit -q
 
@@ -105,7 +105,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       - name: pip-audit
         run: |
           # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
@@ -136,7 +136,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       # testcontainers pulls Postgres/Redis/RabbitMQ images at runtime —
       # the ubuntu-latest runner ships Docker already. ProfileRevealClient's
       # tests never make a live HTTP call (httpx.MockTransport only, per
@@ -160,7 +160,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       # Per-layer thresholds (CLAUDE.md §3, treated as a hard floor for
       # domain per the nutrition-calculation-agent doc): domain >= 90%,
       # application >= 85%, infrastructure >= 70%.
@@ -195,7 +195,7 @@ jobs:
         with:
           version: "0.12.6"
       - name: Install dependencies (incl. mutmut)
-        run: uv sync --frozen --extra dev && uv pip install mutmut
+        run: uv sync --frozen --extra dev && uv pip install mutmut  # NOSONAR: builds packages/shared-contracts, a local first-party monorepo path dependency (not a third-party sdist) -- --no-build cannot be added without breaking this install; see the Dockerfile's builder-stage comment for the full rationale.
       - name: mutmut run (domain layer only -- the correctness-critical formulas)
         # mutmut 3.x dropped the --paths-to-mutate CLI flag entirely --
         # source_paths now comes only from pyproject.toml's [tool.mutmut]

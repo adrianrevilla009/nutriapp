@@ -13,7 +13,13 @@ WORKDIR /repo
 COPY packages/shared-contracts/ packages/shared-contracts/
 COPY services/nutrition-calculation-service/pyproject.toml services/nutrition-calculation-service/uv.lock services/nutrition-calculation-service/
 WORKDIR /repo/services/nutrition-calculation-service
-RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev
+# `uv sync` below builds packages/shared-contracts, a local first-party
+# monorepo path dependency (not a third-party sdist) -- --no-build cannot
+# be added without breaking this install (verified: `uv sync --frozen
+# --no-build` fails outright with "can't be installed because it is
+# marked as --no-build but has no binary distribution"). `pip install`
+# is already pinned to an exact version with --only-binary :all:.
+RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev  # NOSONAR
 
 FROM python:3.12-slim AS runtime
 # The runtime image never invokes system python/pip -- it only ever runs
