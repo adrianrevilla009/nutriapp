@@ -187,7 +187,7 @@ jobs:
       - name: Build image
         run: docker build -f services/diary-service/Dockerfile -t diary-service:${{ github.sha }} .
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.24.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: diary-service:${{ github.sha }}
           severity: "CRITICAL,HIGH"
