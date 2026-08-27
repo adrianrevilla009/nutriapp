@@ -7,6 +7,8 @@ caller wraps this call in a circuit breaker on its own side
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +43,7 @@ async def reveal_token(
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
     x_internal_service_credential: str = Header(default=""),
-):
+) -> Any:
     _users, tokens, _outbox, audit = build_repositories(session, audit_session)
     handler = RevealTokenSecretHandler(tokens, audit, container.settings.internal_reveal_credential)
     try:

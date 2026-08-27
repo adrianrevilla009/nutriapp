@@ -25,6 +25,16 @@ output "internal_reveal_credential_secret_arns" {
   value       = { for k, v in aws_secretsmanager_secret.internal_reveal_credential : k => v.arn }
 }
 
+output "cross_service_reveal_credential_secret_arns" {
+  description = "Map of \"<owner_service>-<caller_service>\" -> Secrets Manager ARN holding {credential}, a per-caller bearer credential for owner_service's internal, non-Kong-routed endpoint (e.g. \"profile-service-nutrition-calculation-service\" for the reveal-metrics endpoint). Read by owner_service's own app_secrets role (already granted below) and by the dedicated caller IRSA role in cross_service_reveal_credential_caller_irsa_role_arns."
+  value       = { for k, v in aws_secretsmanager_secret.cross_service_reveal_credential : k => v.arn }
+}
+
+output "cross_service_reveal_credential_caller_irsa_role_arns" {
+  description = "Map of \"<owner_service>-<caller_service>\" -> IAM role ARN, trusting ONLY caller_service's ServiceAccount, scoped to GetSecretValue on exactly that one cross_service_reveal_credential secret ARN -- nothing else. The caller service's own Helm chart/Terraform wires this ARN into its ServiceAccount's IRSA annotation (or, at /implementation-review reconciliation, this single statement is merged into whatever role that service's app pod already assumes -- a ServiceAccount only ever needs one IRSA role annotation)."
+  value       = { for k, v in aws_iam_role.cross_service_reveal_credential_caller : k => v.arn }
+}
+
 output "usda_fdc_api_key_secret_arns" {
   description = "Map of service name -> Secrets Manager ARN holding {api_key}, a third-party USDA FoodData Central API key populated manually, out-of-band (e.g. catalog-service's USDA FDC ingestion adapter)."
   value       = { for k, v in aws_secretsmanager_secret.usda_fdc_api_key : k => v.arn }

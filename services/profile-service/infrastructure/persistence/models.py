@@ -118,6 +118,34 @@ class ProfileEvolutionModel(Base):
     )
 
 
+class AuditLogModel(Base):
+    """Append-only audit trail (implementation plan Addendum 2, requirement
+    6) -- profile-service's first audit-trail capability. Every call to
+    `POST /internal/v1/profile/{user_id}/reveal-metrics`, success or
+    failure, writes exactly one row here. `audit_metadata` never contains a
+    raw biometric field value (domain.entities.audit_record.AuditRecord
+    enforces this at construction time) -- only field NAMES or a short,
+    generic failure reason. A dedicated Postgres role
+    (`profile_service_audit_writer`, granted INSERT-only by
+    migrations/versions/0003_create_audit_records_table.py) makes this
+    genuinely append-only at the database level, not just by application
+    convention."""
+
+    __tablename__ = "audit_records"
+
+    audit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    occurred_at: Mapped[datetime] = mapped_column(nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    audit_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (Index("ix_audit_records_target", "target_type", "target_id"),)
+
+
 class ProfileDataKeyModel(Base):
     """Per-user envelope-encryption key material (implementation plan
     Addendum 1: profile-service owns its own key store, KMS-wrapped).

@@ -46,6 +46,16 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         yield session
 
 
+async def get_audit_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """Separate session bound to Container.audit_engine (privilege-restricted
+    via SET ROLE at connect time) -- never share with get_session's session
+    (see Container.__init__'s audit_engine docstring). Backs the internal
+    reveal-metrics endpoint's audit trail (implementation plan Addendum 2)."""
+    container: Container = request.app.state.container
+    async with container.new_audit_session() as audit_session:
+        yield audit_session
+
+
 def get_correlation_id(request: Request) -> str:
     return request.headers.get("X-Correlation-Id") or str(uuid.uuid4())
 

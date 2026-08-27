@@ -150,3 +150,41 @@ class FakeDataEncryption:
         if not ciphertext.startswith(prefix):
             raise ValueError("Ciphertext was not encrypted with this user's key.")
         return ciphertext[len(prefix) :]
+
+
+class FakeAuditRepository:
+    """In-memory AuditRepositoryPort fake -- application-layer unit tests
+    for the reveal-metrics handler (implementation plan Addendum 2)."""
+
+    def __init__(self) -> None:
+        self.records: list = []
+
+    async def record(self, entry) -> None:
+        self.records.append(entry)
+
+
+class FakeRateLimiter:
+    """In-memory RateLimiterPort fake. `blocked_keys` lets a test force a
+    RateLimitExceededError for a specific key without needing real Redis;
+    `unavailable` forces RateLimiterUnavailableError (fail-closed path)."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int, int]] = []
+        self.blocked_keys: set[str] = set()
+        self.unavailable: bool = False
+        self._counts: dict[str, int] = {}
+
+    async def check_and_increment(self, key: str, limit: int, window_seconds: int) -> None:
+        from domain.ports.rate_limiter_port import (
+            RateLimiterUnavailableError,
+            RateLimitExceededError,
+        )
+
+        self.calls.append((key, limit, window_seconds))
+        if self.unavailable:
+            raise RateLimiterUnavailableError("Fake rate limiter is unavailable.")
+        if key in self.blocked_keys:
+            raise RateLimitExceededError(f"Rate limit exceeded for key '{key}'.")
+        self._counts[key] = self._counts.get(key, 0) + 1
+        if self._counts[key] > limit:
+            raise RateLimitExceededError(f"Rate limit exceeded for key '{key}'.")

@@ -80,6 +80,16 @@ services:
       timeout: 5s
       retries: 10
 
+  profile-redis:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   profile-service:
     build:
       # Build context is the repo root (not services/profile-service)
@@ -90,8 +100,20 @@ services:
       dockerfile: services/profile-service/Dockerfile
     env_file:
       - .env
+    environment:
+      PROFILE_SERVICE_REDIS_URL: redis://profile-redis:6379/0
+      # Local-dev-only placeholder -- production sets this from
+      # Terraform's `cross_service_reveal_credential` secret
+      # (implementation plan Addendum 2, requirement 1), never a literal
+      # value in this file.
+      PROFILE_SERVICE_REVEAL_CREDENTIAL_NUTRITION_CALC: ${PROFILE_SERVICE_REVEAL_CREDENTIAL_NUTRITION_CALC:-local-dev-only-placeholder}
     ports:
       - "8002:8000"
+      # Internal-only reveal-metrics port (implementation plan Addendum 2,
+      # requirement 3) -- exposed to the host for local dev only; in
+      # cluster this is reachable exclusively from
+      # nutrition-calculation-service's pods (NetworkPolicy), never Kong.
+      - "8003:8001"
     # PROFILE_SERVICE_KMS_ENDPOINT_URL should point at a local KMS-compatible
     # emulator (e.g. LocalStack, added by whoever needs it locally — not
     # part of this stack yet) for local dev without real AWS credentials;
@@ -99,6 +121,8 @@ services:
     # established (see README.md's "Running locally" section).
     depends_on:
       profile-db:
+        condition: service_healthy
+      profile-redis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

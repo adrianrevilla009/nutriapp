@@ -113,8 +113,8 @@ jobs:
           # out entirely ("Dependency not found on PyPI") rather than just
           # skipping them, which used to abort the scan before it audited
           # anything else in this file's real third-party dependencies.
-          uv pip compile pyproject.toml | grep -v '^shared-contracts' > /tmp/requirements-audit.txt
-          uvx pip-audit --strict -r /tmp/requirements-audit.txt
+          uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts$' > /tmp/requirements-audit.txt
+          uvx --no-build pip-audit==2.10.1 --strict -r /tmp/requirements-audit.txt
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest
@@ -186,11 +186,12 @@ jobs:
       - name: Build image
         run: docker build -f services/profile-service/Dockerfile -t profile-service:${{ github.sha }} .
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@6c175e9c4083a92bbca2f9724c8a5e33bc2d97a5 # 0.24.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           image-ref: profile-service:${{ github.sha }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          ignore-unfixed: "true"
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this

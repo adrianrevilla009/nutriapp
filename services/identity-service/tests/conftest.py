@@ -24,7 +24,7 @@ def postgres_async_url(postgres_container) -> str:
     return sync_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
 
 
-@pytest.fixture()
+@pytest.fixture
 async def db_engine(postgres_async_url):
     # Function-scoped (not session-scoped) deliberately: pytest-asyncio
     # gives each test function its own event loop by default, and asyncpg

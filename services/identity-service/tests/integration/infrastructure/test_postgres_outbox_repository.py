@@ -9,7 +9,7 @@ from infrastructure.persistence.models import OutboxModel
 from infrastructure.persistence.postgres_outbox_repository import PostgresOutboxRepository
 
 
-@pytest.fixture()
+@pytest.fixture
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s

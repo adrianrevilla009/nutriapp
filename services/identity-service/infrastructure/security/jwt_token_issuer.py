@@ -56,8 +56,22 @@ class JwtTokenIssuer:
         access_token_ttl: timedelta = DEFAULT_ACCESS_TOKEN_TTL,
         issuer: str = "identity-service",
     ) -> None:
-        self._private_key = serialization.load_pem_private_key(private_key_pem, password=None)
-        self._public_key = serialization.load_pem_public_key(public_key_pem)
+        # This service only ever generates/expects RSA keys (ADR-0022, RS256)
+        # -- serialization.load_pem_*_key's return type is a broad union
+        # covering every key algorithm the `cryptography` library supports.
+        # Narrowing here (rather than typing these attributes as that union)
+        # is both a real type-safety improvement and a genuine runtime
+        # validation: a non-RSA PEM fails loudly here, not confusingly at
+        # first-use downstream.
+        private_key = serialization.load_pem_private_key(private_key_pem, password=None)
+        if not isinstance(private_key, rsa.RSAPrivateKey):
+            raise TypeError("identity-service's signing key must be RSA (ADR-0022).")
+        self._private_key: rsa.RSAPrivateKey = private_key
+
+        public_key = serialization.load_pem_public_key(public_key_pem)
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise TypeError("identity-service's public key must be RSA (ADR-0022).")
+        self._public_key: rsa.RSAPublicKey = public_key
         self._key_id = key_id
         self._ttl = access_token_ttl
         self._issuer = issuer

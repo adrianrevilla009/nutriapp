@@ -5,6 +5,8 @@ command DTO, call the application handler, serialize the result
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,7 +70,7 @@ async def register(
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
     client_ip: str = Depends(get_client_ip),
-):
+) -> Any:
     users, tokens, outbox, _audit = build_repositories(session, session)  # audit unused here
     handler = RegisterUserHandler(
         users, tokens, outbox, container.password_hasher, container.rate_limiter
@@ -100,7 +102,7 @@ async def verify_email(
     session: AsyncSession = Depends(get_session),
     audit_session: AsyncSession = Depends(get_audit_session),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     users, tokens, _outbox, audit = build_repositories(session, audit_session)
     handler = VerifyEmailHandler(users, tokens, audit)
     try:
@@ -131,7 +133,7 @@ async def login(
     correlation_id: str = Depends(get_correlation_id),
     client_ip: str = Depends(get_client_ip),
     user_agent: str = Depends(get_user_agent),
-):
+) -> Any:
     users, tokens, outbox, audit = build_repositories(session, audit_session)
     handler = LoginHandler(
         users,
@@ -170,7 +172,7 @@ async def refresh(
     session: AsyncSession = Depends(get_session),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     users, tokens, _outbox, _audit = build_repositories(session, session)  # audit unused here
     handler = RefreshAccessTokenHandler(tokens, users, container.token_issuer)
     try:
@@ -197,7 +199,7 @@ async def logout(
     session: AsyncSession = Depends(get_session),
     audit_session: AsyncSession = Depends(get_audit_session),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     _users, tokens, _outbox, audit = build_repositories(session, audit_session)
     handler = LogoutHandler(tokens, audit)
     try:
@@ -225,7 +227,7 @@ async def password_reset_request(
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
     client_ip: str = Depends(get_client_ip),
-):
+) -> Any:
     users, tokens, outbox, _audit = build_repositories(session, session)  # audit unused here
     handler = RequestPasswordResetHandler(users, tokens, outbox, container.rate_limiter)
     try:
@@ -254,7 +256,7 @@ async def password_reset_confirm(
     audit_session: AsyncSession = Depends(get_audit_session),
     container: Container = Depends(get_container),
     correlation_id: str = Depends(get_correlation_id),
-):
+) -> Any:
     users, tokens, _outbox, audit = build_repositories(session, audit_session)
     handler = ConfirmPasswordResetHandler(users, tokens, container.password_hasher, audit)
     try:

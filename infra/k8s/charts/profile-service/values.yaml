@@ -3,10 +3,17 @@
 # infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
 # named-template contract. Mirrors infra/k8s/charts/identity-service/values.yaml's
 # structure (this service's reference precedent), adapted for full CQRS/ES
-# (no Redis rate limiter, no JWT signing key, no internal reveal
-# credential -- instead an IRSA-granted AWS KMS key for envelope
+# (no JWT signing key -- instead an IRSA-granted AWS KMS key for envelope
 # encryption, wired via env vars rather than Secrets Manager since KMS
 # access is IAM-based, not secret-based).
+#
+# implementation plan Addendum 2 additions: a Redis rate limiter (the
+# internal reveal-metrics endpoint's per-caller+per-user rate limit) and a
+# distinct, per-caller `internal-reveal-credential-nutrition-calc` secret
+# -- NOT the generic `internal-reveal-credential` shape identity-service
+# uses (a dedicated security-agent review found that single-shared-
+# credential/no-rate-limit/no-audit-trail precedent insufficient for this
+# endpoint's repeatedly-callable Article 9 health data disclosure).
 
 nameOverride: profile-service
 fullnameOverride: profile-service
@@ -32,6 +39,16 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 8000
+  # Internal-only reveal-metrics port (implementation plan Addendum 2,
+  # requirement 3) -- a genuinely distinct containerPort/Service port from
+  # the public API above, not just a second `from` entry on the same port
+  # (see infrastructure/main.py: this app runs two ASGI apps, two ports, in
+  # one process). NetworkPolicy below restricts port 8001 to
+  # nutrition-calculation-service's pod selector only, excluding Kong.
+  additionalPorts:
+    - name: internal
+      port: 8001
+      targetPort: 8001
 
 resources:
   requests:
@@ -65,17 +82,20 @@ pdb:
 
 networkPolicy:
   enabled: true
-  # profile-service's only public HTTP surface is /api/v1/profile/* via
-  # Kong -- it has no other inbound synchronous dependency in this scope
-  # (nutrition-calculation-service/analytics-service, the documented
-  # future consumers of its events, integrate asynchronously via RabbitMQ,
-  # not a synchronous call into this service). Bare podSelector (no
-  # namespaceSelector) scopes to the shared namespace, same convention as
-  # identity-service's chart.
+  # profile-service's public HTTP surface (/api/v1/profile/* on port 8000)
+  # is reachable from Kong only -- and, as of implementation plan
+  # Addendum 2, a SEPARATE internal-only surface
+  # (/internal/v1/profile/{user_id}/reveal-metrics on port 8001) is
+  # reachable from nutrition-calculation-service's pods only, EXCLUDING
+  # Kong entirely (requirement 3). These are two independent ingress rule
+  # entries, each scoped to exactly one port and one caller -- Kong is
+  # never listed on port 8001, and nutrition-calculation-service is never
+  # listed on port 8000. Bare podSelector (no namespaceSelector) scopes to
+  # the shared namespace, same convention as identity-service's chart.
   #
   # NOTE (same known _lib-level gap identity-service's chart documents):
   # _lib only renders `policyTypes: [Ingress]` -- egress (to the shared
-  # RDS instance, RabbitMQ, AWS KMS) is unrestricted by this
+  # RDS instance, Redis, RabbitMQ, AWS KMS) is unrestricted by this
   # NetworkPolicy.
   ingressRules:
     - from:
@@ -85,6 +105,13 @@ networkPolicy:
       ports:
         - protocol: TCP
           port: 8000
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: nutrition-calculation-service
+      ports:
+        - protocol: TCP
+          port: 8001
 
 # _db-provision-job.tpl input (infra/k8s/charts/_lib): creates this
 # service's own logical database + role inside the shared RDS instance as
@@ -110,14 +137,36 @@ dbProvision:
 
 env:
   AWS_REGION: us-east-1
+  PROFILE_SERVICE_PUBLIC_PORT: "8000"
+  PROFILE_SERVICE_INTERNAL_PORT: "8001"
+  # PROFILE_SERVICE_REDIS_URL: set by Terraform (profile-service.tf) --
+  # the shared ElastiCache Redis cluster's endpoint, `profile:*` key
+  # namespace (reveal-metrics rate limiting only, implementation plan
+  # Addendum 2, requirement 4).
   # PROFILE_SERVICE_KMS_KEY_ID: set by Terraform (profile-service.tf) --
   # KMS key ID, not a secret value (the key itself is only usable via the
   # IRSA-granted app role, not by knowing the ID).
 
+# The Kubernetes Secret produced by templates/externalsecret.yaml
+# (ExternalSecret target name "<fullnameOverride>-secrets") -- makes every
+# key in secretsManager below (plus PROFILE_SERVICE_DATABASE_URL) available
+# as an env var. Deliberately omitted until there was a real secret an app
+# env var needed to read (PROFILE_SERVICE_REVEAL_CREDENTIAL_NUTRITION_CALC,
+# added by Addendum 2) -- DB credentials before this point were consumed
+# by the _db-provision-job hook directly from Secrets Manager, not via
+# this chart's own container env.
+envFrom:
+  - secretRef:
+      name: profile-service-secrets
+
 # Secrets Manager entry ARNs (synced via External Secrets Operator per
 # ADR-0007) -- never a literal secret value in this file. Set by Terraform
-# (profile-service.tf) at deploy time. Only DB credentials -- no JWT
-# signing key or internal reveal credential (profile-service issues no
-# tokens and exposes no internal, non-Kong-routed endpoint).
+# (profile-service.tf) at deploy time.
 secretsManager:
   dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  # A NEW, distinct-from-identity-service's, per-caller credential
+  # (implementation plan Addendum 2, requirement 1) -- Terraform's
+  # `cross_service_reveal_credential` resources
+  # (infra/terraform/modules/secrets/main.tf), never the generic
+  # `internal-reveal-credential` shape identity-service uses.
+  internalRevealCredentialNutritionCalc: "" # set by Terraform: module.secrets.cross_service_reveal_credential_secret_arns["profile-service-nutrition-calculation-service"]

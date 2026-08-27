@@ -18,9 +18,25 @@ WORKDIR /repo
 COPY packages/shared-contracts/ packages/shared-contracts/
 COPY services/profile-service/pyproject.toml services/profile-service/uv.lock services/profile-service/
 WORKDIR /repo/services/profile-service
-RUN pip install --no-cache-dir uv && uv sync --frozen --no-dev
+RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev
 
 FROM python:3.12-slim AS runtime
+# The runtime image never invokes system python/pip -- it only ever runs
+# .venv/bin/python (see PATH below), which uv sync populated fully and
+# self-containedly. System pip (and perl-base, an unrelated OS package
+# neither apt nor the app needs post-build) are dead weight that Trivy
+# still scans: pip vendors its own copies of msgpack and pkg_resources
+# (setuptools) at versions with known HIGH-severity CVEs
+# (GHSA-6v7p-g79w-8964, CVE-2025-47273), and perl-base carries several
+# unfixed/fix-deferred upstream CVEs in this base image tag. Removing the
+# actually-unused code is a real fix, not a suppression -- there is
+# nothing left in the image to be vulnerable.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && apt-get remove -y --purge --allow-remove-essential perl-base \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/python3.12/site-packages/pip \
+              /usr/local/lib/python3.12/site-packages/pip-*.dist-info
 RUN useradd --uid 1000 --create-home app
 WORKDIR /app
 COPY --from=builder /repo/services/profile-service/.venv /app/.venv
@@ -31,5 +47,13 @@ COPY services/profile-service/migrations/ migrations/
 COPY services/profile-service/alembic.ini ./
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
+# 8000: public API (Kong-routed). 8001: internal-only reveal-metrics API
+# (implementation plan Addendum 2) -- never routed through Kong, restricted
+# at the NetworkPolicy level to nutrition-calculation-service's pod
+# selector only (infra/k8s/charts/profile-service/values.yaml). Both ports
+# are served by ONE process (see infrastructure/main.py's `run()`), not two
+# containers -- they share one Container (DB pool, KMS client, Redis
+# client, RabbitMQ connection).
 EXPOSE 8000
-CMD ["uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8001
+CMD ["python", "-m", "infrastructure.main"]
