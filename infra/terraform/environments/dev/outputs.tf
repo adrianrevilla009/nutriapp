@@ -90,8 +90,19 @@ output "internal_reveal_credential_secret_arns" {
   value = module.secrets.internal_reveal_credential_secret_arns
 }
 
+# profile-service implementation plan Addendum 2: the reveal-metrics
+# endpoint's distinct, per-caller credential and its dedicated caller IRSA
+# role. This second output in particular is the reconciliation point for
+# nutrition-calculation-service's own (separately developed) Terraform --
+# that service's chart/ServiceAccount wires this role's ARN in as its
+# IRSA annotation, or, at /implementation-review, this single statement is
+# merged into whatever role that service's app pod already assumes.
 output "cross_service_reveal_credential_secret_arns" {
   value = module.secrets.cross_service_reveal_credential_secret_arns
+}
+
+output "cross_service_reveal_credential_caller_irsa_role_arns" {
+  value = module.secrets.cross_service_reveal_credential_caller_irsa_role_arns
 }
 
 output "scale_to_zero_lambda_arn" {

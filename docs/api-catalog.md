@@ -36,7 +36,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service`, `bff-service` | planned    |
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | planned    |
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
-| `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | planned |
+| `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
 
 ## Notes
 

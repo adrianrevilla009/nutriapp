@@ -87,6 +87,29 @@ Article 9 special-category data outside `profile-service`'s erasure design
   (`domain/services/calorie_target_calculator.py`).
 - **Macro repartition** — protein 1.6–2.2 g/kg, fat ≥ 20% of calories,
   carbs = remainder (floored at 0g, flagged via `carbs_floored`)
+
+## Known limitations
+
+- **`Sex.OTHER` users currently never receive a computed nutrition target.**
+  Mifflin-St Jeor only has published constants for male/female, so
+  `bmr_calculator.py` requires an explicit `calculation_sex_constant`
+  selection for `Sex.OTHER` and raises `InvalidBiometricInputError`
+  otherwise (never guesses or averages). This fails safe end-to-end: the
+  raise is caught in `recompute_nutrition_target.py`, re-raised as
+  `RecomputeNutritionTargetDeferredError`, and `profile_metrics_consumer.py`
+  logs it, marks the triggering event processed, and returns — no crash,
+  no wrong computation, no retry storm. However, there is currently **no
+  production code path** by which that selection ever reaches this
+  service: `profile-service`'s reveal-metrics response (six fixed fields,
+  per its own response-minimization requirement) has no field for it, and
+  `RecomputeNutritionTargetCommand.calculation_sex_constant_override` is
+  only ever populated in a unit test today. Every `Sex.OTHER` user's
+  recompute will defer **indefinitely**, not just until a retry succeeds.
+  Tracked follow-up (not yet a human-approved plan): either extend the
+  reveal-metrics response/a dedicated `profile-service` field to carry this
+  per-user choice, or add a command surface for the user to supply it
+  directly to this service. Do not build a Pro feature that assumes every
+  user has a computed target until this is resolved.
   (`domain/services/macro_repartition_calculator.py`).
 - **Nutrient totals** — `(per_100g_value / 100) × quantity_grams`, summed
   per entry/day; micronutrients `"unavailable"` (never estimated) without
