@@ -28,7 +28,7 @@ def _load(name: str) -> dict:
         return json.load(f)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def redis_client(redis_url):
     client = Redis.from_url(redis_url)
     yield client

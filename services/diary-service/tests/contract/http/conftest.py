@@ -41,7 +41,7 @@ class _FakeContainer:
         self.daily_summary_cache = FakeDailySummaryCachePort()
 
 
-@pytest.fixture
+@pytest.fixture()
 async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(food_entry_router)

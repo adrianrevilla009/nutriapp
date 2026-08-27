@@ -10,7 +10,7 @@ import sys
 import pytest
 
 
-@pytest.fixture
+@pytest.fixture()
 def service_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 

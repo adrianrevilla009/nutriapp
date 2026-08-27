@@ -12,7 +12,7 @@ from alembic import command
 from alembic.config import Config
 
 
-@pytest.fixture
+@pytest.fixture()
 def alembic_config(postgres_container) -> Config:
     sync_url = postgres_container.get_connection_url()
     os.environ["CATALOG_SERVICE_DATABASE_URL"] = sync_url

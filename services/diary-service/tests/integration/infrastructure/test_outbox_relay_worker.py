@@ -23,7 +23,7 @@ class FailingPublisher:
         raise RuntimeError("simulated publish failure")
 
 
-@pytest.fixture
+@pytest.fixture()
 def session_factory(db_engine):
     return async_sessionmaker(db_engine, expire_on_commit=False)
 

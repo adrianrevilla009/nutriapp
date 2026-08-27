@@ -11,7 +11,7 @@ from domain.ports.event_store_port import OptimisticConcurrencyError
 from infrastructure.persistence.postgres_event_store import PostgresEventStore
 
 
-@pytest.fixture
+@pytest.fixture()
 async def session(db_engine):
     async with AsyncSession(db_engine, expire_on_commit=False) as s:
         yield s

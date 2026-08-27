@@ -9,7 +9,7 @@ from infrastructure.persistence.postgres_ingestion_run_repository import (
 pytestmark = pytest.mark.usefixtures("db_engine")
 
 
-@pytest.fixture
+@pytest.fixture()
 async def session(db_engine):
     session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_factory() as s:

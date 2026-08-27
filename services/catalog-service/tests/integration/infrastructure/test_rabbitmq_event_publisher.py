@@ -27,7 +27,7 @@ def rabbitmq_container():
         yield container
 
 
-@pytest.fixture
+@pytest.fixture()
 async def amqp_url(rabbitmq_container):
     host = rabbitmq_container.get_container_host_ip()
     port = rabbitmq_container.get_exposed_port(5672)

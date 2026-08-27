@@ -22,7 +22,7 @@ class _FakeContainer:
         self.search_cache = FakeSearchCache()
 
 
-@pytest.fixture
+@pytest.fixture()
 async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(search_router)

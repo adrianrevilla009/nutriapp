@@ -22,7 +22,7 @@ def postgres_async_url(postgres_container) -> str:
     return sync_url.replace("postgresql+psycopg2", "postgresql+asyncpg")
 
 
-@pytest.fixture
+@pytest.fixture()
 async def db_engine(postgres_async_url):
     # Function-scoped deliberately -- see identity-service/tests/conftest.py
     # for the event-loop-binding rationale.
