@@ -362,13 +362,25 @@ Every non-trivial change follows this pipeline, each stage a separate, explicit 
    the planned tests pass.
 7. **Test Execution** (`/test-execution`) — full test suite run, coverage checked.
 8. **Implementation Review** (`/implementation-review`) — `reviewer-agent` and/or
-   `architecture-agent` review the diff against CLAUDE.md and the relevant skills.
+   `architecture-agent` review the diff against CLAUDE.md and the relevant skills,
+   **and verify the actual CI pipeline state for the PR** — every required
+   GitHub Actions check green (not just the jobs that happened to run) and the
+   SonarCloud Quality Gate passing. A diff that looks correct in isolation but
+   leaves any check red, or that reaches green only via an undocumented
+   suppression (a bare `--ignore-vuln`, `# type: ignore`, `NOSONAR`, or
+   `sonar-project.properties` exclusion with no comment explaining why the
+   underlying finding is a genuine false positive), is not APPROVED — it is
+   BLOCKED until the check is actually green or the exception is documented
+   inline next to the code/config it exempts, per `docs/ci-cd-strategy.md`.
 9. **Test Review** (`/test-review`) — verify tests actually assert behavior (not
    tautological), and coverage/mutation thresholds are met.
 10. **Human final approval.**
 11. **Commit** (`/create-commit`) — conventional commit, scoped to one logical change.
 12. **Pull Request** (`/create-pr`) — PR description auto-generated from the plan +
-    review findings, opened for human merge approval.
+    review findings, opened for human merge approval. Before handing a PR to the
+    human for merge, confirm every required check and the SonarCloud Quality
+    Gate are green on the PR's latest commit — a PR is not "ready for merge"
+    on the strength of a passing local test run alone.
 
 No agent skips a gate. No agent merges or pushes without explicit human confirmation
 (enforced by `.claude/hooks/pre-bash-guard.sh` and `.claude/hooks/subagent-stop-gate.sh`).
