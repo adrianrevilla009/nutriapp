@@ -114,7 +114,7 @@ jobs:
           # skipping them, which used to abort the scan before it audited
           # anything else in this file's real third-party dependencies.
           uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts$' > /tmp/requirements-audit.txt
-          uvx pip-audit --strict -r /tmp/requirements-audit.txt
+          uvx --no-build pip-audit==2.10.1 --strict -r /tmp/requirements-audit.txt
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest
