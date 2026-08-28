@@ -12,14 +12,22 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from infrastructure.http import dependencies as deps
 from infrastructure.http.health import router as health_router
+from infrastructure.http.routes.internal_catalog_routes import router as internal_router
 from infrastructure.http.routes.product_routes import router as product_router
 from infrastructure.http.routes.search_routes import router as search_router
 from tests.fixtures.factories import FakeSearchCache
+
+INTERNAL_LOOKUP_CREDENTIAL = "test-internal-lookup-credential"
+
+
+class _FakeSettings:
+    internal_lookup_credential = INTERNAL_LOOKUP_CREDENTIAL
 
 
 class _FakeContainer:
     def __init__(self) -> None:
         self.search_cache = FakeSearchCache()
+        self.settings = _FakeSettings()
 
 
 @pytest.fixture
@@ -27,6 +35,7 @@ async def app_client(db_engine: AsyncEngine):
     app = FastAPI()
     app.include_router(search_router)
     app.include_router(product_router)
+    app.include_router(internal_router)
     app.include_router(health_router)
 
     container = _FakeContainer()

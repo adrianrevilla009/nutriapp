@@ -17,6 +17,7 @@ from starlette.responses import Response
 
 from infrastructure.composition_root import Container, Settings
 from infrastructure.http.health import router as health_router
+from infrastructure.http.routes.internal_catalog_routes import router as internal_router
 from infrastructure.http.routes.product_routes import router as product_router
 from infrastructure.http.routes.search_routes import router as search_router
 
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(search_router)
     app.include_router(product_router)
+    app.include_router(internal_router)
     app.include_router(health_router)
 
     @app.get("/metrics", include_in_schema=False)
