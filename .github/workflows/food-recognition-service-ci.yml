@@ -46,6 +46,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -60,6 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -83,6 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, type-check]
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -95,6 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit-tests
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -121,6 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: dep-vuln-scan
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -147,6 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: integration-and-contract-tests
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
@@ -189,6 +195,7 @@ jobs:
     needs: coverage-gate
     continue-on-error: true
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
