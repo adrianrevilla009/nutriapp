@@ -1,0 +1,26 @@
+name: pip-audit dependency scan
+description: >-
+  Compile this service's locked requirements (excluding local monorepo
+  path-dependencies, which aren't published to PyPI and would otherwise
+  abort pip-audit's strict mode with "Dependency not found on PyPI")
+  and run pip-audit against them. Factored out here because this exact
+  sequence is identical across every service's CI workflow.
+inputs:
+  ignore-vuln:
+    description: >-
+      Comma-separated pip-audit --ignore-vuln IDs to pass through (e.g.
+      a documented false positive/inapplicable advisory for this
+      service's dependency set).
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: pip-audit
+      shell: bash
+      run: |
+        uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts' > /tmp/requirements-audit.txt
+        ignore_flags=""
+        for id in $(echo "${{ inputs.ignore-vuln }}" | tr ',' ' '); do
+          ignore_flags="$ignore_flags --ignore-vuln $id"
+        done
+        uvx --no-build pip-audit==2.10.1 --strict $ignore_flags -r /tmp/requirements-audit.txt

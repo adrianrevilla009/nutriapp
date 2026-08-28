@@ -9,6 +9,8 @@ on:
       - "infra/k8s/charts/_lib/**"
       - ".github/workflows/food-recognition-service-ci.yml"
       - ".github/actions/setup-python-uv/**"
+      - ".github/actions/pip-audit-scan/**"
+      - ".github/actions/helm-lint-and-template/**"
   push:
     branches: [main]
     paths:
@@ -18,6 +20,8 @@ on:
       - "infra/k8s/charts/_lib/**"
       - ".github/workflows/food-recognition-service-ci.yml"
       - ".github/actions/setup-python-uv/**"
+      - ".github/actions/pip-audit-scan/**"
+      - ".github/actions/helm-lint-and-template/**"
 
 defaults:
   run:
@@ -44,10 +48,9 @@ defaults:
 # recognized by githubactions:S8541's static check, which looks for the
 # literal --no-build/--only-binary token; --no-build satisfies it
 # directly and is a harmless no-op given --no-sync already skips any
-# sync/build step. The
-# wheel itself is never checked in (dist/ is gitignored) -- rebuilt
-# fresh in every job, same as every other build artifact in this
-# pipeline.
+# sync/build step. The wheel itself is never checked in (dist/ is
+# gitignored) -- rebuilt fresh in every job, same as every other build
+# artifact in this pipeline.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -94,22 +97,16 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: pip-audit
-        run: |
-          # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
-          # they're not published to PyPI, so pip-audit's strict mode errors
-          # out entirely ("Dependency not found on PyPI") rather than just
-          # skipping them, which used to abort the scan before it audited
-          # anything else in this file's real third-party dependencies.
-          uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts' > /tmp/requirements-audit.txt
-          # PYSEC-2026-3447 (setuptools <83.0.0): a MANIFEST.in exclude-pattern
-          # Unicode-normalization bypass affecting building a source distribution
-          # on macOS APFS/HFS+ -- inapplicable here (this is a Linux runtime
-          # dependency pulled in only so purgatory-circuitbreaker's import-time
-          # `import pkg_resources` succeeds; this service never builds an sdist).
-          # Upgrading past setuptools 81 breaks that import outright (pkg_resources
-          # was removed in 81) -- see pyproject.toml's setuptools constraint comment.
-          uvx --no-build pip-audit==2.10.1 --strict --ignore-vuln PYSEC-2026-3447 -r /tmp/requirements-audit.txt
+      # PYSEC-2026-3447 (setuptools <83.0.0): a MANIFEST.in exclude-pattern
+      # Unicode-normalization bypass affecting building a source distribution
+      # on macOS APFS/HFS+ -- inapplicable here (this is a Linux runtime
+      # dependency pulled in only so purgatory-circuitbreaker's import-time
+      # `import pkg_resources` succeeds; this service never builds an sdist).
+      # Upgrading past setuptools 81 breaks that import outright (pkg_resources
+      # was removed in 81) -- see pyproject.toml's setuptools constraint comment.
+      - uses: ./.github/actions/pip-audit-scan
+        with:
+          ignore-vuln: PYSEC-2026-3447
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest
@@ -222,21 +219,12 @@ jobs:
     # own code) — runs independently so a chart-only change doesn't need
     # to wait on/duplicate the Python stages, same as catalog-service-ci.yml.
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra/k8s/charts/food-recognition-service
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Install helm
-        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+      - uses: ./.github/actions/helm-lint-and-template
         with:
-          version: "v3.16.2"
-      - name: helm dependency update (vendors _lib)
-        run: helm dependency update .
-      - name: helm lint (dev values + checked-in CI fixture)
-        run: helm lint . -f values-dev.yaml -f ci/synthetic-values.yaml
-      - name: helm template (fails on any render error)
-        run: helm template food-recognition-service . -f values-dev.yaml -f ci/synthetic-values.yaml > /dev/null
+          chart-dir: infra/k8s/charts/food-recognition-service
+          release-name: food-recognition-service
 
   # push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
   # promote-prod: follow-up once infra/terraform's platform-infra plan is
