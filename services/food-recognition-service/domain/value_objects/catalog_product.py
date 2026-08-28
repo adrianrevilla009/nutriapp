@@ -40,6 +40,12 @@ class PackageSize:
 
 
 @dataclass(frozen=True, slots=True)
+class Price:
+    amount: float
+    currency: str
+
+
+@dataclass(frozen=True, slots=True)
 class CatalogProduct:
     product_id: uuid.UUID
     barcode: str | None
@@ -50,4 +56,4 @@ class CatalogProduct:
     dietary_tags: list[str]
     allergen_tags: list[str]
     package_size: PackageSize | None
-    sources: list[str]
+    price: Price | None

@@ -29,7 +29,6 @@ _SUCCESS_BODY = {
     "allergen_tags": [],
     "package_size": {"value": 100.0, "unit": "g"},
     "price": {"amount": 1.5, "currency": "EUR"},
-    "sources": ["open_food_facts"],
 }
 
 
@@ -60,6 +59,9 @@ async def test_known_barcode_returns_product_and_sends_credential_header():
     assert product.name == "Test Product"
     assert product.nutrition_per_100g is not None
     assert product.nutrition_per_100g.energy_kcal == 250.0
+    assert product.price is not None
+    assert product.price.amount == 1.5
+    assert product.price.currency == "EUR"
     assert received_headers.get("x-internal-service-credential") == "test-credential"
     await client.aclose()
 

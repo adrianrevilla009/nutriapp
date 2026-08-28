@@ -38,7 +38,7 @@ def make_catalog_product(product_id: uuid.UUID | None = None) -> CatalogProduct:
         dietary_tags=[],
         allergen_tags=[],
         package_size=None,
-        sources=["open_food_facts"],
+        price=None,
     )
 
 

@@ -42,7 +42,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from domain.ports.catalog_lookup_port import CatalogLookupUnavailableError
 from domain.value_objects.barcode import Barcode
-from domain.value_objects.catalog_product import CatalogProduct, NutrientPanel, PackageSize
+from domain.value_objects.catalog_product import CatalogProduct, NutrientPanel, PackageSize, Price
 
 CIRCUIT_NAME = "catalog_lookup"
 DEFAULT_FAIL_MAX = 5
@@ -53,6 +53,7 @@ CREDENTIAL_HEADER_NAME = "X-Internal-Service-Credential"
 def _parse_product(body: dict[str, Any]) -> CatalogProduct:
     nutrition_raw = body.get("nutrition_per_100g")
     package_size_raw = body.get("package_size")
+    price_raw = body.get("price")
     return CatalogProduct(
         product_id=body["product_id"],
         barcode=body.get("barcode"),
@@ -63,7 +64,7 @@ def _parse_product(body: dict[str, Any]) -> CatalogProduct:
         dietary_tags=list(body.get("dietary_tags", [])),
         allergen_tags=list(body.get("allergen_tags", [])),
         package_size=(PackageSize(**package_size_raw) if package_size_raw else None),
-        sources=list(body.get("sources", [])),
+        price=(Price(**price_raw) if price_raw else None),
     )
 
 

@@ -66,6 +66,11 @@ class PackageSizeResponse(BaseModel):
     unit: str
 
 
+class PriceResponse(BaseModel):
+    amount: float
+    currency: str
+
+
 class CatalogProductResponse(BaseModel):
     product_id: uuid.UUID
     barcode: str | None
@@ -76,7 +81,7 @@ class CatalogProductResponse(BaseModel):
     dietary_tags: list[str]
     allergen_tags: list[str]
     package_size: PackageSizeResponse | None
-    sources: list[str]
+    price: PriceResponse | None
 
 
 def catalog_product_to_response(product: CatalogProduct) -> CatalogProductResponse:
@@ -111,7 +116,11 @@ def catalog_product_to_response(product: CatalogProduct) -> CatalogProductRespon
             if product.package_size
             else None
         ),
-        sources=product.sources,
+        price=(
+            PriceResponse(amount=product.price.amount, currency=product.price.currency)
+            if product.price
+            else None
+        ),
     )
 
 
