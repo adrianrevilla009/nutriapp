@@ -15,6 +15,11 @@ import uuid
 import httpx
 import pytest
 from fastapi import FastAPI
+from shared_contracts.testing.jwt_fixtures import (
+    build_signed_token,
+    build_test_jwt_verifier,
+    generate_test_rsa_key_pair,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from infrastructure.http import dependencies as deps
@@ -22,11 +27,6 @@ from infrastructure.http.health import router as health_router
 from infrastructure.http.routes.nutrition_total_routes import router as nutrition_total_router
 from infrastructure.http.routes.target_routes import router as target_router
 from tests.fixtures.factories import FakeCurrentTargetCache, FakeCurrentTotalCache
-from tests.fixtures.jwt_fixtures import (
-    build_signed_token,
-    build_test_jwt_verifier,
-    generate_test_rsa_key_pair,
-)
 
 _TEST_PRIVATE_KEY = generate_test_rsa_key_pair()
 

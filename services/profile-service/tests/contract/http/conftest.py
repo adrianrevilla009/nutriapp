@@ -14,6 +14,11 @@ import uuid
 import httpx
 import pytest
 from fastapi import FastAPI
+from shared_contracts.testing.jwt_fixtures import (
+    build_signed_token,
+    build_test_jwt_verifier,
+    generate_test_rsa_key_pair,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from domain.entities.profile import Profile
@@ -23,11 +28,6 @@ from infrastructure.http.routes.consent_routes import router as consent_router
 from infrastructure.http.routes.profile_routes import router as profile_router
 from infrastructure.persistence.postgres_event_store import PostgresEventStore
 from tests.fixtures.factories import FakeDataEncryption
-from tests.fixtures.jwt_fixtures import (
-    build_signed_token,
-    build_test_jwt_verifier,
-    generate_test_rsa_key_pair,
-)
 
 _TEST_PRIVATE_KEY = generate_test_rsa_key_pair()
 

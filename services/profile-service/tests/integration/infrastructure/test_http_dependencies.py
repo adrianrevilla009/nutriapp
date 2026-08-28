@@ -13,14 +13,14 @@ import httpx
 import pytest
 from fastapi import Depends, FastAPI
 from shared_contracts.auth.jwt_verifier import JwksCircuitOpenError, JwtVerifier
-
-from infrastructure.http.dependencies import get_authenticated_user_id
-from tests.fixtures.jwt_fixtures import (
+from shared_contracts.testing.jwt_fixtures import (
     FakeJwksHttpClient,
     build_jwks_document,
     build_signed_token,
     generate_test_rsa_key_pair,
 )
+
+from infrastructure.http.dependencies import get_authenticated_user_id
 
 
 class _FakeContainer:

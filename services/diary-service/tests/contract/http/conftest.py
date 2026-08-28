@@ -14,6 +14,11 @@ import uuid
 import httpx
 import pytest
 from fastapi import FastAPI
+from shared_contracts.testing.jwt_fixtures import (
+    build_signed_token,
+    build_test_jwt_verifier,
+    generate_test_rsa_key_pair,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from infrastructure.http import dependencies as deps
@@ -26,11 +31,6 @@ from infrastructure.http.routes.water_intake_routes import router as water_intak
 from infrastructure.messaging.diary_event_projector_consumer import apply_event_to_read_models
 from infrastructure.persistence.postgres_outbox_repository import PostgresOutboxRepository
 from tests.fixtures.factories import FakeDailySummaryCachePort
-from tests.fixtures.jwt_fixtures import (
-    build_signed_token,
-    build_test_jwt_verifier,
-    generate_test_rsa_key_pair,
-)
 
 _TEST_PRIVATE_KEY = generate_test_rsa_key_pair()
 
