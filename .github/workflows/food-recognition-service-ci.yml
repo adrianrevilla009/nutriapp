@@ -53,9 +53,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev --no-build
       - name: Ruff lint
-        run: uv run ruff check .
+        run: uv run --no-sync ruff check .
       - name: Ruff format check
-        run: uv run ruff format --check .
+        run: uv run --no-sync ruff format --check .
 
   type-check:
     runs-on: ubuntu-latest
@@ -68,7 +68,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev --no-build
       - name: mypy
-        run: uv run mypy domain application infrastructure
+        run: uv run --no-sync mypy domain application infrastructure
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -92,7 +92,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --extra dev --no-build
       - name: Unit tests (domain + application, no I/O)
-        run: uv run pytest tests/unit -q
+        run: uv run --no-sync pytest tests/unit -q
 
   dep-vuln-scan:
     runs-on: ubuntu-latest
@@ -144,9 +144,9 @@ jobs:
       # (httpx.MockTransport only, per test-plan section 2's explicit
       # "never a live call" requirement).
       - name: Integration tests (testcontainers + httpx.MockTransport, never live)
-        run: uv run pytest tests/integration -q
+        run: uv run --no-sync pytest tests/integration -q
       - name: Contract tests (HTTP + event schemas)
-        run: uv run pytest tests/contract -q
+        run: uv run --no-sync pytest tests/contract -q
 
   coverage-gate:
     runs-on: ubuntu-latest
@@ -169,15 +169,15 @@ jobs:
       # infrastructure >= 70%.
       - name: Full suite (collects coverage for all three layers)
         run: |
-          uv run pytest tests/unit tests/contract tests/integration \
+          uv run --no-sync pytest tests/unit tests/contract tests/integration \
             --cov=domain --cov=application --cov=infrastructure \
             --cov-report=term-missing
       - name: Enforce domain coverage >= 90% (hard floor)
-        run: uv run coverage report --include="domain/*" --fail-under=90
+        run: uv run --no-sync coverage report --include="domain/*" --fail-under=90
       - name: Enforce application coverage >= 85%
-        run: uv run coverage report --include="application/*" --fail-under=85
+        run: uv run --no-sync coverage report --include="application/*" --fail-under=85
       - name: Enforce infrastructure coverage >= 70%
-        run: uv run coverage report --include="infrastructure/*" --fail-under=70
+        run: uv run --no-sync coverage report --include="infrastructure/*" --fail-under=70
 
   mutation-testing:
     # Advisory only, kept deliberately even though this service's domain
@@ -200,7 +200,7 @@ jobs:
       - name: Build shared-contracts wheel
         run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
       - name: Install dependencies (incl. mutmut)
-        run: uv sync --frozen --extra dev --no-build && uv pip install mutmut
+        run: uv sync --frozen --extra dev --no-build && uv pip install --only-binary :all: mutmut
       - name: Install libzbar0 (pyzbar's runtime dependency)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
       - name: mutmut run (domain layer only -- the correctness-critical formulas)
@@ -209,9 +209,9 @@ jobs:
         # (needed anyway: `mutmut results` below is a separate process
         # that has no CLI flags of its own, so config is the only way it
         # can agree with `run` on what was mutated).
-        run: uv run mutmut run || true
+        run: uv run --no-sync mutmut run || true
       - name: mutmut results
-        run: uv run mutmut results
+        run: uv run --no-sync mutmut results
 
   build-and-scan-image:
     runs-on: ubuntu-latest
