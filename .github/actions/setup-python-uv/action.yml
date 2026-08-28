@@ -1,0 +1,26 @@
+name: Setup Python + uv
+description: >-
+  Checkout, install Python, and install uv -- the identical first-three-steps
+  sequence every service CI workflow's jobs repeated inline, factored out
+  here once so it's defined in exactly one place instead of duplicated
+  across every job/workflow (python:S... duplication concern on a brand-new
+  workflow file whose job structure otherwise mirrors every existing
+  service's workflow almost verbatim).
+inputs:
+  python-version:
+    description: Python version to install
+    default: "3.12"
+  uv-version:
+    description: uv version to install
+    default: "0.12.6"
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+    - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        version: ${{ inputs.uv-version }}

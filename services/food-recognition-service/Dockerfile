@@ -14,12 +14,16 @@ WORKDIR /repo
 COPY packages/shared-contracts/ packages/shared-contracts/
 COPY services/food-recognition-service/pyproject.toml services/food-recognition-service/uv.lock services/food-recognition-service/
 WORKDIR /repo/services/food-recognition-service
-# `uv sync` below builds packages/shared-contracts, a local first-party
-# monorepo path dependency (not a third-party sdist) -- --no-build cannot
-# be added without breaking this install (see nutrition-calculation-service's
-# Dockerfile for the verified rationale). `pip install` is already pinned
-# to an exact version with --only-binary :all:.
-RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 && uv sync --frozen --no-dev  # NOSONAR
+# Build shared-contracts into a wheel first, then sync from that wheel
+# with --no-build -- pyproject.toml's [tool.uv.sources] points at this
+# exact wheel path, not the source directory, specifically so --no-build
+# works here instead of needing a NOSONAR exception (python:S8541/S8544;
+# verified: pointing at the source directory instead makes --no-build
+# fail outright with "has no binary distribution"). `pip install` is
+# pinned to an exact version with --only-binary :all:.
+RUN pip install --no-cache-dir --only-binary :all: uv==0.12.6 \
+    && uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist \
+    && uv sync --frozen --no-dev --no-build
 
 FROM python:3.12-slim AS runtime
 # libzbar0 is a REQUIRED runtime dependency (not build-only): pyzbar

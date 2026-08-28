@@ -803,7 +803,7 @@ requires-dist = [
     { name = "pyzbar", specifier = ">=0.1.9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "setuptools", specifier = ">=70,<81" },
-    { name = "shared-contracts", directory = "../../packages/shared-contracts" },
+    { name = "shared-contracts", path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.4" },
     { name = "tenacity", specifier = ">=9.0" },
@@ -2161,7 +2161,7 @@ wheels = [
 [[package]]
 name = "shared-contracts"
 version = "0.1.0"
-source = { directory = "../../packages/shared-contracts" }
+source = { path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
@@ -2169,6 +2169,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "tenacity" },
+]
+wheels = [
+    { filename = "shared_contracts-0.1.0-py3-none-any.whl", hash = "sha256:ad3413374a77a394ba5fa65cf12966c5bfadb109e646a92ba0c63f01d45969aa" },
 ]
 
 [package.metadata]

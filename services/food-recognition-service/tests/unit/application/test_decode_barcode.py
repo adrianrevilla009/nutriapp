@@ -82,8 +82,9 @@ async def test_empty_image_raises_invalid_image_error():
     decoder = FakeBarcodeDecoderPort(barcode_to_return=_KNOWN_BARCODE)
     catalog = FakeCatalogLookupPort(product_to_return=make_catalog_product())
     handler = DecodeBarcodeHandler(decoder, catalog, FakeBarcodeLookupRepository())
+    command = _command(image_bytes=b"")
     with pytest.raises(InvalidImageError):
-        await handler.handle(_command(image_bytes=b""))
+        await handler.handle(command)
 
 
 def test_constructor_never_accepts_a_diary_service_port():

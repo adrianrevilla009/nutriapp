@@ -120,8 +120,9 @@ async def test_feature_flag_disabled_short_circuits_without_calling_provider():
 async def test_empty_image_raises_invalid_image_error():
     vision = FakeVisionRecognitionPort(candidates_to_return=[make_candidate()])
     handler = AnalyzeFoodPhotoHandler(vision, FakePhotoAnalysisRepository(), FakeOutboxRepository())
+    command = _command(image_bytes=b"")
     with pytest.raises(InvalidImageError):
-        await handler.handle(_command(image_bytes=b""))
+        await handler.handle(command)
 
 
 async def test_at_most_three_candidates_are_ever_returned():

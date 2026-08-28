@@ -50,13 +50,20 @@ dev = [
 ]
 
 [tool.uv.sources]
-# NOT editable: this must resolve to a self-contained install inside
-# .venv/site-packages, since the Docker runtime stage only copies .venv
-# (not the packages/shared-contracts source tree) -- see
-# services/food-recognition-service/Dockerfile's comment. Local dev picks
-# up shared-contracts changes via `uv sync` re-running, same as any other
-# pinned dependency.
-shared-contracts = { path = "../../packages/shared-contracts" }
+# Points at a pre-built WHEEL, not the packages/shared-contracts source
+# directory -- deliberately, so `uv sync --no-build` can be used
+# everywhere this dependency is installed (CI, Dockerfile) without
+# needing to build a source distribution at sync time (python:S8541/
+# S8544 -- verified: pointing this at the source directory instead makes
+# --no-build fail outright with "has no binary distribution"). The wheel
+# itself is never checked in (packages/shared-contracts/dist/ is
+# gitignored) -- it's built fresh by a `uv build` step immediately before
+# every `uv sync --no-build` call, both in CI and in this service's own
+# Dockerfile. If shared-contracts' own version in its pyproject.toml ever
+# changes, this filename must be updated to match (also gates on this:
+# a stale/wrong filename here means the wheel-build step's own -o output
+# won't be found and `uv sync` fails loudly, not silently).
+shared-contracts = { path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
