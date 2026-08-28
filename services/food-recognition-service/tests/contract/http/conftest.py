@@ -26,7 +26,7 @@ from tests.fixtures.factories import (
     FakeCatalogLookupPort,
     FakeVisionRecognitionPort,
 )
-from tests.fixtures.jwt_fixtures import (
+from shared_contracts.testing.jwt_fixtures import (
     build_signed_token,
     build_test_jwt_verifier,
     generate_test_rsa_key_pair,

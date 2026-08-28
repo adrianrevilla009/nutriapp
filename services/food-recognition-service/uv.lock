@@ -2171,7 +2171,7 @@ dependencies = [
     { name = "tenacity" },
 ]
 wheels = [
-    { filename = "shared_contracts-0.1.0-py3-none-any.whl", hash = "sha256:ad3413374a77a394ba5fa65cf12966c5bfadb109e646a92ba0c63f01d45969aa" },
+    { filename = "shared_contracts-0.1.0-py3-none-any.whl", hash = "sha256:5f172a6e5760143b243c71665b437956993964419da27d7ff03eb4d3a4cf1049" },
 ]
 
 [package.metadata]
