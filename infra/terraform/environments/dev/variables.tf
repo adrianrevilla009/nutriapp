@@ -97,8 +97,14 @@ variable "jwt_signing_key_service_names" {
 }
 
 variable "db_credential_service_names" {
-  type    = list(string)
-  default = ["identity-service", "profile-service", "catalog-service", "nutrition-calculation-service"]
+  type = list(string)
+  default = [
+    "identity-service",
+    "profile-service",
+    "catalog-service",
+    "nutrition-calculation-service",
+    "food-recognition-service",
+  ]
 }
 
 variable "internal_reveal_credential_service_names" {
@@ -106,20 +112,36 @@ variable "internal_reveal_credential_service_names" {
   default = ["identity-service"]
 }
 
+# NOTE: this block previously existed twice in this file (a duplicate
+# `variable "cross_service_reveal_credentials"` block -- an artifact of
+# two independently-developed worktrees, nutrition-calculation-service's
+# and profile-service's Addendum 2, each adding their own copy without the
+# other's entry). Terraform rejects a duplicate variable declaration
+# outright, so this file was never actually apply-able as committed;
+# reconciled here into one block carrying every pair, per this session's
+# addition of the catalog-service/food-recognition-service pair
+# (implementation plan section 6(c)).
 variable "cross_service_reveal_credentials" {
-  description = "Per-(owner_service, caller_service) pairs needing a distinct internal reveal credential + narrow caller IRSA grant (see modules/secrets/variables.tf's fuller description). profile-service's reveal-metrics endpoint, called only by nutrition-calculation-service (profile-service implementation plan Addendum 2 / nutrition-calculation-service implementation plan Addendum 1)."
+  description = "Per-(owner_service, caller_service) pairs needing a distinct internal reveal credential + narrow caller IRSA grant (see modules/secrets/variables.tf's fuller description). profile-service's reveal-metrics endpoint, called only by nutrition-calculation-service (profile-service implementation plan Addendum 2 / nutrition-calculation-service implementation plan Addendum 1); catalog-service's internal barcode-lookup endpoint, called only by food-recognition-service (catalog-service implementation plan Addendum 2 / food-recognition-service implementation plan section 6(c))."
   type = list(object({
     owner_service  = string
     caller_service = string
   }))
   default = [
     { owner_service = "profile-service", caller_service = "nutrition-calculation-service" },
+    { owner_service = "catalog-service", caller_service = "food-recognition-service" },
   ]
 }
 
 variable "usda_fdc_api_key_service_names" {
   type    = list(string)
   default = ["catalog-service"]
+}
+
+variable "anthropic_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a metered, third-party Anthropic API key (food-recognition-service implementation plan section 6(b)). Same externally-issued-secret shape as usda_fdc_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band."
+  type        = list(string)
+  default     = ["food-recognition-service"]
 }
 
 # --- Scale-to-zero ---

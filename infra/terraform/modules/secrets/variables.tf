@@ -72,6 +72,12 @@ variable "usda_fdc_api_key_service_names" {
   default     = []
 }
 
+variable "anthropic_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a metered, third-party Anthropic API key (e.g. [\"food-recognition-service\"], food-recognition-service implementation plan section 6(b)). Same shape as usda_fdc_api_key_service_names above -- cannot be Terraform-generated, obtained externally (an Anthropic Console API key) and written into the placeholder container manually, out-of-band."
+  type        = list(string)
+  default     = []
+}
+
 variable "jwt_key_algorithm" {
   type    = string
   default = "RSA"

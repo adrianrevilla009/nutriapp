@@ -1,0 +1,167 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Mirrors infra/k8s/charts/nutrition-calculation-service/values.yaml's
+# structure (this service's closest conventional-persistence precedent:
+# one outbound synchronous call guarded by its own dedicated egress
+# NetworkPolicy, one metered external-API secret).
+
+nameOverride: food-recognition-service
+fullnameOverride: food-recognition-service
+
+image:
+  repository: food-recognition-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (food-recognition-service.tf)
+  # with the IRSA role ARN granting access to this service's own Secrets
+  # Manager entries PLUS the one narrow, human-approved exception:
+  # catalog-service's per-caller internal-lookup credential (implementation
+  # plan section 6(c)) -- never catalog-service's db-credentials.
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's only public HTTP surface is /api/v1/recognition/* via
+  # Kong. Bare podSelector (no namespaceSelector) scopes to the shared
+  # namespace, same convention as every other service's chart.
+  #
+  # NOTE (same known _lib-level gap those charts document): _lib only
+  # renders `policyTypes: [Ingress]` here -- egress (to the shared RDS
+  # instance, RabbitMQ, catalog-service, the Anthropic API) is
+  # unrestricted by THIS policy. The catalog-lookup-egress restriction is
+  # a SEPARATE, additional NetworkPolicy resource
+  # (templates/networkpolicy-egress-catalog-lookup.yaml).
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# catalogLookupEgress: the narrow egress rule (implementation plan section
+# 6(c)) -- this service's pods may reach OTHER PODS ONLY via
+# catalog-service's pod selector, on its normal (single, not split)
+# service port -- never lateral movement to any other in-cluster service.
+# Also allows this service's own external dependencies by port
+# (RDS/RabbitMQ) and outbound HTTPS to the Anthropic API -- see
+# templates/networkpolicy-egress-catalog-lookup.yaml's header comment for
+# why those are port-scoped rather than CIDR/pod-selector-scoped today (a
+# documented follow-up, not a silent gap).
+catalogLookupEgress:
+  enabled: true
+  catalogServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-service
+  catalogServicePort: 8000
+  rdsPort: 5432
+  rabbitmqPort: 5672
+  anthropicApiPort: 443
+
+# _db-provision-job.tpl input (implementation plan section 7): creates
+# this service's own logical database + role inside the shared RDS
+# instance as a pre-install/pre-upgrade Helm hook, idempotent on every
+# upgrade.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: food_recognition_service
+  roleName: food_recognition_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["food-recognition-service"]
+
+# NOTE: expressed as a proper Kubernetes EnvVar list ({name, value} pairs),
+# NOT the flat map shape other services' charts currently use for this
+# same `env:` key (e.g. nutrition-calculation-service/values.yaml).
+# `_lib`'s `_deployment.tpl` renders `.Values.env` via a blind `toYaml`
+# with no reshaping, so a flat map renders as an invalid Deployment spec
+# (Kubernetes' `container.env` is an array of objects, not a map) --
+# `helm lint`/`helm template` don't catch this because neither validates
+# against the real Kubernetes API schema, only that the template itself
+# renders. Flagged for a follow-up fix across every other chart (this is
+# a pre-existing, cross-cutting gap, not something introduced by this
+# service) -- not fixed here since that spans charts this plan doesn't
+# own.
+env:
+  - name: AWS_REGION
+    value: "us-east-1"
+  - name: FOOD_RECOGNITION_SERVICE_CATALOG_SERVICE_BASE_URL
+    value: "http://catalog-service:8000"
+  # Product-facing feature knobs (implementation plan section 1 acceptance
+  # criterion 2, section 8.3 acceptance criterion 9) -- tunable without a
+  # code change, deliberately not namespaced with `_SERVICE_` (see
+  # composition_root.py's Settings docstring).
+  - name: FOOD_RECOGNITION_CONFIDENCE_THRESHOLD
+    value: "0.6"
+  - name: FOOD_RECOGNITION_PHOTO_ANALYSIS_ENABLED
+    value: "true"
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# (FOOD_RECOGNITION_SERVICE_DATABASE_URL/ANTHROPIC_API_KEY/
+# CATALOG_LOOKUP_CREDENTIAL) as env vars. NOTE: no other already-merged
+# service's chart actually sets `envFrom` to reference its own
+# `<fullname>-secrets` Secret despite each one rendering an
+# ExternalSecret for it -- another pre-existing, cross-cutting gap (the
+# Secret object is created but never wired into any container), flagged
+# here rather than silently repeated, since without this the app can
+# never actually read its own DATABASE_URL at runtime.
+envFrom:
+  - secretRef:
+      name: food-recognition-service-secrets
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (food-recognition-service.tf) at deploy time.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  anthropicApiKey: "" # set by Terraform: module.secrets.anthropic_api_key_secret_arns["food-recognition-service"]
+  catalogLookupCredential: "" # set by Terraform: module.secrets.cross_service_reveal_credential_secret_arns["catalog-service-food-recognition-service"]

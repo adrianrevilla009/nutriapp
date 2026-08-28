@@ -1,0 +1,41 @@
+name: Setup Python + uv
+description: >-
+  Install Python and uv, then build the shared-contracts wheel and sync
+  this service's dependencies from it -- the identical sequence every
+  job in food-recognition-service-ci.yml repeated inline, factored out
+  here once so it's defined in exactly one place instead of duplicated
+  across every job (duplication concern on a brand-new workflow file
+  whose job structure otherwise mirrors every existing service's
+  workflow almost verbatim). Deliberately does NOT also run
+  actions/checkout: a local composite action's own definition can only
+  be loaded from an already-checked-out repository, so the calling job
+  must check out the repo itself before it can even find this action --
+  folding checkout in here would be a circular requirement.
+inputs:
+  python-version:
+    description: Python version to install
+    default: "3.12"
+  uv-version:
+    description: uv version to install
+    default: "0.12.6"
+  working-directory:
+    description: Service directory containing pyproject.toml/uv.lock
+    default: "services/food-recognition-service"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install uv
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        version: ${{ inputs.uv-version }}
+    - name: Build shared-contracts wheel
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: uv sync --frozen --extra dev --no-build

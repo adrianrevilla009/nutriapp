@@ -16,6 +16,8 @@ uv.lock.tmp
 .coverage.*
 coverage.json
 htmlcov/
+.mutmut-cache
+mutants/
 
 # Helm — vendored subchart tarballs are regenerable via
 # `helm dependency update` (reads Chart.lock, which IS committed)

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/food_photo_analyzed.v1.json",
+  "title": "FoodPhotoAnalyzed",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "FoodPhotoAnalyzed" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["analysis_id", "candidates", "model_version", "status"],
+      "properties": {
+        "analysis_id": { "type": "string", "format": "uuid" },
+        "candidates": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["name", "portion_range_min_g", "portion_range_max_g", "confidence"],
+            "properties": {
+              "name": { "type": "string" },
+              "portion_range_min_g": { "type": "number", "exclusiveMinimum": 0 },
+              "portion_range_max_g": { "type": "number", "exclusiveMinimum": 0 },
+              "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "model_version": { "type": "string" },
+        "status": { "enum": ["detected", "uncertain", "unavailable"] }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

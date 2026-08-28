@@ -1,5 +1,12 @@
 [build-system]
-requires = ["hatchling"]
+# Pinned exactly (not just a floor): hatchling's version string is
+# embedded in the built wheel's WHEEL metadata file ("Generator: hatchling
+# X.Y.Z"), so an unpinned requirement can resolve a different hatchling
+# version locally vs. in CI (whichever is latest on PyPI at build time),
+# producing a different wheel hash for byte-identical source -- which
+# breaks `uv sync --frozen`'s hash-pinned install of this wheel wherever
+# it's built fresh each time (every consuming service's CI/Dockerfile).
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -14,6 +21,7 @@ dependencies = [
     "httpx>=0.27",
     "pybreaker>=1.2",
     "tenacity>=9.0",
+    "fastapi>=0.115",
 ]
 
 [project.optional-dependencies]

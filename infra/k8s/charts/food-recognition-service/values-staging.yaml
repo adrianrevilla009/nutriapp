@@ -1,0 +1,15 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/food-recognition-service/db-credentials
+  anthropicApiKey: nutriapp/staging/food-recognition-service/anthropic-api-key
+  catalogLookupCredential: nutriapp/staging/catalog-service/internal-reveal-credential-food-recognition-service
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/food-recognition-service/db-credentials

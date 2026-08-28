@@ -23,7 +23,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/catalog`        | `catalog-service`        | v1                    | active    |
 | `/api/v1/diary`             | `diary-service`         | v1                    | active    |
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | active    |
-| `/api/v1/media`              | `food-recognition-service`              | v1                    | planned    |
+| `/api/v1/recognition`              | `food-recognition-service`              | v1                    | active    |
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/dashboard`                  | `bff-service` (ADR-0008)             | v1                    | planned    |
@@ -59,3 +59,10 @@ an endpoint surface — enforced by `/implementation-review`.
   minimized to exactly `weight_kg, height_cm, age, sex, activity_level,
   goal_type`. See `services/profile-service/README.md` and
   `/plans/profile-service/implementation-plan.md` Addendum 2.
+- `/api/v1/recognition` (`food-recognition-service`) — renamed from an
+  earlier `/api/v1/media` placeholder: `/plans/food-recognition-service/implementation-plan.md`
+  (the approved implementation plan) specifies the concrete routes
+  `POST /api/v1/recognition/photos/analyze` and
+  `POST /api/v1/recognition/barcodes/decode`, which this row now reflects.
+  No live consumer depended on the placeholder path, so no integration
+  breaks from the rename.

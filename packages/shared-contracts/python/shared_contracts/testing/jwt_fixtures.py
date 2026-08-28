@@ -3,8 +3,10 @@ identity-service's own JwtTokenIssuer output shape: `user_id` + `roles`
 claims, `kid` header) and wiring a `JwtVerifier`
 (shared_contracts.auth.jwt_verifier) against it without a real JWKS HTTP
 server -- shared by every contract/integration test that needs an
-authenticated request.
-"""
+authenticated request. Canonical shared copy: every service's test
+suite imports this instead of redefining it (previously copied
+verbatim per service, which is what accumulated into a duplication
+finding on food-recognition-service's PR)."""
 
 from __future__ import annotations
 
