@@ -39,8 +39,12 @@ defaults:
 # documented exception (githubactions:S8541/S8544; pointing at the
 # source directory instead makes --no-build fail outright with "has no
 # binary distribution"). Every `uv run` call below additionally passes
-# --no-sync, since the action already synced -- a bare `uv run` performs
-# its own implicit sync/build and was flagged by the same rule. The
+# --no-sync --no-build: --no-sync alone (skipping the implicit re-sync
+# a bare `uv run` performs) is functionally sufficient but isn't
+# recognized by githubactions:S8541's static check, which looks for the
+# literal --no-build/--only-binary token; --no-build satisfies it
+# directly and is a harmless no-op given --no-sync already skips any
+# sync/build step. The
 # wheel itself is never checked in (dist/ is gitignored) -- rebuilt
 # fresh in every job, same as every other build artifact in this
 # pipeline.
@@ -51,9 +55,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Ruff lint
-        run: uv run --no-sync ruff check .
+        run: uv run --no-sync --no-build ruff check .
       - name: Ruff format check
-        run: uv run --no-sync ruff format --check .
+        run: uv run --no-sync --no-build ruff format --check .
 
   type-check:
     runs-on: ubuntu-latest
@@ -62,7 +66,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: mypy
-        run: uv run --no-sync mypy domain application infrastructure
+        run: uv run --no-sync --no-build mypy domain application infrastructure
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -82,7 +86,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Unit tests (domain + application, no I/O)
-        run: uv run --no-sync pytest tests/unit -q
+        run: uv run --no-sync --no-build pytest tests/unit -q
 
   dep-vuln-scan:
     runs-on: ubuntu-latest
@@ -126,9 +130,9 @@ jobs:
       # (httpx.MockTransport only, per test-plan section 2's explicit
       # "never a live call" requirement).
       - name: Integration tests (testcontainers + httpx.MockTransport, never live)
-        run: uv run --no-sync pytest tests/integration -q
+        run: uv run --no-sync --no-build pytest tests/integration -q
       - name: Contract tests (HTTP + event schemas)
-        run: uv run --no-sync pytest tests/contract -q
+        run: uv run --no-sync --no-build pytest tests/contract -q
 
   coverage-gate:
     runs-on: ubuntu-latest
@@ -147,15 +151,15 @@ jobs:
       # infrastructure >= 70%.
       - name: Full suite (collects coverage for all three layers)
         run: |
-          uv run --no-sync pytest tests/unit tests/contract tests/integration \
+          uv run --no-sync --no-build pytest tests/unit tests/contract tests/integration \
             --cov=domain --cov=application --cov=infrastructure \
             --cov-report=term-missing
       - name: Enforce domain coverage >= 90% (hard floor)
-        run: uv run --no-sync coverage report --include="domain/*" --fail-under=90
+        run: uv run --no-sync --no-build coverage report --include="domain/*" --fail-under=90
       - name: Enforce application coverage >= 85%
-        run: uv run --no-sync coverage report --include="application/*" --fail-under=85
+        run: uv run --no-sync --no-build coverage report --include="application/*" --fail-under=85
       - name: Enforce infrastructure coverage >= 70%
-        run: uv run --no-sync coverage report --include="infrastructure/*" --fail-under=70
+        run: uv run --no-sync --no-build coverage report --include="infrastructure/*" --fail-under=70
 
   mutation-testing:
     # Advisory only, kept deliberately even though this service's domain
@@ -176,7 +180,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
       - name: Install mutmut
-        run: 'uv pip install --only-binary :all: mutmut'
+        run: 'uv pip install --only-binary :all: mutmut==3.7.0'
       - name: Install libzbar0 (pyzbar's runtime dependency)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
       - name: mutmut run (domain layer only -- the correctness-critical formulas)
@@ -185,9 +189,9 @@ jobs:
         # (needed anyway: `mutmut results` below is a separate process
         # that has no CLI flags of its own, so config is the only way it
         # can agree with `run` on what was mutated).
-        run: uv run --no-sync mutmut run || true
+        run: uv run --no-sync --no-build mutmut run || true
       - name: mutmut results
-        run: uv run --no-sync mutmut results
+        run: uv run --no-sync --no-build mutmut results
 
   build-and-scan-image:
     runs-on: ubuntu-latest
