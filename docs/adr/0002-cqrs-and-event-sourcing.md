@@ -62,3 +62,28 @@ like `identity-service`, which are closer to simple CRUD.
 - CLAUDE.md, section 2.3
 - ADR-0001 (hexagonal architecture underpins where ports for the event store and
   projections live)
+
+## Addendum — 2026-08-28: reconciling scope drift with CLAUDE.md §2.3
+
+Discovered by `architecture-agent` while reviewing `notification-service`'s
+implementation plan: this ADR's original Decision (2026-08-23, above) never
+mentions `profile-service` or `notification-service`, and assigns full event
+sourcing to `nutrition-calculation-service` — both of which diverge from
+CLAUDE.md §2.3 and `.claude/skills/cqrs-event-sourcing/SKILL.md`, and from
+what was actually built and merged: `profile-service` (PR #2) is
+event-sourced; `nutrition-calculation-service` (PR #6) is event-driven CRUD.
+This addendum corrects the record to match the actual, already-implemented
+scope — it is not a new architectural decision, and no already-shipped
+service is affected by it.
+
+Corrected scope (supersedes the Decision section's list above):
+- **Full event sourcing + CQRS**: `diary-service`, `profile-service`.
+- **CQRS, read side only** (consumes events into read models, no
+  event-sourced write aggregate of its own): `analytics-service`,
+  `notification-service`.
+- **Conventional persistence / event-driven CRUD**: `identity-service`,
+  `catalog-service`, `food-recognition-service`, `nutrition-calculation-service`,
+  `nutrition-assistant-service`, and (by default, unless a future ADR
+  addendum says otherwise for a specific one) every other still-unbuilt
+  Phase 2 service — `bff-service`, `activity-service`, `recipe-service`,
+  `social-service`, `billing-service`.
