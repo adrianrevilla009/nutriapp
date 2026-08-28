@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 import httpx
 import pytest
 from fastapi import FastAPI
+from shared_contracts.testing.jwt_fixtures import (
+    build_signed_token,
+    build_test_jwt_verifier,
+    generate_test_rsa_key_pair,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from infrastructure.http import dependencies as deps
@@ -25,11 +30,6 @@ from tests.fixtures.factories import (
     FakeBarcodeDecoderPort,
     FakeCatalogLookupPort,
     FakeVisionRecognitionPort,
-)
-from shared_contracts.testing.jwt_fixtures import (
-    build_signed_token,
-    build_test_jwt_verifier,
-    generate_test_rsa_key_pair,
 )
 
 _TEST_PRIVATE_KEY = generate_test_rsa_key_pair()
