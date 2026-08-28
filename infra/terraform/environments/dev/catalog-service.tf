@@ -9,10 +9,15 @@
 # identity-service.tf/profile-service.tf (see identity-service.tf's
 # header comment for the full rationale).
 #
-# No JWT signing key, no internal-reveal-credential container:
-# catalog-service issues no tokens and exposes no internal, non-Kong-
-# routed endpoint. It does need one new secret container this module
-# didn't previously have -- a third-party USDA FoodData Central API key
+# No JWT signing key: catalog-service issues no tokens. It does now
+# expose one internal, non-Kong-routed endpoint (`GET
+# /internal/v1/catalog/lookup`, implementation plan Addendum 2) --
+# verified against a distinct, per-caller credential (food-recognition-
+# service only), via the same `cross_service_reveal_credential` module
+# mechanism profile-service's Addendum 2 introduced, not the generic
+# `internal_reveal_credential` shape identity-service uses. It does need
+# one new secret container this module didn't previously have -- a
+# third-party USDA FoodData Central API key
 # (`usda_fdc_api_key_service_names`, added to
 # infra/terraform/modules/secrets/ as a follow-up, human-approved
 # reconciliation step, following the same per-service-container pattern
@@ -68,6 +73,10 @@ locals {
   catalog_service_db_credentials_secret_arn   = module.secrets.db_credential_secret_arns[local.catalog_service_name]
   catalog_service_usda_fdc_api_key_secret_arn = module.secrets.usda_fdc_api_key_secret_arns[local.catalog_service_name]
   catalog_service_app_secrets_irsa_role_arn   = module.secrets.app_secrets_irsa_role_arns[local.catalog_service_name]
+  # implementation plan Addendum 2: the internal lookup endpoint's
+  # distinct, per-caller credential -- keyed "<owner_service>-<caller_service>"
+  # per modules/secrets' cross_service_reveal_credential_secret_arns output.
+  catalog_service_lookup_credential_food_recognition_arn = module.secrets.cross_service_reveal_credential_secret_arns["${local.catalog_service_name}-food-recognition-service"]
 }
 
 # --- Helm release ---
@@ -90,8 +99,9 @@ resource "helm_release" "catalog_service" {
         RDS_PORT = module.rds.db_instance_port
       }
       secretsManager = {
-        dbCredentials = local.catalog_service_db_credentials_secret_arn
-        usdaFdcApiKey = local.catalog_service_usda_fdc_api_key_secret_arn
+        dbCredentials            = local.catalog_service_db_credentials_secret_arn
+        usdaFdcApiKey            = local.catalog_service_usda_fdc_api_key_secret_arn
+        internalLookupCredential = local.catalog_service_lookup_credential_food_recognition_arn
       }
       serviceAccount = {
         irsaRoleArn = local.catalog_service_app_secrets_irsa_role_arn

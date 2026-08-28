@@ -95,9 +95,24 @@ dbProvision:
 env:
   CATALOG_SERVICE_USDA_FDC_BASE_URL: "https://api.nal.usda.gov/fdc/v1"
 
+# The Kubernetes Secret produced by templates/externalsecret.yaml
+# (ExternalSecret target name "<fullnameOverride>-secrets") -- makes
+# every key below (CATALOG_SERVICE_DATABASE_URL,
+# CATALOG_SERVICE_USDA_FDC_API_KEY, CATALOG_INTERNAL_LOOKUP_CREDENTIAL)
+# available as a container env var. Deliberately added only now, as part
+# of implementation plan Addendum 2 -- the internal lookup endpoint is
+# the first thing on this service that needs a container-visible secret
+# value at all, mirroring profile-service's own Addendum 2 (this chart
+# had the same latent gap that Addendum closed there).
+envFrom:
+  - secretRef:
+      name: catalog-service-secrets
+
 # Secrets Manager entry ARNs (synced via External Secrets Operator per
 # ADR-0007) — never a literal secret value in this file. Set by Terraform
 # (catalog-service.tf) at deploy time.
 secretsManager:
   dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
   usdaFdcApiKey: "" # set by Terraform: module.secrets.usda_fdc_api_key_secret_arns["catalog-service"]
+  # implementation plan Addendum 2 -- module.secrets.cross_service_reveal_credential_secret_arns["catalog-service-food-recognition-service"]
+  internalLookupCredential: "" # set by Terraform
