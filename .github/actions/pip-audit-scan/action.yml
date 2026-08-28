@@ -12,11 +12,17 @@ inputs:
       a documented false positive/inapplicable advisory for this
       service's dependency set).
     default: ""
+  working-directory:
+    description: >-
+      Service directory containing pyproject.toml/uv.lock -- composite
+      action steps do not inherit the calling job's `defaults.run.working-directory`.
+    required: true
 runs:
   using: composite
   steps:
     - name: pip-audit
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         uv pip compile pyproject.toml --no-build | grep -v 'packages/shared-contracts' > /tmp/requirements-audit.txt
         ignore_flags=""

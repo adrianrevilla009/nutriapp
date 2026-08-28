@@ -107,6 +107,7 @@ jobs:
       - uses: ./.github/actions/pip-audit-scan
         with:
           ignore-vuln: PYSEC-2026-3447
+          working-directory: services/food-recognition-service
 
   integration-and-contract-tests:
     runs-on: ubuntu-latest
