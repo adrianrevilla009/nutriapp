@@ -11,3 +11,10 @@ class UnsupportedSearchFilterError(ValueError):
 
 class ProductNotFoundError(LookupError):
     """Raised when a product id doesn't exist — mapped to HTTP 404."""
+
+
+class InvalidCallerCredentialError(Exception):
+    """Raised when an internal-service caller's `X-Internal-Service-Credential`
+    header doesn't match the configured value — mapped to HTTP 401
+    (implementation plan Addendum 2, mirrors identity-service's
+    `InvalidCallerCredentialError`)."""

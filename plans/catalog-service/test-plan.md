@@ -84,3 +84,20 @@ No test code has been written yet — this defines cases only, per TDD (`.claude
 ## 6. Coverage expectation
 
 Touches all three layers (domain, application, infrastructure). Domain layer (`product_normalizer`, `product_deduplicator`, `allergen_tag_deriver`, `Product` aggregate, all value objects) carries the widest case count in §1 by design — this is the anticorruption-layer boundary the implementation plan's §6 flags for `architecture-agent`/`security-agent` review, so it needs to be the most thoroughly tested layer, well above the ≥90% domain floor. Application-layer command/query handlers are tested against fake ports (§1-adjacent, omitted above for brevity — one test per handler's success path plus its documented error path) to clear ≥85%. Infrastructure §2's integration matrix (7 adapters/repositories × several cases each) plus §3's contract tests are expected to clear ≥70% infrastructure coverage. This plan is assessed as sufficient to meet CLAUDE.md §3's thresholds.
+
+---
+
+## Addendum 2 — internal product-lookup endpoint (implementation plan Addendum 2)
+
+**Unit test cases:**
+- `GetProductByBarcodeHandler` — existing product returns it; unknown barcode raises `ProductNotFoundError`.
+
+**Integration test cases:**
+- `GET /internal/v1/catalog/lookup?barcode={barcode}` — missing/wrong `X-Internal-Service-Credential` header rejected before touching the DB (mirrors `identity-service`'s reveal-endpoint credential test).
+- Same route, valid credential, known barcode — `200` with the same response shape as `GET /api/v1/catalog/products/{id}`.
+- Same route, valid credential, unknown barcode — `404`, not `500`.
+
+**Contract test cases:**
+- Internal lookup response schema matches the public `GET /api/v1/catalog/products/{id}` schema exactly (single shared schema, per implementation plan Addendum 2 §2).
+
+**Coverage:** these additions are small (one query handler, one route); they ride on the existing suite's already-cleared thresholds and are not expected to move the service's per-layer percentages materially.

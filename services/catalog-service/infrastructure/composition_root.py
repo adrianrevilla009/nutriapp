@@ -35,6 +35,12 @@ class Settings:
     rabbitmq_url: str
     usda_fdc_api_key: str
     usda_fdc_base_url: str = "https://api.nal.usda.gov/fdc/v1"
+    # Checked against the internal `GET /internal/v1/catalog/lookup` route's
+    # `X-Internal-Service-Credential` header (implementation plan Addendum
+    # 2), consumed by food-recognition-service. Not routed through Kong.
+    # Local-dev default only — the real value is a Terraform-managed
+    # per-caller secret (infra/terraform/modules/secrets), never checked in.
+    internal_lookup_credential: str = "local-dev-internal-lookup-credential"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -47,6 +53,9 @@ class Settings:
             usda_fdc_api_key=os.environ.get("CATALOG_SERVICE_USDA_FDC_API_KEY", "DEMO_KEY"),
             usda_fdc_base_url=os.environ.get(
                 "CATALOG_SERVICE_USDA_FDC_BASE_URL", "https://api.nal.usda.gov/fdc/v1"
+            ),
+            internal_lookup_credential=os.environ.get(
+                "CATALOG_INTERNAL_LOOKUP_CREDENTIAL", "local-dev-internal-lookup-credential"
             ),
         )
 

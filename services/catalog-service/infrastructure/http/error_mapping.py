@@ -7,7 +7,12 @@ import structlog
 from fastapi import status
 from fastapi.responses import JSONResponse
 
-from application.errors import ProductNotFoundError, UnsupportedSearchFilterError
+from application.errors import (
+    InvalidCallerCredentialError,
+    ProductNotFoundError,
+    UnsupportedSearchFilterError,
+)
+from domain.value_objects.barcode import InvalidBarcodeError
 
 logger = structlog.get_logger()
 
@@ -19,6 +24,8 @@ def error_response(status_code: int, message: str, code: str) -> JSONResponse:
 _MAPPING: list[tuple[type[Exception], int, str]] = [
     (UnsupportedSearchFilterError, status.HTTP_422_UNPROCESSABLE_ENTITY, "UNSUPPORTED_FILTER"),
     (ProductNotFoundError, status.HTTP_404_NOT_FOUND, "PRODUCT_NOT_FOUND"),
+    (InvalidBarcodeError, status.HTTP_422_UNPROCESSABLE_ENTITY, "INVALID_BARCODE"),
+    (InvalidCallerCredentialError, status.HTTP_401_UNAUTHORIZED, "INVALID_CALLER_CREDENTIAL"),
 ]
 
 
