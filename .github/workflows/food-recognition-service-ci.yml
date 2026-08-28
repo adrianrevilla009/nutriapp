@@ -31,27 +31,25 @@ defaults:
 # mutation-testing + build/scan; deploy stages are devops-agent/CI infra
 # follow-up, same as catalog-service-ci.yml/diary-service-ci.yml.
 #
-# Every job below that runs `uv sync` builds packages/shared-contracts
-# into a wheel FIRST (`uv build ... -o .../dist`), because
-# pyproject.toml's [tool.uv.sources] points at that exact wheel path, not
-# the source directory -- this is what lets every `uv sync` call use
-# --no-build cleanly instead of needing a documented exception
-# (python:S8541/S8544 -- pointing at the source directory instead makes
-# --no-build fail outright with "has no binary distribution"; verified
-# locally with both a manual wheel build and this service's own
-# Dockerfile). The wheel itself is never checked in (dist/ is
-# gitignored) -- rebuilt fresh in every job, same as every other build
-# artifact in this pipeline.
+# ./.github/actions/setup-python-uv builds packages/shared-contracts
+# into a wheel and syncs this service's deps from it (uv sync --no-build)
+# for every job below that needs Python -- pyproject.toml's
+# [tool.uv.sources] points at that exact wheel path, not the source
+# directory, which is what lets --no-build succeed instead of needing a
+# documented exception (githubactions:S8541/S8544; pointing at the
+# source directory instead makes --no-build fail outright with "has no
+# binary distribution"). Every `uv run` call below additionally passes
+# --no-sync, since the action already synced -- a bare `uv run` performs
+# its own implicit sync/build and was flagged by the same rule. The
+# wheel itself is never checked in (dist/ is gitignored) -- rebuilt
+# fresh in every job, same as every other build artifact in this
+# pipeline.
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       - name: Ruff lint
         run: uv run --no-sync ruff check .
       - name: Ruff format check
@@ -63,10 +61,6 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       - name: mypy
         run: uv run --no-sync mypy domain application infrastructure
 
@@ -87,10 +81,6 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       - name: Unit tests (domain + application, no I/O)
         run: uv run --no-sync pytest tests/unit -q
 
@@ -100,10 +90,6 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       - name: pip-audit
         run: |
           # Exclude local monorepo path-dependencies (e.g. shared-contracts) --
@@ -127,10 +113,6 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       # pyzbar (infrastructure/recognition/pyzbar_barcode_decoder.py) loads
       # libzbar via ctypes at import time -- never bundled in the wheel on
       # Linux (implementation plan section 1's technology choice). Same
@@ -154,10 +136,6 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies
-        run: uv sync --frozen --extra dev --no-build
       # Same runtime dependency as integration-and-contract-tests above --
       # each GH Actions job runs on its own fresh runner with no shared
       # state, so this step can't be skipped just because that job already
@@ -197,10 +175,8 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: ./.github/actions/setup-python-uv
-      - name: Build shared-contracts wheel
-        run: uv build ../../packages/shared-contracts --wheel -o ../../packages/shared-contracts/dist
-      - name: Install dependencies (incl. mutmut)
-        run: uv sync --frozen --extra dev --no-build && uv pip install --only-binary :all: mutmut
+      - name: Install mutmut
+        run: 'uv pip install --only-binary :all: mutmut'
       - name: Install libzbar0 (pyzbar's runtime dependency)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libzbar0
       - name: mutmut run (domain layer only -- the correctness-critical formulas)
