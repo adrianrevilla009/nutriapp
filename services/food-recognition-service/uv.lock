@@ -2164,6 +2164,7 @@ version = "0.1.0"
 source = { path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" }
 dependencies = [
     { name = "cryptography" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "pybreaker" },
     { name = "pydantic" },
@@ -2171,12 +2172,13 @@ dependencies = [
     { name = "tenacity" },
 ]
 wheels = [
-    { filename = "shared_contracts-0.1.0-py3-none-any.whl", hash = "sha256:5f172a6e5760143b243c71665b437956993964419da27d7ff03eb4d3a4cf1049" },
+    { filename = "shared_contracts-0.1.0-py3-none-any.whl", hash = "sha256:4a497ff22dc49e7951d6dc4b5da61e3503fb619da406ffff365d1b91e36b3933" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=43.0" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23" },
     { name = "pybreaker", specifier = ">=1.2" },

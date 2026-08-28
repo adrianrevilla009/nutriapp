@@ -5,8 +5,10 @@ Authentication (ADR-0022, docs/authorization-model.md section 2): every
 request's `Authorization: Bearer <token>` header carries a RS256 JWT
 issued by identity-service, verified locally via
 `shared_contracts.auth.jwt_verifier.JwtVerifier` -- no synchronous call
-back to identity-service on every request. Mirrors every other service's
-identical dependency.
+back to identity-service on every request. The token-parsing/verification
+logic itself now lives in `shared_contracts.auth.dependencies` (ADR-0022's
+follow-up action); this module only wires this service's own `Container`
+into it.
 """
 
 from __future__ import annotations
@@ -14,17 +16,13 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import HTTPException, Request, status
-from shared_contracts.auth.jwt_verifier import (
-    JwksCircuitOpenError,
-    JwksFetchError,
-    JwtVerificationError,
-)
+from fastapi import Request
+from shared_contracts.auth import dependencies as shared_auth
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infrastructure.composition_root import Container
 
-_BEARER_PREFIX = "Bearer "
+get_correlation_id = shared_auth.get_correlation_id
 
 
 def get_container(request: Request) -> Container:
@@ -38,35 +36,6 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
         yield session
 
 
-def get_correlation_id(request: Request) -> str:
-    return request.headers.get("X-Correlation-Id") or str(uuid.uuid4())
-
-
 async def get_authenticated_user_id(request: Request) -> uuid.UUID:
-    authorization = request.headers.get("Authorization")
-    if not authorization or not authorization.startswith(_BEARER_PREFIX):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authenticated caller."
-        )
-    token = authorization[len(_BEARER_PREFIX) :].strip()
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing authenticated caller."
-        )
-
     container: Container = request.app.state.container
-    try:
-        principal = await container.jwt_verifier.verify(token)
-    except JwtVerificationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authenticated caller."
-        ) from exc
-    except (JwksFetchError, JwksCircuitOpenError) as exc:
-        # Fail closed: if identity-service's public keys can't be fetched
-        # (and the cache is empty/expired), a request cannot be
-        # authenticated -- never silently accept an unverifiable token.
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unable to verify authenticated caller.",
-        ) from exc
-    return principal.user_id
+    return await shared_auth.get_authenticated_user_id(request, container.jwt_verifier)
