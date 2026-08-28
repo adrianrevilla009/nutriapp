@@ -1,0 +1,35 @@
+{
+  "event_id": "55555555-5555-5555-5555-555555555555",
+  "aggregate_id": "99999999-9999-9999-9999-999999999991",
+  "event_type": "MealPlanned",
+  "version": 1,
+  "occurred_at": "2026-08-28T08:00:00+00:00",
+  "payload": {
+    "plan_entry_id": "99999999-9999-9999-9999-999999999991",
+    "user_id": "22222222-2222-2222-2222-222222222222",
+    "source": {
+      "source_type": "catalog_product",
+      "source_reference_id": "prod-1",
+      "snapshot": {
+        "name": "Oats",
+        "brand": null,
+        "quantity": 100.0,
+        "unit": "g",
+        "macros_per_unit": {
+          "calories_kcal": 389.0,
+          "protein_g": 16.9,
+          "carbs_g": 66.3,
+          "fat_g": 6.9
+        }
+      }
+    },
+    "meal_slot": "breakfast",
+    "planned_for": "2026-08-29T08:00:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "77777777-7777-7777-7777-777777777775",
+    "causation_id": "77777777-7777-7777-7777-777777777775",
+    "user_id": "22222222-2222-2222-2222-222222222222"
+  }
+}
+

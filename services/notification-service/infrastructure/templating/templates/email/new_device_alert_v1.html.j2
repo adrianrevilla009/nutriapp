@@ -1,0 +1,15 @@
+<!-- new-device-login alert email, template version 1. Autoescaped per
+     docs/notifications.md section 3. No raw credentials are ever
+     included -- only the already-hashed device fingerprint. -->
+<html>
+  <body>
+    <p>Hi,</p>
+    <p>We noticed a new sign-in to your NutriApp account ({{ email }}) from a
+       device we haven't seen before.</p>
+    <p>Device fingerprint: {{ device_fingerprint_hash }}</p>
+    <p>Time: {{ occurred_at }}</p>
+    <p>If this was you, no action is needed. If you don't recognize this
+       sign-in, please reset your password immediately.</p>
+  </body>
+</html>
+

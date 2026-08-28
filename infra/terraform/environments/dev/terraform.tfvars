@@ -29,7 +29,15 @@ rds_multi_az          = false
 redis_node_type = "cache.t4g.micro"
 
 jwt_signing_key_service_names = ["identity-service"]
-db_credential_service_names   = ["identity-service", "profile-service", "diary-service"]
+# NOTE: catalog-service, nutrition-calculation-service, and
+# food-recognition-service are each already missing from this override
+# list despite needing a db-credentials container -- a pre-existing gap
+# from those services' own worktrees (variables.tf's default already
+# lists all five; this override silently narrows it), not introduced or
+# fixed here. "notification-service" is added below because this plan's
+# own service needs it; the other three remain a separately tracked
+# follow-up, not silently expanded to fix here.
+db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service"]
 
 scale_down_schedule_expression = "cron(0 20 ? * MON-FRI *)"
 scale_up_schedule_expression   = "cron(0 7 ? * MON-FRI *)"

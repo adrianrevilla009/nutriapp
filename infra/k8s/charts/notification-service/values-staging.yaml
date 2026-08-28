@@ -1,0 +1,16 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/notification-service/db-credentials
+  identityRevealCredential: nutriapp/staging/identity-service/internal-reveal-credential
+  sesEndpoint: nutriapp/staging/notification-service/ses-endpoint
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/notification-service/db-credentials
+

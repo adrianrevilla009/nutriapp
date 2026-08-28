@@ -24,6 +24,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/diary`             | `diary-service`         | v1                    | active    |
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | active    |
 | `/api/v1/recognition`              | `food-recognition-service`              | v1                    | active    |
+| `/api/v1/notifications`             | `notification-service`             | v1                    | active    |
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/dashboard`                  | `bff-service` (ADR-0008)             | v1                    | planned    |

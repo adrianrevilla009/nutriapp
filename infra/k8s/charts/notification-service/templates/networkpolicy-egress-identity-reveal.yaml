@@ -1,0 +1,76 @@
+{{/*
+Narrow egress restriction for this service's outbound call to
+identity-service's internal reveal endpoint (this service's one
+synchronous exception, docs/domain-glossary-and-context-map.md): this
+service's pods may reach OTHER PODS in the namespace ONLY via
+identity-service's pod selector -- never arbitrary lateral movement to
+any other service's pods. Declared as its own plain NetworkPolicy
+resource (not via the shared `_lib` `_networkpolicy.tpl`, which only
+renders `policyTypes: [Ingress]` today), mirroring
+food-recognition-service's networkpolicy-egress-catalog-lookup.yaml /
+nutrition-calculation-service's networkpolicy-egress-profile-reveal.yaml
+precedent.
+
+identity-service's internal reveal route is NOT on a separate internal
+port -- same single-port-shared-with-public-routes shape as
+catalog-service's internal lookup endpoint, so this policy targets
+identity-service's normal service port, not a second one.
+
+Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
+Kubernetes default-denies ALL egress from it except what some policy
+explicitly allows (the union across every such policy) -- so this
+resource also allows the narrow, PORT-scoped (not destination-scoped)
+egress this service genuinely needs for its own external dependencies
+(the shared RDS Postgres instance, RabbitMQ) and DNS, plus HTTPS egress
+to SES/SNS (genuine third-party destinations, not in-cluster pods -- see
+the `identityRevealEgress` values below). Same documented, port-scoped-
+not-destination-scoped gap as every other service's identical resource --
+not resolved here, not silently worked around.
+*/}}
+{{- if .Values.identityRevealEgress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nutriapp-lib.fullname" . }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nutriapp-lib.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nutriapp-lib.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS -- otherwise this pod cannot resolve any hostname at all,
+    # including identity-service's own ClusterIP DNS name or SES/SNS
+    # regional endpoints.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The one narrow, pod-selector-scoped allowance this resource exists
+    # for: identity-service's normal service port, nothing else of
+    # identity-service's and no other in-cluster service at all.
+    - to:
+        - podSelector:
+            {{- toYaml .Values.identityRevealEgress.identityServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.identityRevealEgress.identityServicePort }}
+    # This service's own external dependencies -- port-scoped, not
+    # destination-scoped (documented gap above): shared RDS Postgres,
+    # RabbitMQ, and outbound HTTPS to SES/SNS (sandbox in dev/CI, per
+    # docs/notifications.md section 5).
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.identityRevealEgress.rdsPort }}
+        - protocol: TCP
+          port: {{ .Values.identityRevealEgress.rabbitmqPort }}
+        - protocol: TCP
+          port: {{ .Values.identityRevealEgress.externalHttpsPort }}
+{{- end }}
+

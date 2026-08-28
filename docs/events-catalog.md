@@ -185,7 +185,12 @@ yet implemented — the owning service doesn't exist yet).
 ### WaterIntakeLogged (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing).
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- projected into the local
+  `reminder_schedule` read model as a no-op today, per
+  `/plans/notification-service/implementation-plan.md`: a single log
+  entry isn't itself a reminder trigger; the water-absence-reminder
+  mechanism is reserved as a documented follow-up).
 - Emitted when: a user logs water intake.
 - Aggregate: WaterIntakeEntry -- one instance per logged item
   (`aggregate_id = intake_id`).
@@ -195,7 +200,9 @@ yet implemented — the owning service doesn't exist yet).
 ### WaterIntakeRemoved (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing).
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- same no-op projection note as
+  `WaterIntakeLogged` above).
 - Emitted when: a user removes a previously logged water intake entry.
   Never a destructive row delete.
 - Aggregate: WaterIntakeEntry.
@@ -204,8 +211,11 @@ yet implemented — the owning service doesn't exist yet).
 ### FastingWindowStarted (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service, notification-service (reminders) --
-  documented, not yet existing.
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- projects a `reminder_schedule` row via
+  `infrastructure/messaging/diary_events_consumer.py`, covered by a
+  passing contract test, per
+  `/plans/notification-service/implementation-plan.md` section 5).
 - Emitted when: a user starts a fasting window. Rejected (no event
   produced) if the user already has an open window --
   `OverlappingFastingWindowError` (plan section 9.2's resolved simple
@@ -219,8 +229,10 @@ yet implemented — the owning service doesn't exist yet).
 ### FastingWindowEnded (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service, notification-service (reminders) --
-  documented, not yet existing.
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- removes the matching
+  `reminder_schedule` row, same consumer as `FastingWindowStarted`
+  above).
 - Emitted when: a user ends their open fasting window.
 - Aggregate: FastingWindow.
 - Payload: `{ "window_id": "uuid", "user_id": "uuid", "ended_at": "timestamp" }`
@@ -228,7 +240,9 @@ yet implemented — the owning service doesn't exist yet).
 ### MealPlanned (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing).
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- projects a `reminder_schedule` row,
+  per `/plans/notification-service/implementation-plan.md` section 5).
 - Emitted when: a user schedules a planned (future) meal entry -- distinct
   from the as-eaten `FoodEntryLogged` log (weekly meal planning, plan
   section 1).
@@ -242,7 +256,10 @@ yet implemented — the owning service doesn't exist yet).
 ### MealPlanUpdated (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing).
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- updates the existing
+  `reminder_schedule` row in place, same consumer as `MealPlanned`
+  above).
 - Emitted when: a user updates a planned meal entry. Never mutates the
   original `MealPlanned` event.
 - Aggregate: MealPlanEntry.
@@ -253,7 +270,9 @@ yet implemented — the owning service doesn't exist yet).
 ### MealPlanRemoved (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing).
+- Consumers: analytics-service (documented, not yet existing),
+  notification-service (active -- removes the matching
+  `reminder_schedule` row, same consumer as `MealPlanned` above).
 - Emitted when: a user removes a planned meal entry. Never a destructive
   row delete.
 - Aggregate: MealPlanEntry.

@@ -1,0 +1,5 @@
+{
+  "email": "<script>alert(\"xss\")</script>&'quote'",
+  "verification_token": "123456"
+}
+

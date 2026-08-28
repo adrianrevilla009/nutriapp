@@ -1,0 +1,6 @@
+{
+  "email": "<script>alert(\"xss\")</script>&'quote'",
+  "device_fingerprint_hash": "<script>alert(\"xss\")</script>",
+  "occurred_at": "2026-08-28T00:00:00Z"
+}
+
