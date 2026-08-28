@@ -37,5 +37,6 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 
 async def get_authenticated_user_id(request: Request) -> uuid.UUID:
-    container: Container = request.app.state.container
-    return await shared_auth.get_authenticated_user_id(request, container.jwt_verifier)
+    return await shared_auth.get_authenticated_user_id(
+        request, lambda: request.app.state.container.jwt_verifier
+    )
