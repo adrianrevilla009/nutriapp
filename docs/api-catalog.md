@@ -25,6 +25,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/nutrition`         | `nutrition-calculation-service`         | v1                    | active    |
 | `/api/v1/recognition`              | `food-recognition-service`              | v1                    | active    |
 | `/api/v1/notifications`             | `notification-service`             | v1                    | active    |
+| `/api/v1/activity/exercises`             | `activity-service`             | v1                    | active    |
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
@@ -75,6 +76,15 @@ an endpoint surface — enforced by `/implementation-review`.
   `analytics-service` as a consumer (not `bff-service`, corrected from
   an earlier speculative placeholder) — `bff-service` uses the public
   `GET /api/v1/nutrition/target` endpoint instead.
+- `/api/v1/activity/exercises` (`activity-service`,
+  `/plans/activity-service/implementation-plan.md`) covers four concrete
+  routes: `POST /api/v1/activity/exercises` (log a manual entry),
+  `PATCH /api/v1/activity/exercises/{entry_id}` (correct an entry),
+  `DELETE /api/v1/activity/exercises/{entry_id}` (soft-delete, idempotent),
+  `GET /api/v1/activity/exercises?date={date}` (list a day's entries).
+  Manual exercise logging only this MVP — no wearable-provider OAuth
+  connect/sync/disconnect endpoints exist yet (see
+  `services/activity-service/README.md`'s "Known limitations").
 - `/api/v1/recognition` (`food-recognition-service`) — renamed from an
   earlier `/api/v1/media` placeholder: `/plans/food-recognition-service/implementation-plan.md`
   (the approved implementation plan) specifies the concrete routes

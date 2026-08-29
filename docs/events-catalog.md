@@ -416,11 +416,34 @@ yet implemented — the owning service doesn't exist yet).
   "effective_from": "timestamp" }`. See
   `packages/shared-contracts/schemas/nutrition_target_updated.v1.json`.
 
-### ExerciseLogged / WearableActivitySynced (v1)
+### ExerciseLogged (v1)
+- Status: Active
+- Producer: activity-service
+- Consumers: nutrition-calculation-service (documented, not yet consuming
+  -- `NutritionTargetUpdated`'s `activity_adjustment_kcal` field is
+  reserved for this but always `null` this pass; wiring a real consumer
+  means reopening that already-merged, already-closed service's formula
+  surface, gated behind a new ADR per its own `CLAUDE.md` -- see
+  `services/activity-service/README.md`'s "Known limitations"),
+  analytics-service (documented, not yet existing).
+- Emitted when: a user manually logs an exercise entry, or corrects a
+  previously logged one (event-driven CRUD, not event-sourced -- published
+  on both create and update, always reflecting the entry's current
+  state). Never published on delete (a soft delete is a pure state
+  change, no Outbox write in this plan's scope).
+- Aggregate: ExerciseEntry.
+- Payload: `{ "entry_id": "uuid", "exercise_type": "running | walking | cycling | strength_training | swimming | other", "duration_minutes": "integer", "calories_burned_kcal": "number", "occurred_at": "timestamp", "label": "string | null" }`
+
+### WearableActivitySynced (v1)
 - Producer: activity-service
 - Consumers: nutrition-calculation-service, analytics-service
-- Emitted when: a user manually logs exercise, or a wearable sync
-  completes.
+- Emitted when: (future) a wearable provider sync completes. **Not yet
+  implemented** -- `WearableProviderPort` is defined in
+  `activity-service`'s domain layer (interface only: `connect`/`sync`/
+  `disconnect`), but zero provider adapters exist (no real OAuth
+  developer-account credentials are registered for Apple Health, Google
+  Fit, Fitbit, or Garmin -- see `docs/vendor-risk-register.md`). Building
+  this event's producer is a future, separately-planned addition.
 
 ### RecipeCreated / RecipeUpdated / RecipePublished (v1)
 - Producer: recipe-service

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/exercise_logged.v1.json",
+  "title": "ExerciseLogged",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "ExerciseLogged" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": [
+        "entry_id", "exercise_type", "duration_minutes",
+        "calories_burned_kcal", "occurred_at", "label"
+      ],
+      "properties": {
+        "entry_id": { "type": "string", "format": "uuid" },
+        "exercise_type": {
+          "type": "string",
+          "enum": ["running", "walking", "cycling", "strength_training", "swimming", "other"]
+        },
+        "duration_minutes": { "type": "integer", "exclusiveMinimum": 0 },
+        "calories_burned_kcal": { "type": "number", "minimum": 0 },
+        "occurred_at": { "type": "string", "format": "date-time" },
+        "label": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "nutriapp-lib consuming-chart values contract",
+  "description": "Copy of infra/k8s/charts/_lib/values.schema.json.template (see that file's own header comment for why this is a copy, not a chart dependency's own values.schema.json) -- enforced by `helm lint` against this chart's own top-level values.yaml.",
+  "type": "object",
+  "required": ["image", "resources", "serviceAccount"],
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "not": { "const": "latest" },
+          "description": "Must be a git SHA, never the literal 'latest' (docs/containerization-and-orchestration.md section 1)."
+        },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "description": "Every container must declare both requests and limits -- .claude/skills/containerization/SKILL.md.",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": { "type": "string", "minLength": 1 },
+            "memory": { "type": "string", "minLength": 1 }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": { "type": "string", "minLength": 1 },
+            "memory": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "required": ["irsaRoleArn"],
+      "properties": {
+        "irsaRoleArn": {
+          "type": "string",
+          "pattern": "^arn:aws:iam::[0-9]{12}:role/.+$",
+          "description": "IRSA role ARN annotation (ADR-0007) -- required, no default."
+        }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "properties": {
+        "liveness": { "type": "object" },
+        "readiness": { "type": "object" },
+        "startup": { "type": "object" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressRules": { "type": "array" }
+      }
+    },
+    "hpa": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "minReplicas": { "type": "integer", "minimum": 1 },
+        "maxReplicas": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" }
+      }
+    }
+  }
+}

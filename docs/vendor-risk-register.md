@@ -82,6 +82,52 @@ an audit.
 - Owner: `billing-agent` (technical integration), `security-agent`
   (agreement review)
 
+### Wearable Providers (Apple Health, Google Fit, Fitbit, Garmin) -- `activity-service`
+- Purpose: (future, not yet built) syncing exercise/calorie-burn data into
+  `activity-service` to adjust TDEE-based nutrition targets
+  (`.claude/agents/activity-agent.md`). **Not yet integrated** --
+  `/plans/activity-service/implementation-plan.md`'s MVP scope is manual
+  exercise logging only. `WearableProviderPort` is defined in the domain
+  layer (interface only: `connect`/`sync`/`disconnect`); zero of the four
+  providers below have a concrete adapter.
+- Data shared: none today (no adapter exists to share anything with).
+  Once built, each provider's own OAuth scope would determine exactly
+  which activity/calorie-burn fields are shared -- to be documented per
+  provider at that time, not assumed now.
+- Data processing agreement: not applicable yet -- no data is exchanged
+  with any of these vendors. A DPA (or equivalent developer-terms
+  acceptance) must be reviewed and linked here before any adapter goes
+  live, per this file's standing requirement.
+- Data retention/training policy: not applicable yet -- document each
+  provider's actual policy when its adapter is built, not assumed now.
+- Compliance relevance: GDPR (ADR-0020) -- synced activity data is
+  linked to a User and would need the same lawful-basis/consent review
+  as any other personal data source before going live.
+- Risk tier: not yet assessed (no live integration) -- assess per
+  provider at the time a real adapter is planned; a provisional estimate
+  is Medium (activity/fitness data, not GDPR Article 9 special-category
+  health data on its own, but user-identifying and behaviorally
+  sensitive).
+- Review cadence: re-assess whenever a new, separately human-approved
+  plan proposes building an adapter for any of the four providers below
+  (per `.claude/agents/activity-agent.md`: "Any change to which
+  providers are supported is significant enough to warrant noting in
+  `docs/vendor-risk-register.md`" -- recorded here even in the
+  "not yet supported" state so it isn't rediscovered from scratch
+  later).
+- Owner: `activity-agent` (technical integration, when built),
+  `security-agent` (agreement review)
+- Per-provider status:
+  - **Apple Health** -- not yet integrated. No developer account
+    registered.
+  - **Google Fit** -- not yet integrated. No developer account
+    registered. (Note: Google Fit's public API is in a documented
+    sunset/migration path toward Health Connect as of this entry's
+    writing -- whichever is current at the time an adapter is actually
+    planned must be re-verified, not assumed from this note.)
+  - **Fitbit** -- not yet integrated. No developer account registered.
+  - **Garmin** -- not yet integrated. No developer account registered.
+
 ---
 
 ## Ownership & Review

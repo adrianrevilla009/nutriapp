@@ -1,0 +1,71 @@
+[project]
+name = "activity-service"
+version = "0.1.0"
+description = "NutriApp activity-service: manual exercise logging (event-driven CRUD). Wearable provider sync is an interface-only seam this MVP, see README.md."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic[email]>=2.9",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
+    "asyncpg>=0.29",
+    "psycopg2-binary>=2.9",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "faststream[rabbit]>=0.5",
+    "aio-pika>=9.4",
+    "purgatory-circuitbreaker>=0.7",
+    "setuptools>=70,<81",
+    "tenacity>=9.0",
+    "structlog>=24.4",
+    "prometheus-client>=0.20",
+    "opentelemetry-sdk>=1.27",
+    "punq>=0.7",
+    "shared-contracts",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "testcontainers[postgres,rabbitmq]>=4.8",
+    "factory_boy>=3.3",
+    "httpx>=0.27",
+    "jsonschema>=4.23",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.uv.sources]
+shared-contracts = { path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["domain", "application", "infrastructure"]
+# SQLAlchemy's async engine hops across the greenlet boundary (via
+# greenlet.spawn) to bridge its sync-style Core execution onto asyncio --
+# without this, coverage.py's tracer loses lines executed on the other
+# side of that hop (e.g. `await session.commit()` and the `return`
+# immediately after it in the async route handlers), understating
+# infrastructure coverage. Confirmed empirically during test review:
+# raises infra coverage from 93% to 96% with zero code changes.
+concurrency = ["greenlet"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+[tool.ruff.lint.per-file-ignores]
+"infrastructure/http/routes/*.py" = ["B008"]
+"tests/*" = ["RUF059", "C408"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+exclude = ["tests"]
