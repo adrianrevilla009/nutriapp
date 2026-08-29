@@ -498,7 +498,7 @@ services:
       # lead-time item (implementation plan section 9, risk 2) -- these
       # placeholders are never valid against a real Stripe account, same
       # DEMO_KEY-style precedent as catalog-service's USDA FDC default.
-      BILLING_SERVICE_STRIPE_SECRET_KEY: sk_test_placeholder
+      BILLING_SERVICE_STRIPE_SECRET_KEY: UNSET_STRIPE_SECRET_KEY
       BILLING_SERVICE_STRIPE_WEBHOOK_SIGNING_SECRET: whsec_placeholder
       BILLING_SERVICE_STRIPE_PRICE_ID: price_pro_monthly_placeholder
       BILLING_SERVICE_STRIPE_BASE_URL: https://api.stripe.com

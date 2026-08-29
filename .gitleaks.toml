@@ -1,0 +1,24 @@
+# gitleaks config for NutriApp.
+#
+# Extends gitleaks' own default ruleset (all standard rules stay active);
+# this file only allowlists confirmed false positives, each documented
+# with why it isn't a real secret. Never add an entry here without
+# verifying the flagged value by hand first (per CLAUDE.md section 6
+# stage 8's rule against undocumented suppressions).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Confirmed non-secret fixture/placeholder values"
+regexes = [
+  # billing-service's Stripe Checkout Session/webhook test fixtures use a
+  # fixed, non-secret UUID for Stripe's `client_reference_id` field (the
+  # documented mechanism for correlating a Checkout Session back to a
+  # NutriApp user_id -- see /plans/billing-service/implementation-plan.md).
+  # gitleaks' generic-api-key rule flags this UUID as a possible secret
+  # purely on the field-name+value-shape heuristic; it is a plain UUID
+  # with no relation to any Stripe API credential and is never sent
+  # anywhere as a credential. Confirmed by hand before adding this entry.
+  '''3f6a8e2c-2b1a-4a3e-9c1a-6b2f9e0a1234''',
+]

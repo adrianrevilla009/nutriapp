@@ -76,9 +76,15 @@ class Settings:
             # (implementation plan section 9, risk 2) -- the placeholder
             # values below are never valid against a real Stripe account,
             # same "DEMO_KEY"-style precedent as catalog-service's USDA FDC
-            # default.
+            # default. Deliberately NOT prefixed "sk_test_"/"sk_live_" --
+            # that prefix alone (regardless of what follows) trips both
+            # gitleaks' stripe-access-token rule and Trivy's image secret
+            # scan; this string is never sent to Stripe's real API surface
+            # so the exact placeholder format doesn't matter, only that a
+            # misconfigured deployment fails loudly rather than silently
+            # matching a real-looking key.
             stripe_secret_key=os.environ.get(
-                "BILLING_SERVICE_STRIPE_SECRET_KEY", "sk_test_placeholder"
+                "BILLING_SERVICE_STRIPE_SECRET_KEY", "UNSET_STRIPE_SECRET_KEY"
             ),
             stripe_webhook_signing_secret=os.environ.get(
                 "BILLING_SERVICE_STRIPE_WEBHOOK_SIGNING_SECRET", "whsec_placeholder"
