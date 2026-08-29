@@ -21,9 +21,7 @@ dependencies = [
     { name = "prometheus-client" },
     { name = "psycopg2-binary" },
     { name = "punq" },
-    { name = "purgatory-circuitbreaker" },
     { name = "pydantic", extra = ["email"] },
-    { name = "setuptools" },
     { name = "shared-contracts" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
@@ -60,13 +58,11 @@ requires-dist = [
     { name = "prometheus-client", specifier = ">=0.20" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "punq", specifier = ">=0.7" },
-    { name = "purgatory-circuitbreaker", specifier = ">=0.7" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.9" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
-    { name = "setuptools", specifier = ">=70,<81" },
     { name = "shared-contracts", path = "../../packages/shared-contracts/dist/shared_contracts-0.1.0-py3-none-any.whl" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.4" },
@@ -1529,15 +1525,6 @@ wheels = [
 ]
 
 [[package]]
-name = "purgatory-circuitbreaker"
-version = "0.7.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8d/90/4136c2dd4e86b79390c94f88c6deaf215eea1feb506da55a1355743d78c1/purgatory-circuitbreaker-0.7.2.tar.gz", hash = "sha256:7de4282822d11fe2ebe5cb7982da932c32284134c25630ab4dacd597ffafb8a4", size = 12334, upload-time = "2022-01-18T07:41:49.295Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/10/c54b75b392c7baa8e73bd03d554c8cda619b56ee5f0131dd92074a2ddbbe/purgatory_circuitbreaker-0.7.2-py3-none-any.whl", hash = "sha256:094b5abc10dba502532ca9510af3606cee05f7fbdf54f2c2acd6f85bc8f7f72f", size = 19911, upload-time = "2022-01-18T07:41:50.55Z" },
-]
-
-[[package]]
 name = "pybreaker"
 version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1933,15 +1920,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ed/20/656d67f5b25ca9bda4e02b1de25867b2954e1d19e03648060f167ad0f4cc/ruff-0.16.5-py3-none-win32.whl", hash = "sha256:288b0a5f080492fe5635db849f9e2e84aa3cce7b7f0e955997d416c507c76a26", size = 10034250, upload-time = "2026-08-27T16:34:11.8Z" },
     { url = "https://files.pythonhosted.org/packages/5b/42/ee8e68a207b9127fcde6c3d7e197def432f346cb1af159e1fa14ca0d1cdc/ruff-0.16.5-py3-none-win_amd64.whl", hash = "sha256:ddc6385fb2137f616357ca03d6c74f4be987f80fed4008566b754f6032b8546f", size = 10516714, upload-time = "2026-08-27T16:34:13.963Z" },
     { url = "https://files.pythonhosted.org/packages/73/e3/7df5a396e445b9ba49ce9a9437439a4d80042c61c0ade199abf8d16de1ac/ruff-0.16.5-py3-none-win_arm64.whl", hash = "sha256:a64abe90968719b851bb7cedffaa8753fbdbdadab483089682db623f3edc587e", size = 10391564, upload-time = "2026-08-27T16:34:16.064Z" },
-]
-
-[[package]]
-name = "setuptools"
-version = "80.10.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/76/95/faf61eb8363f26aa7e1d762267a8d602a1b26d4f3a1e758e92cb3cb8b054/setuptools-80.10.2.tar.gz", hash = "sha256:8b0e9d10c784bf7d262c4e5ec5d4ec94127ce206e8738f29a437945fbc219b70", size = 1200343, upload-time = "2026-01-25T22:38:17.252Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/94/b8/f1f62a5e3c0ad2ff1d189590bfa4c46b4f3b6e49cef6f26c6ee4e575394d/setuptools-80.10.2-py3-none-any.whl", hash = "sha256:95b30ddfb717250edb492926c92b5221f7ef3fbcc2b07579bcd4a27da21d0173", size = 1064234, upload-time = "2026-01-25T22:38:15.216Z" },
 ]
 
 [[package]]
