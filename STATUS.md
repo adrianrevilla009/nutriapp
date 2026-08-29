@@ -64,6 +64,19 @@ deploy. `food-recognition-service`'s own new chart uses the correct
 format; the other five services' charts are **not yet backported**. A
 dedicated follow-up is recommended before any real `helm install`.
 
+**Known unresolved issue (flagged during `bff-service`'s implementation
+review, not yet fixed):** `bff-service`'s chart defines an egress
+`NetworkPolicy` allowing calls to `diary-service` and
+`nutrition-calculation-service`, but those two services' own charts
+(unmodified by this change) only allow ingress from Kong's pod selector
+today, not from `bff-service`. On a real cluster, `bff-service`'s calls
+to both would be blocked until their charts' ingress `NetworkPolicy`s are
+updated to also allow `bff-service`'s pod selector — a follow-up for
+`diary-agent`/`nutrition-calculation-agent`. Documented in the header
+comment of `infra/k8s/charts/bff-service/templates/networkpolicy-egress-downstream.yaml`.
+Not a blocker today since nothing is `apply`'d to a real cluster
+(CLAUDE.md §7).
+
 ### MCP servers
 
 Per `docs/mcp-servers.md`: all entries remain disabled. None connected in
