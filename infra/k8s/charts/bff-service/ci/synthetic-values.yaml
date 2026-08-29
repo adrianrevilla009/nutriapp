@@ -1,0 +1,39 @@
+# infra/k8s/charts/bff-service/ci/synthetic-values.yaml
+#
+# Checked-in fixture used ONLY by .github/workflows/bff-service-ci.yml's
+# helm-lint-and-template job to fill the fields Terraform normally
+# injects at deploy time (bff-service.tf) -- ARNs/hosts below are
+# syntactically valid but point at nothing real. Never use these values
+# outside CI (same pattern/rationale as every other service's own
+# ci/synthetic-values.yaml). Notably shorter than every prior service's
+# fixture: no secretsManager block, no dbProvision block -- this service
+# has neither.
+
+image:
+  repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/bff-service"
+  tag: "ci-fixture"
+
+serviceAccount:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-bff-service-app"
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+downstreamEgress:
+  enabled: true
+  diaryServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: diary-service
+  diaryServicePort: 8000
+  nutritionCalculationServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: nutrition-calculation-service
+  nutritionCalculationServicePort: 8000

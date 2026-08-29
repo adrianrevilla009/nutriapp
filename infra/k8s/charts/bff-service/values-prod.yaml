@@ -1,0 +1,17 @@
+replicaCount: 3
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 15
+
+pdb:
+  minAvailable: 2
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi

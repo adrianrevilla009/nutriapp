@@ -1,0 +1,127 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Built with the CORRECT env-list format +
+# envFrom->ExternalSecret wiring convention from the start (same bar
+# notification-service/food-recognition-service set) -- adapted here: NO
+# envFrom / ExternalSecret at all, because this service has NO secrets of
+# its own (no database, no downstream credential -- every call it makes
+# is to an ordinary public endpoint, forwarding the caller's own JWT,
+# implementation plan section 2/9).
+
+nameOverride: bff-service
+fullnameOverride: bff-service
+
+image:
+  repository: bff-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (bff-service.tf). This
+  # service needs NO AWS permission at all (no Secrets Manager read, no
+  # S3, nothing) -- the IRSA role exists only to satisfy the chart-wide
+  # "every ServiceAccount has a scoped IRSA role" convention (ADR-0007);
+  # its attached policy is empty by design (least privilege: this
+  # service asks for nothing because it needs nothing).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  # This is the single entry point for every dashboard-screen load, so it
+  # scales with frontend traffic more directly than a domain service --
+  # ceiling set a notch above diary-service's own (CLAUDE.md section
+  # 2.2's highest-write-volume service) since this is a read-only
+  # aggregation fan-out, cheaper per request than a write.
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's only public HTTP surface is /api/v1/bff/* via Kong.
+  # Bare podSelector (no namespaceSelector) scopes to the shared
+  # namespace, same convention as every other service's chart.
+  #
+  # NOTE (same known _lib-level gap every other chart documents): _lib
+  # only renders `policyTypes: [Ingress]` here -- egress (to
+  # diary-service, nutrition-calculation-service) is unrestricted by THIS
+  # policy. The downstream-egress restriction is a SEPARATE, additional
+  # NetworkPolicy resource (templates/networkpolicy-egress-downstream.yaml).
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# downstreamEgress: this service's two synchronous outbound calls
+# (implementation plan section 1/6, docs/domain-glossary-and-context-map.md)
+# -- this service's pods may reach OTHER PODS ONLY via diary-service's
+# and nutrition-calculation-service's pod selectors, on their normal
+# (single, public) service port -- never lateral movement to any other
+# in-cluster service. See
+# templates/networkpolicy-egress-downstream.yaml's header comment for
+# the documented gap on the two downstream services' OWN ingress
+# NetworkPolicies (out of scope for this chart).
+downstreamEgress:
+  enabled: true
+  diaryServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: diary-service
+  diaryServicePort: 8000
+  nutritionCalculationServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: nutrition-calculation-service
+  nutritionCalculationServicePort: 8000
+
+# NO dbProvision block -- this service has no database (implementation
+# plan section 2), unlike every prior service's chart.
+
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) --
+# the CORRECT format _lib's _deployment.tpl expects.
+env:
+  - name: BFF_SERVICE_IDENTITY_JWKS_URL
+    value: "http://identity-service:8000/.well-known/jwks.json"
+  - name: BFF_SERVICE_DIARY_SERVICE_BASE_URL
+    value: "http://diary-service:8000"
+  - name: BFF_SERVICE_NUTRITION_CALCULATION_SERVICE_BASE_URL
+    value: "http://nutrition-calculation-service:8000"
+
+# NO envFrom / secretsManager block -- this service has no Secrets
+# Manager entry of its own to sync (no ExternalSecret resource in this
+# chart, unlike every prior service's).

@@ -1,0 +1,71 @@
+{{/*
+Narrow egress restriction for this service's two outbound calls
+(diary-service, nutrition-calculation-service -- implementation plan
+section 1/6): this service's pods may reach OTHER PODS in the namespace
+ONLY via those two services' pod selectors, on their normal (public,
+Kong-routable) service port -- never arbitrary lateral movement to any
+other service's pods. Declared as its own plain NetworkPolicy resource
+(not via the shared `_lib` `_networkpolicy.tpl`, which only renders
+`policyTypes: [Ingress]` today), mirroring notification-service's
+networkpolicy-egress-identity-reveal.yaml /
+food-recognition-service's networkpolicy-egress-catalog-lookup.yaml
+precedent.
+
+Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
+Kubernetes default-denies ALL egress from it except what some policy
+explicitly allows (the union across every such policy) -- so this
+resource also allows DNS, the only other egress this service needs (it
+has no database, no message broker, no third-party dependency of its
+own, implementation plan section 2).
+
+KNOWN, DOCUMENTED GAP (not silently worked around): this resource only
+covers THIS service's own egress side. diary-service's and
+nutrition-calculation-service's own ingress NetworkPolicies
+(infra/k8s/charts/diary-service/values.yaml,
+infra/k8s/charts/nutrition-calculation-service/values.yaml) currently
+allow ingress ONLY from Kong's pod selector -- calling them directly
+(bypassing Kong, as this service does) would be blocked by those
+policies in a real cluster today. Adding an allow-rule for bff-service's
+pod selector to each of those two charts is a follow-up change scoped to
+those services' own owning agents (diary-agent,
+nutrition-calculation-agent), out of scope for this plan, same as
+ADR-0008's own "write Kong's declarative config" follow-up action --
+flagged here rather than silently deployed broken.
+*/}}
+{{- if .Values.downstreamEgress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nutriapp-lib.fullname" . }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nutriapp-lib.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nutriapp-lib.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS -- otherwise this pod cannot resolve any hostname at all,
+    # including diary-service's/nutrition-calculation-service's own
+    # ClusterIP DNS names.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.diaryServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.diaryServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.nutritionCalculationServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.nutritionCalculationServicePort }}
+{{- end }}
