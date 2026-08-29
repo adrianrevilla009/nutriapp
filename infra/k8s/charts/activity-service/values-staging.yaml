@@ -1,0 +1,13 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/activity-service/db-credentials
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/activity-service/db-credentials

@@ -104,6 +104,7 @@ variable "db_credential_service_names" {
     "catalog-service",
     "nutrition-calculation-service",
     "food-recognition-service",
+    "activity-service",
   ]
 }
 

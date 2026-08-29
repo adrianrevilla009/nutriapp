@@ -1,0 +1,3 @@
+{{- if .Values.dbProvision.enabled }}
+{{ include "nutriapp-lib.dbProvisionJob" . }}
+{{- end }}
