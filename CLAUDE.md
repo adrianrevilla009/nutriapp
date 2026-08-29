@@ -319,6 +319,9 @@ that service's hexagonal boundaries, event contracts, and test suite:
 - `analytics-agent` -> analytics-service
 - `nutrition-assistant-agent` -> nutrition-assistant-service
 - `notification-agent` -> notification-service (email + push delivery, see ADR-0011)
+- `bff-agent` -> bff-service (frontend response aggregation only, never business
+  logic, see ADR-0008 — closely guarded by `architecture-agent` given that's
+  this service's one real risk)
 
 Cross-cutting agents (domain-agnostic, keep as-is):
 - `architecture-agent` — guards hexagonal boundaries, CQRS/event sourcing
