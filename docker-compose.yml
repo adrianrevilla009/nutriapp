@@ -345,6 +345,56 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  notification-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_POSTGRES_DB:-notification_service}
+      POSTGRES_USER: ${NOTIFICATION_POSTGRES_USER:-notification_service}
+      POSTGRES_PASSWORD: ${NOTIFICATION_POSTGRES_PASSWORD:-notification_service}
+    ports:
+      - "5438:5432"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_POSTGRES_USER:-notification_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notification-service:
+    build:
+      # Build context is the repo root (not services/notification-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8007:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      NOTIFICATION_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      NOTIFICATION_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      NOTIFICATION_SERVICE_IDENTITY_SERVICE_BASE_URL: http://identity-service:8000
+      # Read access to identity-service's single, shared internal-reveal
+      # credential (composition_root.py's Settings docstring) -- local
+      # dev only, production value comes from Secrets Manager.
+      NOTIFICATION_SERVICE_IDENTITY_REVEAL_CREDENTIAL: dev-identity-reveal-credential-change-me
+      # SES sandbox / local fake endpoints (docs/notifications.md section
+      # 5) -- never real SES/SNS in local dev, same as CI.
+      NOTIFICATION_SERVICE_SES_BASE_URL: http://ses-fake:9001
+      NOTIFICATION_SERVICE_SNS_BASE_URL: http://sns-fake:9002
+      NOTIFICATION_SERVICE_SES_FROM_ADDRESS: no-reply@nutriapp.example
+      NOTIFICATION_SERVICE_REMINDER_SCAN_INTERVAL_SECONDS: "60"
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -352,3 +402,4 @@ volumes:
   catalog-db-data:
   nutrition-db-data:
   food-recognition-db-data:
+  notification-db-data:

@@ -1,0 +1,4 @@
+{{- if .Values.networkPolicy.enabled }}
+{{ include "nutriapp-lib.networkPolicy" . }}
+{{- end }}
+

@@ -1,0 +1,19 @@
+{
+  "event_id": "11111111-1111-1111-1111-111111111113",
+  "aggregate_id": "22222222-2222-2222-2222-222222222222",
+  "event_type": "NewDeviceLoginDetected",
+  "version": 1,
+  "occurred_at": "2026-08-28T09:10:00+00:00",
+  "payload": {
+    "user_id": "22222222-2222-2222-2222-222222222222",
+    "device_fingerprint_hash": "sha256:abc123def456",
+    "occurred_at": "2026-08-28T09:10:00+00:00",
+    "email": "new.user@example.com"
+  },
+  "metadata": {
+    "correlation_id": "44444444-4444-4444-4444-444444444446",
+    "causation_id": "44444444-4444-4444-4444-444444444446",
+    "user_id": "22222222-2222-2222-2222-222222222222"
+  }
+}
+

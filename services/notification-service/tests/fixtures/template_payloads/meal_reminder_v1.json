@@ -1,0 +1,5 @@
+{
+  "category": "meal",
+  "source_aggregate_id": "<script>alert(\"xss\")</script>&'quote'"
+}
+
