@@ -44,3 +44,13 @@ output "anthropic_api_key_secret_arns" {
   description = "Map of service name -> Secrets Manager ARN holding {api_key}, a metered third-party Anthropic API key populated manually, out-of-band (e.g. food-recognition-service's ClaudeVisionAdapter)."
   value       = { for k, v in aws_secretsmanager_secret.anthropic_api_key : k => v.arn }
 }
+
+output "stripe_api_key_secret_arns" {
+  description = "Map of service name -> Secrets Manager ARN holding {secret_key}, a Stripe secret API key populated manually, out-of-band (billing-service's StripePaymentAdapter)."
+  value       = { for k, v in aws_secretsmanager_secret.stripe_api_key : k => v.arn }
+}
+
+output "stripe_webhook_signing_secret_secret_arns" {
+  description = "Map of service name -> Secrets Manager ARN holding {signing_secret}, a Stripe webhook signing secret (whsec_...) populated manually, out-of-band (billing-service's StripePaymentAdapter.verify_webhook_signature)."
+  value       = { for k, v in aws_secretsmanager_secret.stripe_webhook_signing_secret : k => v.arn }
+}

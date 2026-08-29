@@ -1,0 +1,32 @@
+{
+  "id": "evt_1NG8xxCheckoutCompleted01",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1717200100,
+  "type": "checkout.session.completed",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_checkout_completed_01",
+    "idempotency_key": null
+  },
+  "data": {
+    "object": {
+      "id": "cs_test_a1b2c3d4e5f6g7h8i9j0",
+      "object": "checkout.session",
+      "mode": "subscription",
+      "status": "complete",
+      "payment_status": "paid",
+      "client_reference_id": "3f6a8e2c-2b1a-4a3e-9c1a-6b2f9e0a1234",
+      "customer": "cus_QzTestCustomer01",
+      "customer_email": "user@example.com",
+      "subscription": "sub_QzTestSubscription01",
+      "currency": "usd",
+      "amount_total": 999,
+      "created": 1717200000,
+      "livemode": false,
+      "metadata": {}
+    }
+  }
+}
+

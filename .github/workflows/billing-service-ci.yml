@@ -1,0 +1,183 @@
+name: billing-service-ci
+
+on:
+  pull_request:
+    paths:
+      - "services/billing-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/billing-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/billing-service-ci.yml"
+      - ".github/actions/setup-python-uv/**"
+      - ".github/actions/pip-audit-scan/**"
+      - ".github/actions/helm-lint-and-template/**"
+  push:
+    branches: [main]
+    paths:
+      - "services/billing-service/**"
+      - "packages/shared-contracts/**"
+      - "infra/k8s/charts/billing-service/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/billing-service-ci.yml"
+      - ".github/actions/setup-python-uv/**"
+      - ".github/actions/pip-audit-scan/**"
+      - ".github/actions/helm-lint-and-template/**"
+
+defaults:
+  run:
+    working-directory: services/billing-service
+
+# Stage order per ci-cd-conventions SKILL.md: lint -> type-check ->
+# secret-scan -> unit -> dep-vuln-scan -> integration -> contract ->
+# coverage-gate -> build-image -> image-scan -> push -> deploy-dev ->
+# smoke-e2e -> promote-staging -> manual-approval -> promote-prod. This
+# workflow covers lint through coverage-gate + build/scan; deploy stages
+# are devops-agent/CI infra follow-up, same as every other service's
+# *-ci.yml. Mirrors notification-service-ci.yml's structure closely (both
+# depend on packages/shared-contracts as a wheel, both need the repo-root
+# Docker build context).
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      - name: Ruff lint
+        run: uv run --no-sync --no-build ruff check .
+      - name: Ruff format check
+        run: uv run --no-sync --no-build ruff format --check .
+
+  type-check:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      - name: mypy
+        run: uv run --no-sync --no-build mypy domain application infrastructure
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, type-check]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      - name: Unit tests (domain + application, no I/O)
+        run: uv run --no-sync --no-build pytest tests/unit -q
+
+  dep-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      # Same setuptools-pin rationale as catalog-service-ci.yml/
+      # notification-service-ci.yml (purgatory-circuitbreaker's import-time
+      # `import pkg_resources`) -- PYSEC-2026-3447 (setuptools <83.0.0) is a
+      # source-distribution-build issue on macOS APFS/HFS+, inapplicable
+      # here (this service never builds an sdist in CI). Upgrading past
+      # setuptools 81 breaks that import outright (pkg_resources was
+      # removed in 81).
+      - uses: ./.github/actions/pip-audit-scan
+        with:
+          ignore-vuln: PYSEC-2026-3447
+          working-directory: services/billing-service
+
+  integration-and-contract-tests:
+    runs-on: ubuntu-latest
+    needs: dep-vuln-scan
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      # testcontainers pulls Postgres/RabbitMQ images at runtime -- the
+      # ubuntu-latest runner ships Docker already. StripePaymentAdapter's
+      # tests never make a live HTTP call (httpx.MockTransport / local HMAC
+      # only, per test-plan section 2's explicit "never a live call"
+      # requirement).
+      - name: Integration tests (testcontainers + fixtures, never live Stripe)
+        run: uv run --no-sync --no-build pytest tests/integration -q
+      - name: Contract tests (HTTP + event schemas)
+        run: uv run --no-sync --no-build pytest tests/contract -q
+
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: integration-and-contract-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          working-directory: services/billing-service
+      # Per-layer thresholds (CLAUDE.md section 3, billing-agent.md): domain
+      # >= 90%, application >= 85%, infrastructure >= 70%.
+      - name: Full suite (collects coverage for all three layers)
+        run: |
+          uv run --no-sync --no-build pytest tests/unit tests/contract tests/integration \
+            --cov=domain --cov=application --cov=infrastructure \
+            --cov-report=term-missing
+      - name: Enforce domain coverage >= 90% (hard floor)
+        run: uv run --no-sync --no-build coverage report --include="domain/*" --fail-under=90
+      - name: Enforce application coverage >= 85%
+        run: uv run --no-sync --no-build coverage report --include="application/*" --fail-under=85
+      - name: Enforce infrastructure coverage >= 70%
+        run: uv run --no-sync --no-build coverage report --include="infrastructure/*" --fail-under=70
+
+  build-and-scan-image:
+    runs-on: ubuntu-latest
+    needs: coverage-gate
+    # Overrides the workflow-level default working-directory: the build
+    # context must be the repo root, not services/billing-service, since
+    # this service depends on packages/shared-contracts as a local path
+    # dependency -- see services/billing-service/Dockerfile's own comment.
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image
+        run: docker build -f services/billing-service/Dockerfile -t billing-service:${{ github.sha }} .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: billing-service:${{ github.sha }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: "true"
+
+  helm-lint-and-template:
+    # Not part of the lint->...->coverage-gate->build chain above (this
+    # validates infra/k8s/charts/, not services/billing-service/'s own
+    # code) -- runs independently so a chart-only change doesn't need to
+    # wait on/duplicate the Python stages, same as every other service's
+    # *-ci.yml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: ./.github/actions/helm-lint-and-template
+        with:
+          chart-dir: infra/k8s/charts/billing-service
+          release-name: billing-service
+
+  # push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
+  # promote-prod: follow-up once infra/terraform's platform-infra plan is
+  # applied and an ECR repo + EKS cluster exist (docs/ci-cd-strategy.md).

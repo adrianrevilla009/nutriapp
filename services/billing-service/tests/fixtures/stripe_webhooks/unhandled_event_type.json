@@ -1,0 +1,22 @@
+{
+  "id": "evt_1NG8xxCustomerUpdated01",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1717200050,
+  "type": "customer.updated",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_customer_updated_01",
+    "idempotency_key": null
+  },
+  "data": {
+    "object": {
+      "id": "cus_QzTestCustomer01",
+      "object": "customer",
+      "email": "user@example.com",
+      "livemode": false
+    }
+  }
+}
+

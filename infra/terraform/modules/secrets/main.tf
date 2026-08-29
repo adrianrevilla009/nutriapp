@@ -316,6 +316,69 @@ resource "aws_secretsmanager_secret_version" "anthropic_api_key_placeholder" {
   }
 }
 
+# --- Stripe secret API key (per service) -----------------------------------
+# Empty (placeholder) container, same shape as anthropic_api_key above: a
+# genuine external, third-party-issued secret (billing-service implementation
+# plan section 1, ADR-0015) that cannot be Terraform-generated -- it must be
+# written into this container manually (out-of-band) once a real Stripe
+# account/API key is provisioned (a tracked lead-time item, not a blocker to
+# this module). Terraform intentionally ignores drift on `secret_string`
+# after that manual write, exactly like anthropic_api_key/usda_fdc_api_key.
+
+resource "aws_secretsmanager_secret" "stripe_api_key" {
+  # checkov:skip=CKV2_AWS_57:Externally-issued third-party API key, manually rotated per a documented runbook -- no AWS-native rotation Lambda template applies to a Stripe-issued credential.
+  for_each   = toset(var.stripe_api_key_service_names)
+  name       = "nutriapp/${var.environment}/${each.value}/stripe-api-key"
+  kms_key_id = var.secrets_kms_key_id
+
+  tags = merge(local.base_tags, {
+    Name = "${each.value}-stripe-api-key"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_api_key_placeholder" {
+  for_each  = toset(var.stripe_api_key_service_names)
+  secret_id = aws_secretsmanager_secret.stripe_api_key[each.value].id
+  secret_string = jsonencode({
+    secret_key = "PENDING"
+    note       = "Populated manually, out-of-band, with a real Stripe secret key -- never by Terraform."
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# --- Stripe webhook signing secret (per service) ----------------------------
+# Same externally-issued-secret shape as stripe_api_key above -- populated
+# manually, out-of-band, once the webhook endpoint is registered in the
+# Stripe dashboard and Stripe issues a `whsec_...` signing secret
+# (billing-service implementation plan section 1.2).
+
+resource "aws_secretsmanager_secret" "stripe_webhook_signing_secret" {
+  # checkov:skip=CKV2_AWS_57:Externally-issued third-party webhook signing secret, manually rotated per a documented runbook -- no AWS-native rotation Lambda template applies to a Stripe-issued credential.
+  for_each   = toset(var.stripe_webhook_signing_secret_service_names)
+  name       = "nutriapp/${var.environment}/${each.value}/stripe-webhook-signing-secret"
+  kms_key_id = var.secrets_kms_key_id
+
+  tags = merge(local.base_tags, {
+    Name = "${each.value}-stripe-webhook-signing-secret"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "stripe_webhook_signing_secret_placeholder" {
+  for_each  = toset(var.stripe_webhook_signing_secret_service_names)
+  secret_id = aws_secretsmanager_secret.stripe_webhook_signing_secret[each.value].id
+  secret_string = jsonencode({
+    signing_secret = "PENDING"
+    note           = "Populated manually, out-of-band, with the real whsec_... value Stripe issues when the webhook endpoint is registered -- never by Terraform."
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
 # --- IRSA: db-provision-job (write-only, per service) ---------------------
 # Trust policy binds to "<service>-db-provision" ServiceAccount in the
 # shared namespace — the consuming Helm chart's Job must use exactly this
@@ -441,6 +504,8 @@ data "aws_iam_policy_document" "app_secrets" {
       contains(var.internal_reveal_credential_service_names, each.value) ? aws_secretsmanager_secret.internal_reveal_credential[each.value].arn : "",
       contains(var.usda_fdc_api_key_service_names, each.value) ? aws_secretsmanager_secret.usda_fdc_api_key[each.value].arn : "",
       contains(var.anthropic_api_key_service_names, each.value) ? aws_secretsmanager_secret.anthropic_api_key[each.value].arn : "",
+      contains(var.stripe_api_key_service_names, each.value) ? aws_secretsmanager_secret.stripe_api_key[each.value].arn : "",
+      contains(var.stripe_webhook_signing_secret_service_names, each.value) ? aws_secretsmanager_secret.stripe_webhook_signing_secret[each.value].arn : "",
     ])
   }
 }

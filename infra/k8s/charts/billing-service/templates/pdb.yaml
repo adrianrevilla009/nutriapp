@@ -1,0 +1,4 @@
+{{- if .Values.pdb.enabled }}
+{{ include "nutriapp-lib.pdb" . }}
+{{- end }}
+

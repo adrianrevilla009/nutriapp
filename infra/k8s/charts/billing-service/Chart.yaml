@@ -1,0 +1,10 @@
+apiVersion: v2
+name: billing-service
+description: NutriApp billing-service -- Pro subscription lifecycle, Stripe payment processing, and entitlement issuance (ADR-0015).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"

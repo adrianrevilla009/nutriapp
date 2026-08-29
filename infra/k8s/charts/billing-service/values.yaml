@@ -1,0 +1,140 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Built with the CORRECT env-list format and
+# envFrom->ExternalSecret wiring from the start (mirrors
+# notification-service/values.yaml's precedent, not the five earlier
+# charts' documented env-as-a-map bug).
+
+nameOverride: billing-service
+fullnameOverride: billing-service
+
+image:
+  repository: billing-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (billing-service.tf) with the
+  # IRSA role ARN granting access to this service's own Secrets Manager
+  # entries only (CLAUDE.md section 2.9, ADR-0007).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # Two DISTINCT inbound callers share this one public port (implementation
+  # plan section 9.1, README.md's dedicated Kong-exception note):
+  #   1. Kong, for the JWT-gated `POST /api/v1/billing/checkout-sessions`
+  #      route (the normal, every-other-service pattern).
+  #   2. Stripe itself, reaching `POST /internal/v1/billing/webhooks/stripe`
+  #      directly over the public internet (Stripe's own documented
+  #      requirement for webhook endpoints) -- Kong still fronts this path
+  #      too (routed publicly, per the README's exception note), so from
+  #      this NetworkPolicy's perspective Kong remains the only in-cluster
+  #      ingress peer; Stripe's calls arrive via the ALB/Kong from outside
+  #      the cluster, same as any other public request.
+  # `GET /internal/v1/billing/entitlements/{user_id}` has zero real
+  # callers today (implementation plan section 6) -- no additional
+  # NetworkPolicy ingress rule is added for it yet; a future consuming
+  # service's own implementation plan adds that peer when it exists.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# _db-provision-job.tpl input (platform-infra plan section 9.1): creates
+# this service's own logical database + role inside the shared RDS
+# instance as a pre-install/pre-upgrade Helm hook, idempotent on every
+# upgrade.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: billing_service
+  roleName: billing_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["billing-service"]
+
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) -- the
+# CORRECT format _lib's _deployment.tpl expects.
+env:
+  - name: BILLING_SERVICE_IDENTITY_JWKS_URL
+    value: "http://identity-service:8000/.well-known/jwks.json"
+  - name: BILLING_SERVICE_IDENTITY_ISSUER
+    value: "identity-service"
+  - name: BILLING_SERVICE_STRIPE_BASE_URL
+    value: "https://api.stripe.com"
+  # Not itself a secret (Stripe Price ids are not sensitive), but STILL a
+  # placeholder until real Stripe account/catalog setup happens (implementation
+  # plan section 9, risk 2) -- never a real, chargeable price id checked in.
+  - name: BILLING_SERVICE_STRIPE_PRICE_ID
+    value: "price_pro_monthly_placeholder"
+  - name: BILLING_SERVICE_RABBITMQ_URL
+    value: "amqp://guest:guest@rabbitmq:5672/"
+  - name: BILLING_SERVICE_REVOCATION_SCAN_INTERVAL_SECONDS
+    value: "60"
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# (BILLING_SERVICE_DATABASE_URL/STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SIGNING_SECRET/
+# BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL) as env vars.
+envFrom:
+  - secretRef:
+      name: billing-service-secrets
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (billing-service.tf) at deploy time.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  stripeApiKey: "" # set by Terraform: module.secrets.stripe_api_key_secret_arns["billing-service"]
+  stripeWebhookSigningSecret: "" # set by Terraform: module.secrets.stripe_webhook_signing_secret_secret_arns["billing-service"]
+  internalEntitlementCredential: "" # set by Terraform: module.secrets.internal_reveal_credential_secret_arns["billing-service"]
+

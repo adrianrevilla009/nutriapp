@@ -4,7 +4,7 @@ Expands `docs/security-and-compliance.md` section 3 into the full
 data-protection posture.
 
 **Fill in section 0 for your domain before relying on the rest of this
-document** — the erasure/crypto-shredding mechanism (section 4) is fully
+document** — the erasure/crypto-shredding mechanism (section 5) is fully
 generic and reusable regardless of your answer; sections 1-3 and 5 need
 your domain's actual data categories.
 
@@ -32,7 +32,7 @@ incidentally reveal health information. Sections 1-3 below apply in full.
   version of the consent text, when) — stored in `identity-service`, treated
   with the same immutability requirement as other audit records
   (`docs/observability-and-audit.md`).
-- Withdrawing consent triggers the deletion flow in section 4 below, not just
+- Withdrawing consent triggers the deletion flow in section 5 below, not just
   a flag flip that leaves data in place.
 
 ## 2. Data Minimization
@@ -65,7 +65,80 @@ to reach an external provider.
   data itself) as part of the audit trail, so a future access-request or
   breach investigation can reconstruct exposure.
 
-## 4. Right to Erasure ("Right to be Forgotten")
+## 4. Third-Party Payment Processing (Stripe, `billing-service`)
+
+ADR-0015's own follow-up action, completed here per
+`/plans/billing-service/implementation-plan.md` section 1 acceptance
+criterion 7 (not deferred). `billing-service` is the one service in this
+codebase that touches payment data — see `.claude/agents/billing-agent.md`
+for the full bounded-context rules this section summarizes the compliance
+rationale for.
+
+### What is stored
+
+Only Stripe's own opaque references and derived subscription state, in
+`billing-service`'s own `subscriptions` table:
+
+- `stripe_customer_id` (`cus_...`), `stripe_subscription_id` (`sub_...`)
+  — Stripe's own object identifiers, meaningless outside a call to
+  Stripe's API with this service's own secret key.
+- Subscription `status` (`active`/`past_due`/`canceled`),
+  `current_period_end`, `cancel_at_period_end`, `created_at`/`updated_at`.
+- Stripe's own webhook event `id`s, in `processed_webhook_events`, kept
+  only for idempotency deduplication (never the full webhook payload body
+  — event `id` and a processed timestamp only).
+
+### What is never stored
+
+- **No raw card number, CVV, expiry date, or cardholder name.** This
+  service never receives them in the first place: `POST /api/v1/billing/checkout-sessions`
+  returns a Stripe-hosted Checkout Session URL, and the browser is
+  redirected there — card entry happens entirely on Stripe's own domain.
+  Card data physically never reaches this service's servers, request
+  logs, or database at any point in the flow.
+- **No full payment token or payment-method reference beyond what Stripe's
+  own webhook payloads already scope to a customer/subscription.** This
+  service does not call `POST /v1/payment_methods` or any endpoint that
+  would hand it a reusable card-charging credential — it only ever
+  triggers Stripe's own recurring-billing engine via the Subscription
+  object Stripe itself manages.
+- **No raw webhook payload body is logged.** Structured log lines record
+  the event `type` and `id` only (`.claude/agents/billing-agent.md`'s
+  explicit "never log a raw card number, CVV, or full payment token"
+  rule, enforced as a tested logging-boundary rule in
+  `tests/contract/http/test_stripe_webhook_routes.py`, not an assumption
+  that stays true by accident).
+
+### SAQ A eligibility rationale
+
+Because card data is entered exclusively on Stripe's own hosted Checkout
+page and never transits, is processed by, or is stored on any
+NutriApp-controlled system, `billing-service`'s PCI DSS scope qualifies
+for **SAQ A** (the lightest PCI Self-Assessment Questionnaire tier,
+applicable when card data is fully outsourced to a PCI-validated
+third-party processor via a redirect/hosted-fields integration; see
+Stripe's own SAQ A eligibility documentation,
+https://stripe.com/docs/security). This is exactly why the implementation
+plan and `.claude/agents/billing-agent.md` mandate hosted Checkout as a
+day-one architectural constraint (not a later hardening pass) — any
+alternative that collects card data through a NutriApp-controlled form,
+even one that forwards it immediately to Stripe (Stripe Elements embedded
+client-side without a redirect, or any custom card form), moves this
+service into a materially heavier SAQ tier and is out of scope without a
+new ADR.
+
+### DPA / vendor status
+
+Stripe's processing of NutriApp's payment data (customer/subscription
+metadata, never raw card data) is covered under Stripe's own standard
+merchant Data Processing Agreement — tracked in
+`docs/vendor-risk-register.md` alongside every other third-party
+processor. Real production Stripe account setup (API keys, webhook
+registration) is a tracked lead-time item (implementation plan section 9,
+risk 2), not a blocker to this section's compliance posture, which holds
+regardless of whether the underlying keys are live or placeholder.
+
+## 5. Right to Erasure ("Right to be Forgotten")
 
 This interacts non-trivially with Event Sourcing (ADR-0002), because the
 event store is meant to be immutable and append-only, while erasure requires
@@ -119,17 +192,18 @@ Erasure checklist, verified end-to-end (not just "delete the users row"):
 7. Confirm to the user, within the legally required window (typically 30
    days), that erasure is complete.
 
-## 5. Data Retention Defaults
+## 6. Data Retention Defaults
 
 | Data category                                    | Default retention                          |
 |----------------------------------------------------|-------------------------------------------------|
 | Diary entries (food, water, fasting, meal plans)    | Retained while the account is active + 90 days after deletion (grace period for accidental deletion recovery), then erased |
-| Profile biometric/health metrics                     | Same as diary entries; erasure via crypto-shredding is mandatory given GDPR Art. 9 status (section 4) |
+| Profile biometric/health metrics                     | Same as diary entries; erasure via crypto-shredding is mandatory given GDPR Art. 9 status (section 5) |
 | Uploaded food photos                                  | Discarded immediately after `food-recognition-service` processing succeeds, unless the user opts in to retention (then: per user setting, default 1 year, user-configurable) |
 | Audit records (auth, admin actions, subscription/payment events) | 3 years (compliance-driven, not personal-data-driven) |
+| Subscription/entitlement records (`billing-service`: Stripe customer/subscription IDs, status, timestamps — never raw card data, see section 4) | Retained while the account is active + 90 days after cancellation (mirrors the diary-entry grace period), then erased; Stripe's own record of the underlying charges is retained per Stripe's own compliance obligations, independent of this service's copy |
 | Consent records                                        | Retained as long as the account exists + statute-of-limitations window after deletion |
 
-## 6. Data Subject Access Requests (DSAR)
+## 7. Data Subject Access Requests (DSAR)
 
 - Users can request an export of their data (a first-class feature per
   CLAUDE.md section 8, not an afterthought) — a single endpoint aggregating
@@ -138,7 +212,7 @@ Erasure checklist, verified end-to-end (not just "delete the users row"):
 - Response time target: 30 days maximum, tracked as an SLA in
   `docs/observability-slo.md`.
 
-## 7. Ownership
+## 8. Ownership
 
 `security-agent` reviews any change touching personal data handling,
 consent flow, or third-party data transmission, using this document and

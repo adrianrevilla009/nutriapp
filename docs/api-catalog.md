@@ -29,6 +29,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
+| `/api/v1/billing`             | `billing-service` (ADR-0015)             | v1                    | active    |
 | `/.well-known/jwks.json`             | `identity-service` (ADR-0022)        | n/a (JWK Set, not versioned) | active |
 
 ## Internal APIs (service-to-service, not routed through Kong)
@@ -39,6 +40,8 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | active    |
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 | `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
+| `/internal/v1/billing/webhooks/stripe` | `billing-service` | Stripe (external, see Notes) | active |
+| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service`, `analytics-service` (none exist yet) | active |
 
 ## Notes
 
@@ -92,3 +95,24 @@ an endpoint surface — enforced by `/implementation-review`.
   `POST /api/v1/recognition/barcodes/decode`, which this row now reflects.
   No live consumer depended on the placeholder path, so no integration
   breaks from the rename.
+- `/internal/v1/billing/webhooks/stripe` (`billing-service`,
+  `/plans/billing-service/implementation-plan.md` section 1.2) is the ONE
+  documented exception to "every `/internal/v1/...` route is never routed
+  through Kong" in this entire table — Stripe itself must be able to reach
+  this endpoint over the public internet (Stripe's own documented
+  requirement for webhook endpoints), so Kong DOES route this one path
+  publicly. It is still never JWT-gated: authenticity is verified instead
+  via the `Stripe-Signature` HMAC scheme
+  (https://stripe.com/docs/webhooks/signatures), never an unverified
+  payload. Do not mistake the `/internal/v1` prefix here for "never
+  publicly reachable" — see `services/billing-service/README.md` and the
+  Helm chart's NetworkPolicy comment for the same note, so a future
+  reviewer doesn't flag this as a missing-auth bug.
+- `/internal/v1/billing/entitlements/{user_id}` (`billing-service`) is
+  built now with zero real callers (implementation plan section 1.4,
+  same "publish the contract before any consumer exists" pattern as the
+  six billing events in `docs/events-catalog.md`) — it is the documented
+  synchronous fallback compensation path for the
+  `ProUpgradeEntitlementPropagation` saga
+  (`docs/sagas-and-distributed-transactions.md`), consumed only once
+  `recipe-service`/`social-service`/`analytics-service` actually exist.

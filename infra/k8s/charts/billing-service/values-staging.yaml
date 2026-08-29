@@ -1,0 +1,16 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/billing-service/db-credentials
+  stripeApiKey: nutriapp/staging/billing-service/stripe-api-key
+  stripeWebhookSigningSecret: nutriapp/staging/billing-service/stripe-webhook-signing-secret
+  internalEntitlementCredential: nutriapp/staging/billing-service/internal-reveal-credential
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/billing-service/db-credentials

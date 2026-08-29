@@ -1,0 +1,26 @@
+{
+  "id": "evt_1NG8xxSubscriptionDeleted01",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1719964800,
+  "type": "customer.subscription.deleted",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_subscription_deleted_01",
+    "idempotency_key": null
+  },
+  "data": {
+    "object": {
+      "id": "sub_QzTestSubscription01",
+      "object": "subscription",
+      "customer": "cus_QzTestCustomer01",
+      "status": "canceled",
+      "cancel_at_period_end": false,
+      "current_period_end": 1719878400,
+      "canceled_at": 1719964800,
+      "livemode": false
+    }
+  }
+}
+

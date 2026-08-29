@@ -431,6 +431,27 @@ services:
       timeout: 5s
       retries: 10
 
+  billing-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${BILLING_POSTGRES_DB:-billing_service}
+      POSTGRES_USER: ${BILLING_POSTGRES_USER:-billing_service}
+      POSTGRES_PASSWORD: ${BILLING_POSTGRES_PASSWORD:-billing_service}
+    ports:
+      # 5440, not 5439 -- 5439 was already claimed by activity-db above
+      # (both services independently picked "next available port" without
+      # awareness of each other; reconciled here during the merge, same
+      # port-collision-reconciliation lesson as bff-service/activity-service
+      # earlier this session).
+      - "5440:5432"
+    volumes:
+      - billing-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BILLING_POSTGRES_USER:-billing_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   activity-service:
     build:
       # Build context is the repo root (not services/activity-service)
@@ -454,6 +475,44 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  billing-service:
+    build:
+      # Build context is the repo root (not services/billing-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/billing-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      # 8010, not 8009 -- 8009 was already claimed by activity-service above.
+      - "8010:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      BILLING_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      BILLING_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      BILLING_SERVICE_IDENTITY_ISSUER: identity-service
+      # Real Stripe API key/webhook secret provisioning is a tracked
+      # lead-time item (implementation plan section 9, risk 2) -- these
+      # placeholders are never valid against a real Stripe account, same
+      # DEMO_KEY-style precedent as catalog-service's USDA FDC default.
+      BILLING_SERVICE_STRIPE_SECRET_KEY: UNSET_STRIPE_SECRET_KEY
+      BILLING_SERVICE_STRIPE_WEBHOOK_SIGNING_SECRET: whsec_placeholder
+      BILLING_SERVICE_STRIPE_PRICE_ID: price_pro_monthly_placeholder
+      BILLING_SERVICE_STRIPE_BASE_URL: https://api.stripe.com
+      # Local-dev-only value for the internal entitlement-check endpoint's
+      # X-Internal-Service-Credential header (composition_root.py's
+      # Settings docstring) -- production value comes from Secrets Manager.
+      BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL: dev-billing-internal-entitlement-credential-change-me
+      BILLING_SERVICE_REVOCATION_SCAN_INTERVAL_SECONDS: "60"
+    depends_on:
+      billing-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -463,3 +522,4 @@ volumes:
   food-recognition-db-data:
   notification-db-data:
   activity-db-data:
+  billing-db-data:

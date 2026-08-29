@@ -34,10 +34,17 @@ jwt_signing_key_service_names = ["identity-service"]
 # list despite needing a db-credentials container -- a pre-existing gap
 # from those services' own worktrees (variables.tf's default already
 # lists all five; this override silently narrows it), not introduced or
-# fixed here. "notification-service" is added below because this plan's
-# own service needs it; the other three remain a separately tracked
-# follow-up, not silently expanded to fix here.
-db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service"]
+# fixed here. "notification-service" and "billing-service" are added
+# below because each needs its own db-credentials container (this
+# session's billing-service implementation plan); the other three remain
+# a separately tracked follow-up, not silently expanded to fix here.
+db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service", "billing-service"]
+
+# billing-service's own internal, non-Kong-routed entitlement-check
+# endpoint (GET /internal/v1/billing/entitlements/{user_id}, implementation
+# plan section 1.4) -- zero real callers today, same deferral pattern as
+# the endpoint itself.
+internal_reveal_credential_service_names = ["identity-service", "billing-service"]
 
 scale_down_schedule_expression = "cron(0 20 ? * MON-FRI *)"
 scale_up_schedule_expression   = "cron(0 7 ? * MON-FRI *)"
