@@ -456,12 +456,96 @@ yet implemented — the owning service doesn't exist yet).
 - Consumers: notification-service, analytics-service
 - Emitted when: a user follows/unfollows another user (Pro-gated).
 
-### SubscriptionStarted / SubscriptionRenewed / SubscriptionCancelled / SubscriptionPaymentFailed / EntitlementGranted / EntitlementRevoked (v1)
+### SubscriptionStarted (v1)
+- Status: Active
 - Producer: billing-service
 - Consumers: recipe-service, social-service, analytics-service
-  (cache the entitlement flag locally per `.claude/skills/saga-conventions/SKILL.md`)
-- Emitted when: the corresponding subscription/payment/entitlement
-  lifecycle event happens.
+  (documented, not yet implemented — none of these three services exist
+  yet; cache the entitlement flag locally per
+  `.claude/skills/saga-conventions/SKILL.md`, same deferral pattern as
+  `activity-service`'s `ExerciseLogged`)
+- Emitted when: `checkout.session.completed` — a brand new Pro
+  subscription was created via Stripe's hosted Checkout.
+- Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
+  "stripe_customer_id": "string", "stripe_subscription_id": "string",
+  "current_period_end": "timestamp", "started_at": "timestamp" }`
+  — `current_period_end` reflects whatever this service's `subscriptions`
+  row holds at the moment `checkout.session.completed` is processed:
+  Stripe's real `customer.subscription.created` webhook (consumed
+  internally, not itself a published event) is the authoritative source
+  for this value and does not strictly arrive before or after
+  `checkout.session.completed`, so in the rarer ordering
+  (`checkout.session.completed` first) this field may briefly reflect a
+  same-day best-effort estimate rather than Stripe's real billing-cycle
+  date — corrected in the row within moments, but not necessarily before
+  this specific event was already published. Consumers needing the
+  guaranteed-authoritative value should treat `EntitlementGranted`'s
+  `granted_at`/the entitlement-check endpoint as the source of truth for
+  "is this user entitled right now", not this field. See
+  `services/billing-service/README.md`'s "Known limitation, resolved"
+  section for the full design.
+
+### SubscriptionRenewed (v1)
+- Status: Active
+- Producer: billing-service
+- Consumers: recipe-service, social-service, analytics-service (documented,
+  not yet implemented)
+- Emitted when: `invoice.paid` for an existing subscription — the paid
+  period was extended.
+- Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
+  "stripe_subscription_id": "string", "current_period_end": "timestamp",
+  "renewed_at": "timestamp" }`
+
+### SubscriptionCancelled (v1)
+- Status: Active
+- Producer: billing-service
+- Consumers: recipe-service, social-service, analytics-service (documented,
+  not yet implemented)
+- Emitted when: `customer.subscription.deleted`, immediately — this event
+  records the cancellation as a fact that happened now; it does NOT imply
+  the user has already lost access (`EntitlementRevoked` below is deferred
+  to `current_period_end`, `.claude/agents/billing-agent.md`'s explicit
+  rule).
+- Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
+  "stripe_subscription_id": "string", "cancel_at_period_end": "boolean",
+  "current_period_end": "timestamp", "cancelled_at": "timestamp" }`
+
+### SubscriptionPaymentFailed (v1)
+- Status: Active
+- Producer: billing-service
+- Consumers: recipe-service, social-service, analytics-service (documented,
+  not yet implemented)
+- Emitted when: `invoice.payment_failed`. Entitlement is NOT revoked by
+  this event alone — Stripe's own dunning/retry window determines if/when
+  the subscription is ultimately canceled (a later
+  `SubscriptionCancelled`).
+- Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
+  "stripe_subscription_id": "string", "failed_at": "timestamp" }`
+
+### EntitlementGranted (v1)
+- Status: Active
+- Producer: billing-service
+- Consumers: recipe-service, social-service, analytics-service (documented,
+  not yet implemented — cache the entitlement flag locally per
+  `.claude/skills/saga-conventions/SKILL.md`; a lagging consumer falls back
+  to `GET /internal/v1/billing/entitlements/{user_id}`, per the
+  `ProUpgradeEntitlementPropagation` saga)
+- Emitted when: `checkout.session.completed` succeeds, immediately after
+  `SubscriptionStarted`. `aggregate_id` is the `user_id` (not the
+  `subscription_id`) — entitlement is a per-user derived flag, matching
+  how every consumer actually caches it.
+- Payload: `{ "user_id": "uuid", "reason": "string", "granted_at": "timestamp" }`
+
+### EntitlementRevoked (v1)
+- Status: Active
+- Producer: billing-service
+- Consumers: recipe-service, social-service, analytics-service (documented,
+  not yet implemented)
+- Emitted when: a scheduled revocation row's `revoke_at` (the
+  subscription's `current_period_end` at the time it was canceled) is
+  actually due — never synchronously from the cancellation webhook itself.
+  `aggregate_id` is the `user_id`, same rationale as `EntitlementGranted`.
+- Payload: `{ "user_id": "uuid", "reason": "string", "revoked_at": "timestamp" }`
 
 ### NutrientDeficiencyDetected (v1)
 - Producer: analytics-service

@@ -64,19 +64,28 @@ an audit.
 - Review cadence: Annual
 - Owner: `infra-agent`, `security-agent`
 
-### Payment Processor (Stripe recommended — see `.claude/agents/billing-agent.md`)
+### Payment Processor (Stripe — selected and integrated, `billing-service`)
 - Purpose: Pro subscription billing/payment handling (ADR-0015).
-- Data shared: ideally none — cardholder data must never reach
-  `billing-service`'s own infrastructure; the integration uses the
-  provider's hosted checkout/Elements so card data goes directly from the
-  client to the provider (`.claude/agents/billing-agent.md`'s PCI
-  scope-minimization rule).
-- Data processing agreement: status to be confirmed once
-  `billing-service`'s implementation plan selects and integrates a
-  specific provider — do not assume one exists until verified and linked
-  here.
-- Compliance relevance: PCI-DSS (scope minimized via tokenization/hosted
-  checkout, not eliminated), GDPR (ADR-0020).
+  `/plans/billing-service/implementation-plan.md` built `StripePaymentAdapter`
+  against Stripe's real, publicly documented API contract (Checkout
+  Sessions, webhook signature verification); real API key/webhook-secret
+  provisioning remains a tracked lead-time item (implementation plan
+  section 9, risk 2) — not a blocker to the integration being built and
+  tested (fixture-only, never a live call).
+- Data shared: none — cardholder data never reaches `billing-service`'s
+  own infrastructure. The integration uses Stripe's hosted Checkout so
+  card data goes directly from the client to Stripe
+  (`.claude/agents/billing-agent.md`'s PCI scope-minimization rule,
+  `docs/data-protection-and-privacy.md` section 4 for the full
+  what's-stored/what's-never-stored breakdown and SAQ A eligibility
+  rationale).
+- Data processing agreement: covered under Stripe's standard merchant DPA
+  (`docs/data-protection-and-privacy.md` section 4) — confirm the
+  specific signed agreement reference once a real (non-placeholder)
+  Stripe account is provisioned.
+- Compliance relevance: PCI-DSS (SAQ A — card data fully outsourced to
+  Stripe via hosted Checkout, never touching a NutriApp-controlled
+  system), GDPR (ADR-0020).
 - Risk tier: High
 - Review cadence: Annual
 - Owner: `billing-agent` (technical integration), `security-agent`

@@ -78,6 +78,18 @@ variable "anthropic_api_key_service_names" {
   default     = []
 }
 
+variable "stripe_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a Stripe secret API key (e.g. [\"billing-service\"], billing-service implementation plan section 1, ADR-0015). Same shape as usda_fdc_api_key_service_names/anthropic_api_key_service_names -- cannot be Terraform-generated; a real Stripe test/live secret key is written into the placeholder container manually, out-of-band, once a real Stripe account exists (a tracked lead-time item, not a blocker to this module)."
+  type        = list(string)
+  default     = []
+}
+
+variable "stripe_webhook_signing_secret_service_names" {
+  description = "Service names that need a Secrets Manager container for a Stripe webhook signing secret (e.g. [\"billing-service\"], billing-service implementation plan section 1.2 -- verifies the Stripe-Signature header on the webhook receiver route). Same externally-issued-secret shape as stripe_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band once the webhook endpoint is registered in the Stripe dashboard."
+  type        = list(string)
+  default     = []
+}
+
 variable "jwt_key_algorithm" {
   type    = string
   default = "RSA"

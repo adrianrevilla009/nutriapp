@@ -1,0 +1,4 @@
+{{- if .Values.hpa.enabled }}
+{{ include "nutriapp-lib.hpa" . }}
+{{- end }}
+

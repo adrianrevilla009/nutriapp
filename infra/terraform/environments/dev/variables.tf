@@ -105,12 +105,14 @@ variable "db_credential_service_names" {
     "nutrition-calculation-service",
     "food-recognition-service",
     "activity-service",
+    "billing-service",
   ]
 }
 
 variable "internal_reveal_credential_service_names" {
-  type    = list(string)
-  default = ["identity-service"]
+  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- zero real callers today (recipe-service/social-service/analytics-service don't exist yet), same deferral pattern as the endpoint itself."
+  type        = list(string)
+  default     = ["identity-service", "billing-service"]
 }
 
 # NOTE: this block previously existed twice in this file (a duplicate
@@ -143,6 +145,18 @@ variable "anthropic_api_key_service_names" {
   description = "Service names that need a Secrets Manager container for a metered, third-party Anthropic API key (food-recognition-service implementation plan section 6(b)). Same externally-issued-secret shape as usda_fdc_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band."
   type        = list(string)
   default     = ["food-recognition-service"]
+}
+
+variable "stripe_api_key_service_names" {
+  description = "Service names that need a Secrets Manager container for a Stripe secret API key (billing-service implementation plan section 1, ADR-0015). Same externally-issued-secret shape as usda_fdc_api_key_service_names/anthropic_api_key_service_names -- cannot be Terraform-generated; real key provisioning is a tracked lead-time item (implementation plan section 9, risk 2), populated manually out-of-band once a real Stripe account exists."
+  type        = list(string)
+  default     = ["billing-service"]
+}
+
+variable "stripe_webhook_signing_secret_service_names" {
+  description = "Service names that need a Secrets Manager container for a Stripe webhook signing secret (`whsec_...`, billing-service implementation plan section 1.2) -- verifies the `Stripe-Signature` header on POST /internal/v1/billing/webhooks/stripe. Same externally-issued-secret shape as stripe_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band once the webhook endpoint is registered in the Stripe dashboard."
+  type        = list(string)
+  default     = ["billing-service"]
 }
 
 # --- Scale-to-zero ---

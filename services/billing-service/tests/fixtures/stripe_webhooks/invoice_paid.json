@@ -1,0 +1,30 @@
+{
+  "id": "evt_1NG8xxInvoicePaid01",
+  "object": "event",
+  "api_version": "2024-06-20",
+  "created": 1719878500,
+  "type": "invoice.paid",
+  "livemode": false,
+  "pending_webhooks": 1,
+  "request": {
+    "id": "req_invoice_paid_01",
+    "idempotency_key": null
+  },
+  "data": {
+    "object": {
+      "id": "in_QzTestInvoice01",
+      "object": "invoice",
+      "billing_reason": "subscription_cycle",
+      "customer": "cus_QzTestCustomer01",
+      "subscription": "sub_QzTestSubscription01",
+      "status": "paid",
+      "currency": "usd",
+      "amount_paid": 999,
+      "period_start": 1717200000,
+      "period_end": 1719878400,
+      "created": 1719878400,
+      "livemode": false
+    }
+  }
+}
+

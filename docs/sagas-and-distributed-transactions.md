@@ -84,10 +84,16 @@ of every consumer calling it synchronously on every request.*
     back to `billing-service`'s synchronous entitlement-check endpoint
     (behind a circuit breaker) on the next Pro-feature request, rather
     than serving a stale "not entitled" flag indefinitely.
-  - A `SubscriptionCancelled` or `SubscriptionPaymentFailed` event follows
-    the same fan-out shape via `EntitlementRevoked`, applied at the end of
-    the paid period per `docs/sla-and-contracts.md`, not immediately on
-    cancellation.
+  - A `SubscriptionCancelled` event schedules `EntitlementRevoked` for the
+    subscription's `current_period_end` (never immediately on
+    cancellation) — the same fan-out shape, just deferred. A
+    `SubscriptionPaymentFailed` event does NOT, by itself, ever lead to
+    `EntitlementRevoked`: Stripe's own dunning/retry window determines
+    if/when the subscription is ultimately canceled (a later
+    `SubscriptionCancelled`, which is what actually schedules the
+    revocation) — corrected here from an earlier draft that implied
+    `SubscriptionPaymentFailed` also fed the same revocation path
+    directly.
 - Idempotency: each consumer deduplicates by `event_id`; a lagging or
   duplicate-processing consumer fails safe (treats the user as
   not-yet-entitled) rather than fail open.
@@ -95,6 +101,24 @@ of every consumer calling it synchronously on every request.*
   propagated through `SubscriptionStarted`/`EntitlementGranted` and every
   consumer's processing, so a support investigation ("why can't this user
   publish a recipe") can trace the full fan-out in one trace.
+- **Implementation status** (`/plans/billing-service/implementation-plan.md`):
+  `billing-service`'s own side of this saga is built —
+  webhook-signature-verified, idempotent (dedupes by Stripe's own event
+  `id`) `checkout.session.completed`/`invoice.paid`/
+  `customer.subscription.deleted`/`invoice.payment_failed` handling, the
+  Outbox-published `SubscriptionStarted`/`SubscriptionRenewed`/
+  `SubscriptionCancelled`/`SubscriptionPaymentFailed`/`EntitlementGranted`/
+  `EntitlementRevoked` events (all `Status: Active` in
+  `docs/events-catalog.md`), the deferred-revocation scheduling mechanism
+  (`entitlement_revocation_schedule` + `revocation_scan_worker.py`), and
+  the synchronous fallback endpoint
+  (`GET /internal/v1/billing/entitlements/{user_id}`). Step 2 — the three
+  consumers (`recipe-service`, `social-service`, `analytics-service`)
+  actually subscribing to these events and calling the fallback endpoint —
+  remains pending: none of those three services exist yet, same deferral
+  pattern as `activity-service`'s `ExerciseLogged` consumers. This saga's
+  choreography is only fully exercised once at least one of those three
+  services is built.
 
 ---
 
