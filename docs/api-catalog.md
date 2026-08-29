@@ -27,14 +27,14 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/notifications`             | `notification-service`             | v1                    | active    |
 | `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
-| `/api/v1/dashboard`                  | `bff-service` (ADR-0008)             | v1                    | planned    |
+| `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
 | `/.well-known/jwks.json`             | `identity-service` (ADR-0022)        | n/a (JWK Set, not versioned) | active |
 
 ## Internal APIs (service-to-service, not routed through Kong)
 
 | Path prefix                     | Owning service       | Consumers                    | Status  |
 |-----------------------------------|-------------------------|---------------------------------|-----------|
-| `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service`, `bff-service` | planned    |
+| `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service` | planned    |
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | active    |
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 | `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
@@ -60,6 +60,21 @@ an endpoint surface — enforced by `/implementation-review`.
   minimized to exactly `weight_kg, height_cm, age, sex, activity_level,
   goal_type`. See `services/profile-service/README.md` and
   `/plans/profile-service/implementation-plan.md` Addendum 2.
+- `/api/v1/bff/dashboard` (`bff-service`, `/plans/bff-service/implementation-plan.md`)
+  fans out three server-to-server calls, in parallel, to already-public
+  endpoints: `GET /api/v1/diary/summary?date={date}` (`diary-service`),
+  `GET /api/v1/nutrition/totals/{date}` and `GET /api/v1/nutrition/target`
+  (`nutrition-calculation-service`). These are **not** a new internal-
+  endpoint exception (the `/internal/v1/...` rows above) — they are the
+  exact same public rows already in this table, called server-to-server
+  purely to do the fan-out/composition the frontend would otherwise do
+  itself in three separate requests (Open Host Service / Customer-
+  Supplier, `docs/domain-glossary-and-context-map.md`). No new endpoint
+  was added to either downstream service for this. The
+  `/internal/v1/nutrition/targets` row above lists only
+  `analytics-service` as a consumer (not `bff-service`, corrected from
+  an earlier speculative placeholder) — `bff-service` uses the public
+  `GET /api/v1/nutrition/target` endpoint instead.
 - `/api/v1/recognition` (`food-recognition-service`) — renamed from an
   earlier `/api/v1/media` placeholder: `/plans/food-recognition-service/implementation-plan.md`
   (the approved implementation plan) specifies the concrete routes

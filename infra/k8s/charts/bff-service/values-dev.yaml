@@ -1,0 +1,18 @@
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    cpu: 250m
+    memory: 192Mi
+
+hpa:
+  enabled: false # single replica in dev, scale-to-zero handles cost
+
+pdb:
+  enabled: false # meaningless at replicaCount: 1
+
+image:
+  pullPolicy: Always

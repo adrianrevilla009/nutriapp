@@ -1,0 +1,6 @@
+{{/*
+Delegates to the shared library chart's Deployment template
+(infra/k8s/charts/_lib/templates/_deployment.tpl), same convention as
+every other service.
+*/}}
+{{ include "nutriapp-lib.deployment" . }}

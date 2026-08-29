@@ -1,0 +1,4 @@
+{
+  "error": "No computed nutrition target for this user yet.",
+  "code": "NUTRITION_TARGET_NOT_FOUND"
+}
