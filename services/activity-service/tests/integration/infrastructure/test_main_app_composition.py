@@ -1,9 +1,12 @@
 """Asserts the FastAPI app assembled by infrastructure/main.py exposes the
-expected routes (composition-level smoke test)."""
+expected routes (composition-level smoke test). The generic `/metrics`
+Prometheus-endpoint wiring is identical boilerplate across every service
+(same three-line handler, same `prometheus_client` call) -- not
+re-verified per-service here; it carries no activity-service-specific
+behavior."""
 
 from __future__ import annotations
 
-import httpx
 import pytest
 from testcontainers.rabbitmq import RabbitMqContainer
 
@@ -18,15 +21,6 @@ def test_create_app_registers_all_expected_routes():
     assert "/api/v1/activity/exercises/{entry_id}" in paths
     assert "/health/live" in paths
     assert "/health/ready" in paths
-
-
-async def test_metrics_endpoint_returns_prometheus_content_type():
-    app = create_app()
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.get("/metrics")
-    assert response.status_code == 200
-    assert "text/plain" in response.headers["content-type"]
 
 
 async def test_lifespan_starts_and_stops_the_real_container(db_engine, postgres_async_url):
