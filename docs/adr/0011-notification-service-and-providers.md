@@ -81,3 +81,32 @@ rule in ADR-0001 exists to prevent.
 - `docs/notifications.md`
 - `.claude/agents/notification-agent.md`
 - ADR-0001, ADR-0006
+
+## Addendum (2026-08-31): `new_follower` push category sign-off
+
+`docs/notifications.md` section 1 requires explicit ADR sign-off, not a
+silent table addition, for any new event classified into either "No"
+column (transactional or suppressible-by-preference) — the classification
+itself is a legal/UX decision, not an implementation detail. This
+addendum is that sign-off for social-service's `UserFollowed` event,
+added as `notification-service`'s new `new_follower` push category
+(architecture-agent review, notification-service PR B).
+
+**Classification**: Push, non-transactional, suppressible by preference,
+quiet-hours-respecting — identical to the existing meal/water/fasting
+reminder categories this ADR's Context already named. This is a direct
+application of that existing classification, not a new one: a low-urgency
+social notification has the same delivery guarantees as a reminder,
+carries no security/account implication, and there is no basis to give it
+a weaker (or stronger) guarantee than the other three push categories.
+For that reason this is recorded as an addendum to this ADR rather than a
+new ADR number.
+
+**Consequence specific to this addition**: `UserFollowed` is a one-shot
+triggering event, unlike the periodic reminders — a quiet-hours delay has
+no natural "next occurrence" to retry against, so `notification-service`
+gained a second, narrower persistence/scan mechanism
+(`pending_push_dispatch` + `PendingPushDispatchScanWorker`) purpose-built
+for one-shot deferred sends, kept deliberately separate from
+`reminder_schedule`'s periodic shape. See `docs/notifications.md` section
+2 and `services/notification-service/README.md`.

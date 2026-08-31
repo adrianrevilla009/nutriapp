@@ -1,7 +1,15 @@
 """Consumed-event payload contracts (test-plan section 3): each fixture
 is validated against its docs/events-catalog.md schema, sourced from the
 producing service's own published shared_contracts payload models --
-never hand-guessed."""
+never hand-guessed.
+
+Exception: `UserFollowed` (social-service PR A, test-plan section 6) is
+validated against the locally-defined `UserFollowedPayloadV1` in
+`infrastructure/messaging/social_events_consumer.py`, not a
+shared_contracts model -- social-service does not exist in this repository
+yet (implementation-plan.md section 6's two-PR sequencing), so there is no
+independently-published schema to source from. See that module's docstring
+for the flagged follow-up once social-service exists for real."""
 
 from __future__ import annotations
 
@@ -23,6 +31,8 @@ from shared_contracts.events.identity import (
     PasswordResetRequestedPayloadV1,
     UserRegisteredPayloadV1,
 )
+
+from infrastructure.messaging.social_events_consumer import UserFollowedPayloadV1
 
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures"
 
@@ -49,6 +59,7 @@ _CASES = [
     ("diary_events/meal_planned.json", "MealPlanned", MealPlannedPayloadV1),
     ("diary_events/meal_plan_updated.json", "MealPlanUpdated", MealPlanUpdatedPayloadV1),
     ("diary_events/meal_plan_removed.json", "MealPlanRemoved", MealPlanRemovedPayloadV1),
+    ("social_events/user_followed.json", "UserFollowed", UserFollowedPayloadV1),
 ]
 
 

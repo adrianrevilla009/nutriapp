@@ -1,5 +1,5 @@
 """FastAPI application entrypoint. Wires the composition root and routes
-(messaging-conventions SKILL.md, observability-audit SKILL.md). The two
+(messaging-conventions SKILL.md, observability-audit SKILL.md). The three
 RabbitMQ consumers and the reminder-scan worker all run as background
 tasks/consumers started from Container.startup(), not inline here, same
 convention as every other service."""

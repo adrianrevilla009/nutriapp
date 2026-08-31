@@ -1,0 +1,5 @@
+{
+  "category": "new_follower",
+  "follow_id": "<script>alert(\"xss\")</script>&'quote'",
+  "follower_id": "77777777-7777-7777-7777-777777777777"
+}

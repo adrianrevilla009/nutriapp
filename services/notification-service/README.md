@@ -23,6 +23,12 @@ token-reveal call). Not event-sourced.
   `WaterIntakeLogged`/`Removed` (diary-service) -> the local
   `reminder_schedule` projection, scanned periodically for due push
   reminders.
+- `UserFollowed` (social-service) -> `new_follower` push, opt-in only,
+  quiet-hours-respecting (docs/notifications.md section 1, ADR-0011
+  addendum). One-shot trigger, so a quiet-hours-delayed send is persisted
+  to a separate `pending_push_dispatch` row (not the periodic
+  `reminder_schedule` projection) and retried by its own
+  `PendingPushDispatchScanWorker` until due.
 
 This service publishes no domain events of its own.
 

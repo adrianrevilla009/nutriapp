@@ -25,8 +25,12 @@ from infrastructure.external.ses_email_adapter import SesEmailAdapter
 from infrastructure.external.sns_push_adapter import SnsPushAdapter
 from infrastructure.messaging.diary_events_consumer import DiaryEventsConsumer
 from infrastructure.messaging.identity_events_consumer import IdentityEventsConsumer
+from infrastructure.messaging.social_events_consumer import SocialEventsConsumer
 from infrastructure.persistence.postgres_preferences_repository import (
     PostgresPreferencesRepository,
+)
+from infrastructure.scheduling.pending_push_dispatch_scan_worker import (
+    PendingPushDispatchScanWorker,
 )
 from infrastructure.scheduling.reminder_scan_worker import ReminderScanWorker
 from infrastructure.templating.jinja_template_renderer import JinjaTemplateRenderer
@@ -40,6 +44,7 @@ DEFAULT_SES_BASE_URL = "http://localhost:9001"
 DEFAULT_SNS_BASE_URL = "http://localhost:9002"
 DEFAULT_SES_FROM_ADDRESS = "no-reply@nutriapp.example"
 DEFAULT_REMINDER_SCAN_INTERVAL_SECONDS = 60.0
+DEFAULT_PENDING_PUSH_DISPATCH_SCAN_INTERVAL_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +66,7 @@ class Settings:
     ses_from_address: str
     sns_base_url: str
     reminder_scan_interval_seconds: float
+    pending_push_dispatch_scan_interval_seconds: float
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -90,6 +96,12 @@ class Settings:
                 os.environ.get(
                     "NOTIFICATION_SERVICE_REMINDER_SCAN_INTERVAL_SECONDS",
                     DEFAULT_REMINDER_SCAN_INTERVAL_SECONDS,
+                )
+            ),
+            pending_push_dispatch_scan_interval_seconds=float(
+                os.environ.get(
+                    "NOTIFICATION_SERVICE_PENDING_PUSH_DISPATCH_SCAN_INTERVAL_SECONDS",
+                    DEFAULT_PENDING_PUSH_DISPATCH_SCAN_INTERVAL_SECONDS,
                 )
             ),
         )
@@ -125,7 +137,9 @@ class Container:
         self._rabbitmq_connection: aio_pika.abc.AbstractRobustConnection | None = None
         self._identity_events_consumer: IdentityEventsConsumer | None = None
         self._diary_events_consumer: DiaryEventsConsumer | None = None
+        self._social_events_consumer: SocialEventsConsumer | None = None
         self._reminder_scan_worker: ReminderScanWorker | None = None
+        self._pending_push_dispatch_scan_worker: PendingPushDispatchScanWorker | None = None
         self._background_tasks: list[asyncio.Task[None]] = []
 
     async def startup(self) -> None:
@@ -144,6 +158,16 @@ class Container:
         await self._diary_events_consumer.setup(self._rabbitmq_connection)
         await self._diary_events_consumer.consume()
 
+        # social-service PR A (/plans/social-service/implementation-plan.md
+        # section 6): a real, live consumer of UserFollowed -- wired here
+        # so the event is never published (once social-service exists)
+        # with nothing listening.
+        self._social_events_consumer = SocialEventsConsumer(
+            self.session_factory, self.push_provider, self.template_renderer
+        )
+        await self._social_events_consumer.setup(self._rabbitmq_connection)
+        await self._social_events_consumer.consume()
+
         self._reminder_scan_worker = ReminderScanWorker(
             self.session_factory,
             self.push_provider,
@@ -151,6 +175,20 @@ class Container:
             scan_interval_seconds=self.settings.reminder_scan_interval_seconds,
         )
         self._background_tasks.append(asyncio.create_task(self._reminder_scan_worker.run_forever()))
+
+        # UserFollowed PR B (quiet-hours fix): retries any new_follower push
+        # deferred past quiet hours by SendNewFollowerPushHandler -- wired
+        # here so a persisted pending_push_dispatch row is never stuck with
+        # nothing scanning it.
+        self._pending_push_dispatch_scan_worker = PendingPushDispatchScanWorker(
+            self.session_factory,
+            self.push_provider,
+            self.template_renderer,
+            scan_interval_seconds=self.settings.pending_push_dispatch_scan_interval_seconds,
+        )
+        self._background_tasks.append(
+            asyncio.create_task(self._pending_push_dispatch_scan_worker.run_forever())
+        )
 
     async def shutdown(self) -> None:
         for task in self._background_tasks:
