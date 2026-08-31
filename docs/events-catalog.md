@@ -473,8 +473,17 @@ yet implemented — the owning service doesn't exist yet).
 ### RecipePublished (v1)
 - Status: Active
 - Producer: recipe-service
-- Consumers: analytics-service, nutrition-assistant-service (documented,
-  not yet implemented)
+- Consumers: **social-service** (implemented -- `recipe_events_consumer.py`,
+  the FIRST real consumer of this event; projects a local `feed_entries`
+  read table for fan-out-on-read feed composition, per
+  `/plans/social-service/implementation-plan.md` section 1.3), plus
+  analytics-service, nutrition-assistant-service (documented, not yet
+  implemented -- neither service exists yet). **Known payload gap**: this
+  event does not carry a `title` field, even though `social-service`'s
+  `feed_entries` projection wants one for display purposes -- flagged in
+  `services/social-service/domain/value_objects/feed_entry.py`'s docstring;
+  `title` is `None` in every projected feed entry today, a candidate for a
+  future v2 payload addition, out of scope for this plan.
 - Emitted when: a user publishes a recipe to cross-user search — **Pro-gated**
   (entitlement checked cache-first, falling back to `billing-service`'s
   synchronous endpoint on a cache miss; every ingredient re-verified to
@@ -486,8 +495,11 @@ yet implemented — the owning service doesn't exist yet).
 ### RecipeUnpublished (v1)
 - Status: Active
 - Producer: recipe-service
-- Consumers: analytics-service, nutrition-assistant-service (documented,
-  not yet implemented)
+- Consumers: **social-service** (implemented -- same
+  `recipe_events_consumer.py`; removes the corresponding `feed_entries`
+  row synchronously with consumption, never a scheduled recompute), plus
+  analytics-service, nutrition-assistant-service (documented, not yet
+  implemented).
 - Emitted when: a user unpublishes or deletes a previously-published
   recipe — removed from cross-user search, author's own record/event
   history retained (never a hard row delete, recipe-agent.md). NOT
@@ -498,20 +510,51 @@ yet implemented — the owning service doesn't exist yet).
   New event, added by `/plans/recipe-service/implementation-plan.md`
   section 5 — not previously documented in this file.
 
-### UserFollowed / UserUnfollowed (v1)
+### UserFollowed (v1)
+- Status: Active
 - Producer: social-service
-- Consumers: notification-service, analytics-service
-- Emitted when: a user follows/unfollows another user (Pro-gated).
+- Consumers: **notification-service** (implemented --
+  `social_events_consumer.py`, real live wiring since notification-service
+  already existed at plan time, not a documented-deferred consumer --
+  dispatches an opt-in, suppressible `new_follower` push notification),
+  plus analytics-service (documented, not yet implemented -- that service
+  doesn't exist yet).
+- Emitted when: a user follows another user -- **Pro-gated** (entitlement
+  checked cache-first on the follower, falling back to `billing-service`'s
+  synchronous endpoint on a cache miss). Idempotent: an already-existing
+  follow does NOT re-publish this event.
+- Payload: `{ "follow_id": "uuid", "follower_id": "uuid", "followee_id": "uuid", "followed_at": "timestamp" }`.
+  `follow_id` (the `follows` row's own primary key) is `aggregate_id`. See
+  `packages/shared-contracts/schemas/user_followed.v1.json`.
+  Fleshed out (payload previously unspecified) by
+  `/plans/social-service/implementation-plan.md` section 1.5.
+
+### UserUnfollowed (v1)
+- Status: Active
+- Producer: social-service
+- Consumers: analytics-service (documented, not yet implemented) --
+  deliberately NOT notification-service (unfollowing does not notify the
+  formerly-followed user, `/plans/social-service/implementation-plan.md`
+  section 1.5).
+- Emitted when: a user unfollows another user they were following --
+  **Pro-gated**, same entitlement pattern as `UserFollowed`. A genuine
+  hard delete of the `Follow` row (not a soft-unpublish, a confirmed
+  deviation from `recipe-service`'s convention). Idempotent: not
+  currently following is a no-op -- does NOT publish this event.
+- Payload: `{ "follow_id": "uuid", "follower_id": "uuid", "followee_id": "uuid", "unfollowed_at": "timestamp" }`.
+  See `packages/shared-contracts/schemas/user_unfollowed.v1.json`.
+  Fleshed out (payload previously unspecified) by
+  `/plans/social-service/implementation-plan.md` section 1.5.
 
 ### SubscriptionStarted (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: social-service, analytics-service (documented, not yet
-  implemented — neither service exists yet). Not recipe-service --
-  recipe-service consumes only `EntitlementGranted`/`EntitlementRevoked`
-  below (the derived entitlement flag), never this service's own
-  subscription-lifecycle events directly (implementation plan section
-  1.7's cache-first design).
+- Consumers: analytics-service (documented, not yet implemented -- that
+  service doesn't exist yet). Not recipe-service or social-service --
+  both consume only `EntitlementGranted`/`EntitlementRevoked` below (the
+  derived entitlement flag), never this service's own subscription-
+  lifecycle events directly (each service's own cache-first entitlement-
+  gating design).
 - Emitted when: `checkout.session.completed` — a brand new Pro
   subscription was created via Stripe's hosted Checkout.
 - Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
@@ -536,8 +579,9 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionRenewed (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: social-service, analytics-service (documented, not yet
-  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
+- Consumers: analytics-service (documented, not yet implemented). Not
+  recipe-service or social-service -- see `SubscriptionStarted`'s note
+  above.
 - Emitted when: `invoice.paid` for an existing subscription — the paid
   period was extended.
 - Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
@@ -547,8 +591,9 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionCancelled (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: social-service, analytics-service (documented, not yet
-  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
+- Consumers: analytics-service (documented, not yet implemented). Not
+  recipe-service or social-service -- see `SubscriptionStarted`'s note
+  above.
 - Emitted when: `customer.subscription.deleted`, immediately — this event
   records the cancellation as a fact that happened now; it does NOT imply
   the user has already lost access (`EntitlementRevoked` below is deferred
@@ -561,8 +606,9 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionPaymentFailed (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: social-service, analytics-service (documented, not yet
-  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
+- Consumers: analytics-service (documented, not yet implemented). Not
+  recipe-service or social-service -- see `SubscriptionStarted`'s note
+  above.
 - Emitted when: `invoice.payment_failed`. Entitlement is NOT revoked by
   this event alone — Stripe's own dunning/retry window determines if/when
   the subscription is ultimately canceled (a later
@@ -575,11 +621,13 @@ yet implemented — the owning service doesn't exist yet).
 - Producer: billing-service
 - Consumers: **recipe-service** (implemented -- `billing_events_consumer.py`,
   the FIRST real consumer of this event; caches the entitlement flag
-  locally in `entitlement_cache`, checked before publish/search), plus
-  social-service, analytics-service (documented, not yet implemented --
-  neither service exists yet). A lagging/absent consumer falls back to
-  `GET /internal/v1/billing/entitlements/{user_id}`, per the
-  `ProUpgradeEntitlementPropagation` saga.
+  locally in `entitlement_cache`, checked before publish/search),
+  **social-service** (implemented -- own `billing_events_consumer.py`, the
+  SECOND real consumer; caches the entitlement flag locally, checked
+  before follow/unfollow/feed), plus analytics-service (documented, not
+  yet implemented -- that service doesn't exist yet). A lagging/absent
+  consumer falls back to `GET /internal/v1/billing/entitlements/{user_id}`,
+  per the `ProUpgradeEntitlementPropagation` saga.
 - Emitted when: `checkout.session.completed` succeeds, immediately after
   `SubscriptionStarted`. `aggregate_id` is the `user_id` (not the
   `subscription_id`) — entitlement is a per-user derived flag, matching
@@ -590,8 +638,10 @@ yet implemented — the owning service doesn't exist yet).
 - Status: Active
 - Producer: billing-service
 - Consumers: **recipe-service** (implemented -- same
-  `billing_events_consumer.py`), plus social-service, analytics-service
-  (documented, not yet implemented).
+  `billing_events_consumer.py`), **social-service** (implemented -- own
+  `billing_events_consumer.py`; only flips the cached flag, never touches
+  existing `follows`/`feed_entries` rows -- non-destructive, structurally
+  guarded), plus analytics-service (documented, not yet implemented).
 - Emitted when: a scheduled revocation row's `revoke_at` (the
   subscription's `current_period_end` at the time it was canceled) is
   actually due — never synchronously from the cancellation webhook itself.

@@ -31,6 +31,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
 | `/api/v1/billing`             | `billing-service` (ADR-0015)             | v1                    | active    |
 | `/api/v1/recipes`             | `recipe-service` (CLAUDE.md section 2.2)             | v1                    | active    |
+| `/api/v1/social`             | `social-service` (CLAUDE.md section 2.2)             | v1                    | active    |
 | `/.well-known/jwks.json`             | `identity-service` (ADR-0022)        | n/a (JWK Set, not versioned) | active |
 
 ## Internal APIs (service-to-service, not routed through Kong)
@@ -42,7 +43,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 | `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
 | `/internal/v1/billing/webhooks/stripe` | `billing-service` | Stripe (external, see Notes) | active |
-| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service` (real, cache-miss fallback only), `social-service`, `analytics-service` (neither exists yet) | active |
+| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service` (both real, cache-miss fallback only), `analytics-service` (doesn't exist yet) | active |
 
 ## Notes
 
@@ -112,14 +113,15 @@ an endpoint surface — enforced by `/implementation-review`.
 - `/internal/v1/billing/entitlements/{user_id}` (`billing-service`) was
   built with zero real callers (implementation plan section 1.4, same
   "publish the contract before any consumer exists" pattern as the six
-  billing events in `docs/events-catalog.md`) and now has its first:
-  `recipe-service` calls it (own `billing_entitlement_check` circuit
-  breaker) ONLY on an `entitlement_cache` miss — the documented
+  billing events in `docs/events-catalog.md`) and now has two real
+  callers: `recipe-service` and `social-service` each call it (own,
+  independently-named `billing_entitlement_check` circuit breaker per
+  service) ONLY on an `entitlement_cache` miss — the documented
   synchronous fallback compensation path for the
   `ProUpgradeEntitlementPropagation` saga
-  (`docs/sagas-and-distributed-transactions.md`). `social-service`/
-  `analytics-service` remain documented, not-yet-implemented consumers
-  (neither service exists yet).
+  (`docs/sagas-and-distributed-transactions.md`). `analytics-service`
+  remains a documented, not-yet-implemented consumer (that service
+  doesn't exist yet).
 - `/api/v1/recipes` (`recipe-service`, `/plans/recipe-service/implementation-plan.md`)
   covers seven routes: `POST /api/v1/recipes` (author, not Pro-gated),
   `PATCH /api/v1/recipes/{recipe_id}` (edit own, not Pro-gated),
@@ -135,3 +137,14 @@ an endpoint surface — enforced by `/implementation-review`.
   reuse of an existing precedent; see
   `services/recipe-service/infrastructure/http/error_mapping.py` for the
   full reasoning.
+- `/api/v1/social` (`social-service`, `/plans/social-service/implementation-plan.md`)
+  covers five routes: `POST /api/v1/social/follows` (follow, **Pro-gated**,
+  idempotent, rejects self-follow), `DELETE /api/v1/social/follows/{followee_id}`
+  (unfollow, **Pro-gated**, idempotent hard delete),
+  `GET /api/v1/social/follows/following` / `GET /api/v1/social/follows/followers`
+  (list own connections, not Pro-gated), and `GET /api/v1/social/feed`
+  (**Pro-gated**, followed users' published recipes, newest first).
+  Reuses `recipe-service`'s `402 Payment Required` / `NOT_ENTITLED`
+  entitlement-rejection convention verbatim — now a repo-wide standard,
+  not a per-service decision (implementation plan section 3); see
+  `services/social-service/infrastructure/http/error_mapping.py`.

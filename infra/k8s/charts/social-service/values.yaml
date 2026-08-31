@@ -1,0 +1,122 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Keys are consumed by the named templates in
+# infra/k8s/charts/_lib/ -- see that chart's own README.md for the full
+# named-template contract. Built with the CORRECT env-list format and
+# envFrom->ExternalSecret wiring from the start (mirrors
+# recipe-service/values.yaml's/billing-service/values.yaml's precedent).
+
+nameOverride: social-service
+fullnameOverride: social-service
+
+image:
+  repository: social-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (social-service.tf) with the
+  # IRSA role ARN granting access to this service's own Secrets Manager
+  # entries only (CLAUDE.md section 2.9, ADR-0007).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 150m
+    memory: 192Mi
+  limits:
+    cpu: 750m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's only public HTTP surface is /api/v1/social/* via
+  # Kong -- Kong is the sole in-cluster ingress peer, same convention as
+  # every other service's chart.
+  #
+  # NOTE (same known _lib-level gap every other chart documents): _lib
+  # only renders `policyTypes: [Ingress]` here -- egress (to the shared
+  # RDS instance, RabbitMQ, billing-service) is unrestricted by THIS
+  # policy.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# _db-provision-job.tpl input (platform-infra plan section 9.1): creates
+# this service's own logical database + role inside the shared RDS
+# instance as a pre-install/pre-upgrade Helm hook, idempotent on every
+# upgrade.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: social_service
+  roleName: social_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["social-service"]
+
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) -- the
+# CORRECT format _lib's _deployment.tpl expects.
+env:
+  - name: SOCIAL_SERVICE_IDENTITY_JWKS_URL
+    value: "http://identity-service:8000/.well-known/jwks.json"
+  - name: SOCIAL_SERVICE_IDENTITY_ISSUER
+    value: "identity-service"
+  - name: SOCIAL_SERVICE_BILLING_SERVICE_BASE_URL
+    value: "http://billing-service:8000"
+  - name: SOCIAL_SERVICE_RABBITMQ_URL
+    value: "amqp://guest:guest@rabbitmq:5672/"
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# (SOCIAL_SERVICE_DATABASE_URL/SOCIAL_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL)
+# as env vars.
+envFrom:
+  - secretRef:
+      name: social-service-secrets
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (social-service.tf) at deploy time.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN (same value as dbProvision.dbCredentialSecretArn above)
+  billingEntitlementCredential: "" # set by Terraform: module.secrets.internal_reveal_credential_secret_arns["billing-service"] (billing-service's OWN single shared credential, not a new per-caller secret -- see social-service.tf)

@@ -569,6 +569,58 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  social-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${SOCIAL_POSTGRES_DB:-social_service}
+      POSTGRES_USER: ${SOCIAL_POSTGRES_USER:-social_service}
+      POSTGRES_PASSWORD: ${SOCIAL_POSTGRES_PASSWORD:-social_service}
+    ports:
+      # 5442, not 5441 -- 5441 was already claimed by recipe-db above.
+      - "5442:5432"
+    volumes:
+      - social-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SOCIAL_POSTGRES_USER:-social_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  social-service:
+    build:
+      # Build context is the repo root (not services/social-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/social-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      # 8012, not 8011 -- 8011 was already claimed by recipe-service above.
+      - "8012:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      SOCIAL_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      SOCIAL_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      SOCIAL_SERVICE_IDENTITY_ISSUER: identity-service
+      SOCIAL_SERVICE_BILLING_SERVICE_BASE_URL: http://billing-service:8000
+      # Local-dev-only value for the outbound entitlement-check call's
+      # X-Internal-Service-Credential header (composition_root.py's
+      # Settings docstring) -- must match billing-service's own
+      # BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL for local dev to work
+      # end-to-end; production value comes from Secrets Manager, reading
+      # billing-service's own single shared internal_reveal_credential
+      # (same mechanism as recipe-service's identical env var above -- see
+      # social-service.tf's header comment).
+      SOCIAL_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL: dev-billing-internal-entitlement-credential-change-me
+    depends_on:
+      social-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -580,3 +632,4 @@ volumes:
   activity-db-data:
   billing-db-data:
   recipe-db-data:
+  social-db-data:
