@@ -34,16 +34,24 @@ jwt_signing_key_service_names = ["identity-service"]
 # list despite needing a db-credentials container -- a pre-existing gap
 # from those services' own worktrees (variables.tf's default already
 # lists all five; this override silently narrows it), not introduced or
-# fixed here. "notification-service" and "billing-service" are added
-# below because each needs its own db-credentials container (this
-# session's billing-service implementation plan); the other three remain
-# a separately tracked follow-up, not silently expanded to fix here.
-db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service", "billing-service"]
+# fixed here. "notification-service" and "billing-service" were added
+# previously because each needs its own db-credentials container;
+# "recipe-service" is added now for the same reason (this session's
+# recipe-service implementation plan); the other three remain a
+# separately tracked follow-up, not silently expanded to fix here.
+db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service", "billing-service", "recipe-service"]
 
 # billing-service's own internal, non-Kong-routed entitlement-check
 # endpoint (GET /internal/v1/billing/entitlements/{user_id}, implementation
-# plan section 1.4) -- zero real callers today, same deferral pattern as
-# the endpoint itself.
+# plan section 1.4) -- recipe-service is now its first real caller
+# (recipe-service.tf), granted read access to this SAME single shared
+# credential ARN via a narrow inline IAM policy in recipe-service.tf
+# (billing-service's route checks against exactly one credential value,
+# so the newer per-caller cross_service_reveal_credentials mechanism does
+# NOT apply here -- see recipe-service.tf's own comment for the full
+# reasoning). This list itself is unchanged by that -- it only controls
+# which services get their OWN internal_reveal_credential secret
+# provisioned, not who may read it.
 internal_reveal_credential_service_names = ["identity-service", "billing-service"]
 
 scale_down_schedule_expression = "cron(0 20 ? * MON-FRI *)"

@@ -1,0 +1,261 @@
+{
+  "$comment": "Hand-computed reference recipes for recipe-service's recipe_nutrient_calculator.py (formula: nutrient_amount = (per_100g_value / 100) * quantity_grams, summed per recipe, divided by servings for the per-serving figure -- domain-calculation-conventions SKILL.md, /plans/recipe-service/implementation-plan.md architecture-agent anti-drift recommendation). Data only, no logic. `nutrition_per_100g` fields match catalog-service's nutrition_per_100g panel field names; `expected_per_recipe`/`expected_per_serving` fields match recipe-service's own NutrientTotals/MacroAmounts canonical vocabulary (calories_kcal/protein_g/carbs_g/fat_g for macros; the 8 micronutrient field names pass through unchanged). Shared with (not required to be adopted by) nutrition-calculation-service's own test suite.",
+  "cases": [
+    {
+      "name": "single_ingredient_full_macros_and_micros",
+      "servings": 2,
+      "ingredients": [
+        {
+          "quantity_grams": 200,
+          "nutrition_per_100g": {
+            "energy_kcal": 150,
+            "protein_g": 10,
+            "carbohydrates_g": 20,
+            "fat_g": 5,
+            "sugars_g": 8,
+            "fiber_g": 2,
+            "saturated_fat_g": 1,
+            "sodium_mg": 100,
+            "salt_g": 0.25,
+            "calcium_mg": 50,
+            "iron_mg": 1.2,
+            "vitamin_c_mg": 10
+          }
+        }
+      ],
+      "expected_per_recipe": {
+        "macros": {
+          "calories_kcal": 300,
+          "protein_g": 20,
+          "carbs_g": 40,
+          "fat_g": 10
+        },
+        "macros_status": "available",
+        "micronutrients": {
+          "sugars_g": 16,
+          "fiber_g": 4,
+          "saturated_fat_g": 2,
+          "sodium_mg": 200,
+          "salt_g": 0.5,
+          "calcium_mg": 100,
+          "iron_mg": 2.4,
+          "vitamin_c_mg": 20
+        },
+        "micronutrients_status": "available"
+      },
+      "expected_per_serving": {
+        "macros": {
+          "calories_kcal": 150,
+          "protein_g": 10,
+          "carbs_g": 20,
+          "fat_g": 5
+        },
+        "macros_status": "available",
+        "micronutrients": {
+          "sugars_g": 8,
+          "fiber_g": 2,
+          "saturated_fat_g": 1,
+          "sodium_mg": 100,
+          "salt_g": 0.25,
+          "calcium_mg": 50,
+          "iron_mg": 1.2,
+          "vitamin_c_mg": 10
+        },
+        "micronutrients_status": "available"
+      }
+    },
+    {
+      "name": "mixed_one_ingredient_missing_nutrition_panel_yields_partial_status",
+      "servings": 1,
+      "ingredients": [
+        {
+          "quantity_grams": 100,
+          "nutrition_per_100g": {
+            "energy_kcal": 200,
+            "protein_g": 8,
+            "carbohydrates_g": 25,
+            "fat_g": 6,
+            "sugars_g": 5,
+            "fiber_g": 3,
+            "saturated_fat_g": 2,
+            "sodium_mg": 50,
+            "salt_g": 0.1,
+            "calcium_mg": 20,
+            "iron_mg": 0.5,
+            "vitamin_c_mg": 5
+          }
+        },
+        {
+          "quantity_grams": 50,
+          "nutrition_per_100g": null
+        }
+      ],
+      "expected_per_recipe": {
+        "macros": {
+          "calories_kcal": 200,
+          "protein_g": 8,
+          "carbs_g": 25,
+          "fat_g": 6
+        },
+        "macros_status": "partial",
+        "micronutrients": {
+          "sugars_g": 5,
+          "fiber_g": 3,
+          "saturated_fat_g": 2,
+          "sodium_mg": 50,
+          "salt_g": 0.1,
+          "calcium_mg": 20,
+          "iron_mg": 0.5,
+          "vitamin_c_mg": 5
+        },
+        "micronutrients_status": "partial"
+      },
+      "expected_per_serving": {
+        "macros": {
+          "calories_kcal": 200,
+          "protein_g": 8,
+          "carbs_g": 25,
+          "fat_g": 6
+        },
+        "macros_status": "partial",
+        "micronutrients": {
+          "sugars_g": 5,
+          "fiber_g": 3,
+          "saturated_fat_g": 2,
+          "sodium_mg": 50,
+          "salt_g": 0.1,
+          "calcium_mg": 20,
+          "iron_mg": 0.5,
+          "vitamin_c_mg": 5
+        },
+        "micronutrients_status": "partial"
+      }
+    },
+    {
+      "name": "zero_ingredients_yields_zero_totals_never_a_division_error",
+      "servings": 1,
+      "ingredients": [],
+      "expected_per_recipe": {
+        "macros": {
+          "calories_kcal": 0,
+          "protein_g": 0,
+          "carbs_g": 0,
+          "fat_g": 0
+        },
+        "macros_status": "unavailable",
+        "micronutrients": null,
+        "micronutrients_status": "unavailable"
+      },
+      "expected_per_serving": {
+        "macros": {
+          "calories_kcal": 0,
+          "protein_g": 0,
+          "carbs_g": 0,
+          "fat_g": 0
+        },
+        "macros_status": "unavailable",
+        "micronutrients": null,
+        "micronutrients_status": "unavailable"
+      }
+    },
+    {
+      "name": "all_ingredients_missing_nutrition_panel_yields_unavailable_status",
+      "servings": 3,
+      "ingredients": [
+        {
+          "quantity_grams": 100,
+          "nutrition_per_100g": null
+        },
+        {
+          "quantity_grams": 150,
+          "nutrition_per_100g": null
+        }
+      ],
+      "expected_per_recipe": {
+        "macros": {
+          "calories_kcal": 0,
+          "protein_g": 0,
+          "carbs_g": 0,
+          "fat_g": 0
+        },
+        "macros_status": "unavailable",
+        "micronutrients": null,
+        "micronutrients_status": "unavailable"
+      },
+      "expected_per_serving": {
+        "macros": {
+          "calories_kcal": 0,
+          "protein_g": 0,
+          "carbs_g": 0,
+          "fat_g": 0
+        },
+        "macros_status": "unavailable",
+        "micronutrients": null,
+        "micronutrients_status": "unavailable"
+      }
+    },
+    {
+      "name": "single_ingredient_partially_populated_panel_preserves_per_field_nulls",
+      "servings": 1,
+      "ingredients": [
+        {
+          "quantity_grams": 100,
+          "nutrition_per_100g": {
+            "energy_kcal": 100,
+            "protein_g": 5,
+            "carbohydrates_g": 10,
+            "fat_g": 2,
+            "sugars_g": null,
+            "fiber_g": 1,
+            "saturated_fat_g": null,
+            "sodium_mg": 20,
+            "salt_g": null,
+            "calcium_mg": 10,
+            "iron_mg": null,
+            "vitamin_c_mg": 2
+          }
+        }
+      ],
+      "expected_per_recipe": {
+        "macros": {
+          "calories_kcal": 100,
+          "protein_g": 5,
+          "carbs_g": 10,
+          "fat_g": 2
+        },
+        "macros_status": "available",
+        "micronutrients": {
+          "sugars_g": null,
+          "fiber_g": 1,
+          "saturated_fat_g": null,
+          "sodium_mg": 20,
+          "salt_g": null,
+          "calcium_mg": 10,
+          "iron_mg": null,
+          "vitamin_c_mg": 2
+        },
+        "micronutrients_status": "available"
+      },
+      "expected_per_serving": {
+        "macros": {
+          "calories_kcal": 100,
+          "protein_g": 5,
+          "carbs_g": 10,
+          "fat_g": 2
+        },
+        "macros_status": "available",
+        "micronutrients": {
+          "sugars_g": null,
+          "fiber_g": 1,
+          "saturated_fat_g": null,
+          "sodium_mg": 20,
+          "salt_g": null,
+          "calcium_mg": 10,
+          "iron_mg": null,
+          "vitamin_c_mg": 2
+        },
+        "micronutrients_status": "available"
+      }
+    }
+  ]
+}

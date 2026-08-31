@@ -1,0 +1,39 @@
+# infra/k8s/charts/recipe-service/ci/synthetic-values.yaml
+#
+# Checked-in fixture used ONLY by .github/workflows/recipe-service-ci.yml's
+# helm-lint-and-template job to fill the fields Terraform normally injects
+# at deploy time (recipe-service.tf) -- ARNs/hosts/roles below are
+# syntactically valid but point at nothing real. Never use these values
+# outside CI (same pattern/rationale as every other service's own
+# ci/synthetic-values.yaml).
+
+image:
+  repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/recipe-service"
+  tag: "ci-fixture"
+
+serviceAccount:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-recipe-service-app-secrets"
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+secretsManager:
+  dbCredentials: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/recipe-service/db-credentials-XyZ123"
+  billingEntitlementCredential: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/billing-service/internal-reveal-credential-AbCdEf"
+
+dbProvision:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-recipe-service-db-provision"
+  rdsHost: "nutriapp-dev-postgres.abc123.us-east-1.rds.amazonaws.com"
+  rdsMasterSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:rds!db-abc123"
+  dbCredentialSecretArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:nutriapp/dev/recipe-service/db-credentials-XyZ123"
+  image:
+    repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/db-provision"
+    tag: "ci-fixture"

@@ -445,11 +445,58 @@ yet implemented — the owning service doesn't exist yet).
   Fit, Fitbit, or Garmin -- see `docs/vendor-risk-register.md`). Building
   this event's producer is a future, separately-planned addition.
 
-### RecipeCreated / RecipeUpdated / RecipePublished (v1)
+### RecipeCreated (v1)
+- Status: Active
 - Producer: recipe-service
-- Consumers: analytics-service, nutrition-assistant-service
-- Emitted when: a user authors, edits, or publishes a recipe (publish is
-  Pro-gated — see `SubscriptionStarted`/`EntitlementGranted` below).
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  not yet implemented — neither service exists yet; same deferral
+  pattern as `activity-service`'s `ExerciseLogged`)
+- Emitted when: a user authors a new recipe (not Pro-gated — personal
+  authoring is free, recipe-agent.md).
+- Payload: `{ "recipe_id": "uuid", "user_id": "uuid" }` — intentionally
+  thin (no ingredient/nutrient snapshot in the event itself); a consumer
+  needing the full recipe reads it back via `GET /api/v1/recipes/{recipe_id}`,
+  same "event as a notification, not a full payload dump" convention as
+  `ProductUpdated`. See `packages/shared-contracts/schemas/recipe_created.v1.json`.
+
+### RecipeUpdated (v1)
+- Status: Active
+- Producer: recipe-service
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  not yet implemented)
+- Emitted when: a user edits their own recipe (ingredients/instructions/
+  servings/title) — publishes exactly once per successful update,
+  totals are recomputed server-side, never accepted as user input.
+- Payload: `{ "recipe_id": "uuid", "user_id": "uuid" }`. See
+  `packages/shared-contracts/schemas/recipe_updated.v1.json`.
+
+### RecipePublished (v1)
+- Status: Active
+- Producer: recipe-service
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  not yet implemented)
+- Emitted when: a user publishes a recipe to cross-user search — **Pro-gated**
+  (entitlement checked cache-first, falling back to `billing-service`'s
+  synchronous endpoint on a cache miss; every ingredient re-verified to
+  still resolve against `catalog-service` at publish time — never
+  publishes incomplete data, recipe-agent.md).
+- Payload: `{ "recipe_id": "uuid", "user_id": "uuid", "published_at": "timestamp" }`.
+  See `packages/shared-contracts/schemas/recipe_published.v1.json`.
+
+### RecipeUnpublished (v1)
+- Status: Active
+- Producer: recipe-service
+- Consumers: analytics-service, nutrition-assistant-service (documented,
+  not yet implemented)
+- Emitted when: a user unpublishes or deletes a previously-published
+  recipe — removed from cross-user search, author's own record/event
+  history retained (never a hard row delete, recipe-agent.md). NOT
+  published for a recipe that was never published (a draft) or is
+  already unpublished (idempotent no-op — no duplicate event).
+- Payload: `{ "recipe_id": "uuid", "user_id": "uuid", "unpublished_at": "timestamp" }`.
+  See `packages/shared-contracts/schemas/recipe_unpublished.v1.json`.
+  New event, added by `/plans/recipe-service/implementation-plan.md`
+  section 5 — not previously documented in this file.
 
 ### UserFollowed / UserUnfollowed (v1)
 - Producer: social-service
@@ -459,11 +506,12 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionStarted (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service
-  (documented, not yet implemented — none of these three services exist
-  yet; cache the entitlement flag locally per
-  `.claude/skills/saga-conventions/SKILL.md`, same deferral pattern as
-  `activity-service`'s `ExerciseLogged`)
+- Consumers: social-service, analytics-service (documented, not yet
+  implemented — neither service exists yet). Not recipe-service --
+  recipe-service consumes only `EntitlementGranted`/`EntitlementRevoked`
+  below (the derived entitlement flag), never this service's own
+  subscription-lifecycle events directly (implementation plan section
+  1.7's cache-first design).
 - Emitted when: `checkout.session.completed` — a brand new Pro
   subscription was created via Stripe's hosted Checkout.
 - Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
@@ -488,8 +536,8 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionRenewed (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service (documented,
-  not yet implemented)
+- Consumers: social-service, analytics-service (documented, not yet
+  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
 - Emitted when: `invoice.paid` for an existing subscription — the paid
   period was extended.
 - Payload: `{ "subscription_id": "uuid", "user_id": "uuid",
@@ -499,8 +547,8 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionCancelled (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service (documented,
-  not yet implemented)
+- Consumers: social-service, analytics-service (documented, not yet
+  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
 - Emitted when: `customer.subscription.deleted`, immediately — this event
   records the cancellation as a fact that happened now; it does NOT imply
   the user has already lost access (`EntitlementRevoked` below is deferred
@@ -513,8 +561,8 @@ yet implemented — the owning service doesn't exist yet).
 ### SubscriptionPaymentFailed (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service (documented,
-  not yet implemented)
+- Consumers: social-service, analytics-service (documented, not yet
+  implemented). Not recipe-service -- see `SubscriptionStarted`'s note above.
 - Emitted when: `invoice.payment_failed`. Entitlement is NOT revoked by
   this event alone — Stripe's own dunning/retry window determines if/when
   the subscription is ultimately canceled (a later
@@ -525,11 +573,13 @@ yet implemented — the owning service doesn't exist yet).
 ### EntitlementGranted (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service (documented,
-  not yet implemented — cache the entitlement flag locally per
-  `.claude/skills/saga-conventions/SKILL.md`; a lagging consumer falls back
-  to `GET /internal/v1/billing/entitlements/{user_id}`, per the
-  `ProUpgradeEntitlementPropagation` saga)
+- Consumers: **recipe-service** (implemented -- `billing_events_consumer.py`,
+  the FIRST real consumer of this event; caches the entitlement flag
+  locally in `entitlement_cache`, checked before publish/search), plus
+  social-service, analytics-service (documented, not yet implemented --
+  neither service exists yet). A lagging/absent consumer falls back to
+  `GET /internal/v1/billing/entitlements/{user_id}`, per the
+  `ProUpgradeEntitlementPropagation` saga.
 - Emitted when: `checkout.session.completed` succeeds, immediately after
   `SubscriptionStarted`. `aggregate_id` is the `user_id` (not the
   `subscription_id`) — entitlement is a per-user derived flag, matching
@@ -539,8 +589,9 @@ yet implemented — the owning service doesn't exist yet).
 ### EntitlementRevoked (v1)
 - Status: Active
 - Producer: billing-service
-- Consumers: recipe-service, social-service, analytics-service (documented,
-  not yet implemented)
+- Consumers: **recipe-service** (implemented -- same
+  `billing_events_consumer.py`), plus social-service, analytics-service
+  (documented, not yet implemented).
 - Emitted when: a scheduled revocation row's `revoke_at` (the
   subscription's `current_period_end` at the time it was canceled) is
   actually due — never synchronously from the cancellation webhook itself.

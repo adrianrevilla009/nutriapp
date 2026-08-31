@@ -513,6 +513,62 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  recipe-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${RECIPE_POSTGRES_DB:-recipe_service}
+      POSTGRES_USER: ${RECIPE_POSTGRES_USER:-recipe_service}
+      POSTGRES_PASSWORD: ${RECIPE_POSTGRES_PASSWORD:-recipe_service}
+    ports:
+      # 5441, not 5440 -- 5440 was already claimed by billing-db above.
+      - "5441:5432"
+    volumes:
+      - recipe-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RECIPE_POSTGRES_USER:-recipe_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  recipe-service:
+    build:
+      # Build context is the repo root (not services/recipe-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/recipe-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      # 8011, not 8010 -- 8010 was already claimed by billing-service above.
+      - "8011:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      RECIPE_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RECIPE_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      RECIPE_SERVICE_IDENTITY_ISSUER: identity-service
+      RECIPE_SERVICE_CATALOG_SERVICE_BASE_URL: http://catalog-service:8000
+      RECIPE_SERVICE_BILLING_SERVICE_BASE_URL: http://billing-service:8000
+      # Local-dev-only value for the outbound entitlement-check call's
+      # X-Internal-Service-Credential header (composition_root.py's
+      # Settings docstring) -- must match billing-service's own
+      # BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL for local dev to work
+      # end-to-end; production value comes from Secrets Manager, reading
+      # billing-service's own single shared internal_reveal_credential
+      # (billing-service's entitlement route validates this one scalar
+      # value via hmac.compare_digest -- not the per-caller
+      # cross_service_reveal_credentials mechanism, since that would mint
+      # a distinct value billing-service's check would simply reject; see
+      # recipe-service.tf's header comment).
+      RECIPE_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL: dev-billing-internal-entitlement-credential-change-me
+    depends_on:
+      recipe-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -523,3 +579,4 @@ volumes:
   notification-db-data:
   activity-db-data:
   billing-db-data:
+  recipe-db-data:

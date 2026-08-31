@@ -1,0 +1,6 @@
+dependencies:
+- name: nutriapp-lib
+  repository: file://../_lib
+  version: 0.1.0
+digest: sha256:0d78b1136951713e2b06dcc00139d153dba287854de1e4be73f8bcdd990d6cc2
+generated: "2026-08-30T22:57:47.159839354+02:00"

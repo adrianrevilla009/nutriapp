@@ -101,7 +101,8 @@ of every consumer calling it synchronously on every request.*
   propagated through `SubscriptionStarted`/`EntitlementGranted` and every
   consumer's processing, so a support investigation ("why can't this user
   publish a recipe") can trace the full fan-out in one trace.
-- **Implementation status** (`/plans/billing-service/implementation-plan.md`):
+- **Implementation status** (`/plans/billing-service/implementation-plan.md`,
+  `/plans/recipe-service/implementation-plan.md`):
   `billing-service`'s own side of this saga is built —
   webhook-signature-verified, idempotent (dedupes by Stripe's own event
   `id`) `checkout.session.completed`/`invoice.paid`/
@@ -112,13 +113,22 @@ of every consumer calling it synchronously on every request.*
   `docs/events-catalog.md`), the deferred-revocation scheduling mechanism
   (`entitlement_revocation_schedule` + `revocation_scan_worker.py`), and
   the synchronous fallback endpoint
-  (`GET /internal/v1/billing/entitlements/{user_id}`). Step 2 — the three
-  consumers (`recipe-service`, `social-service`, `analytics-service`)
-  actually subscribing to these events and calling the fallback endpoint —
-  remains pending: none of those three services exist yet, same deferral
-  pattern as `activity-service`'s `ExerciseLogged` consumers. This saga's
-  choreography is only fully exercised once at least one of those three
-  services is built.
+  (`GET /internal/v1/billing/entitlements/{user_id}`). Step 2 is now
+  PARTIALLY built: `recipe-service` is the FIRST of the three documented
+  consumers to actually implement its side of the fan-out --
+  `billing_events_consumer.py` subscribes to `billing.events` (routing
+  key `billing.entitlement.*`), idempotently (by `event_id`) upserting
+  its local `entitlement_cache` table, checked cache-first by
+  `PublishRecipeHandler`/`SearchPublishedRecipesHandler` before falling
+  back to the synchronous endpoint on a genuine cache miss (own
+  `billing_entitlement_check` circuit breaker, never sharing state with
+  the separate `catalog_product_lookup` breaker used for ingredient
+  resolution). `social-service`/`analytics-service` remain pending: neither
+  service exists yet, same deferral pattern as `activity-service`'s
+  `ExerciseLogged` consumers. This saga's choreography is now fully
+  exercised end-to-end for its one real consumer (`recipe-service`); the
+  remaining two consumers will exercise the same already-proven pattern
+  once built.
 
 ---
 

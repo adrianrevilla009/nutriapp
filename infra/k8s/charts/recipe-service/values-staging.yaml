@@ -1,0 +1,19 @@
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+
+secretsManager:
+  dbCredentials: nutriapp/staging/recipe-service/db-credentials
+  # billing-service's OWN single shared internal-reveal credential path --
+  # NOT a recipe-service-owned secret (see recipe-service.tf's comment:
+  # billing-service's internal entitlement route checks against exactly
+  # one credential value, so recipe-service reads that same secret rather
+  # than minting a new per-caller one).
+  billingEntitlementCredential: nutriapp/staging/billing-service/internal-reveal-credential
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/staging/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/staging/recipe-service/db-credentials
