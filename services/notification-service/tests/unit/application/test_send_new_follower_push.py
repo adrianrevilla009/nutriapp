@@ -237,4 +237,3 @@ async def test_not_in_quiet_hours_still_dispatches_immediately():
     assert delivery_log.records[-1].status.value == "sent"
     assert pending.added == []
     assert await processed.already_processed(command.event_id, "push") is True
-
