@@ -106,11 +106,21 @@ variable "db_credential_service_names" {
     "food-recognition-service",
     "activity-service",
     "billing-service",
+    # "recipe-service" was missing here despite recipe-service.tf already
+    # referencing module.secrets.db_credential_secret_arns["recipe-service"]
+    # -- a pre-existing drift discovered while adding social-service.tf's
+    # own reference (both services follow the identical pattern). Added
+    # here rather than left broken, since it is a one-line, purely
+    # additive registration with no other side effect -- flagged in the
+    # social-service implementation report for reviewer-agent/
+    # architecture-agent visibility, not silently folded in.
+    "recipe-service",
+    "social-service",
   ]
 }
 
 variable "internal_reveal_credential_service_names" {
-  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- zero real callers today (recipe-service/social-service/analytics-service don't exist yet), same deferral pattern as the endpoint itself."
+  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- real callers now exist (recipe-service.tf, social-service.tf), each granted narrow IAM read access to this SAME credential ARN via their own inline policy, not a new entry in this list (this list is for the credential OWNER, not its callers). analytics-service remains a documented-not-yet-implemented future caller."
   type        = list(string)
   default     = ["identity-service", "billing-service"]
 }
