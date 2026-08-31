@@ -1,0 +1,26 @@
+{
+  "product_id": "11111111-1111-1111-1111-111111111111",
+  "barcode": "4006381333931",
+  "name": "Rolled Oats",
+  "brand": "Test Brand",
+  "category": "grains",
+  "nutrition_per_100g": {
+    "energy_kcal": 389.0,
+    "protein_g": 16.9,
+    "carbohydrates_g": 66.3,
+    "fat_g": 6.9,
+    "sugars_g": 0.99,
+    "fiber_g": 10.6,
+    "saturated_fat_g": 1.2,
+    "sodium_mg": 2.0,
+    "salt_g": 0.005,
+    "calcium_mg": 54.0,
+    "iron_mg": 4.7,
+    "vitamin_c_mg": 0.0
+  },
+  "dietary_tags": ["vegan"],
+  "allergen_tags": ["gluten"],
+  "package_size": { "value": 500.0, "unit": "g" },
+  "price": { "amount": 2.5, "currency": "EUR" },
+  "sources": ["open_food_facts"]
+}

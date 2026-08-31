@@ -1,0 +1,10 @@
+apiVersion: v2
+name: recipe-service
+description: NutriApp recipe-service -- user recipe authoring, computed macro/micro totals, Pro-gated publishing and cross-user recipe search (CLAUDE.md section 2.2).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"
