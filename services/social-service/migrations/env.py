@@ -17,8 +17,12 @@ target_metadata = Base.metadata
 
 database_url = os.environ.get("SOCIAL_SERVICE_DATABASE_URL")
 if database_url:
-    sync_database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
-    config.set_main_option("sqlalchemy.url", sync_database_url)
+    # Alembic drives migrations through a synchronous engine, while the
+    # app itself talks to Postgres over asyncpg (composition_root.py) --
+    # swap the driver segment only, host/db/credentials stay untouched.
+    config.set_main_option(
+        "sqlalchemy.url", database_url.replace("postgresql+asyncpg://", "postgresql://")
+    )
 
 
 def run_migrations_offline() -> None:
@@ -34,9 +38,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    empty_section: dict[str, str] = {}
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, empty_section),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

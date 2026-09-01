@@ -55,6 +55,9 @@ class EntitlementCacheModel(Base):
 
 
 class ProcessedEntitlementEventModel(Base):
+    """Idempotency ledger for `BillingEventsConsumer` -- see that
+    consumer's own docstring for why it's keyed by `event_id` alone."""
+
     __tablename__ = "processed_entitlement_events"
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -62,6 +65,10 @@ class ProcessedEntitlementEventModel(Base):
 
 
 class ProcessedRecipeEventModel(Base):
+    """Idempotency ledger for `RecipeEventsConsumer` -- a separate table
+    from `processed_entitlement_events` by design (two independent
+    consumers, two independent ledgers, implementation plan section 3)."""
+
     __tablename__ = "processed_recipe_events"
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -69,12 +76,17 @@ class ProcessedRecipeEventModel(Base):
 
 
 class OutboxModel(Base):
+    """Backs `PostgresOutboxRepository` -- one row per `UserFollowed`/
+    `UserUnfollowed` waiting for (or already relayed by)
+    `OutboxRelayWorker`. `published_at IS NULL` is exactly the
+    "still pending relay" predicate the worker polls on."""
+
     __tablename__ = "outbox"
 
     event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    aggregate_id: Mapped[str] = mapped_column(String(64), nullable=False)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[int] = mapped_column(nullable=False)
-    aggregate_id: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     event_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(nullable=False)

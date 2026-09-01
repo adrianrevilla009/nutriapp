@@ -24,6 +24,18 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _create_event_ledger_table(table_name: str) -> None:
+    """Shape shared by both idempotency ledgers below -- a bare
+    `event_id` primary key plus `processed_at`, no foreign key, since each
+    consumer's idempotency contract keys purely off the inbound
+    `event_id`."""
+    op.create_table(
+        table_name,
+        sa.Column("event_id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("processed_at", sa.DateTime(timezone=True), nullable=False),
+    )
+
+
 def upgrade() -> None:
     op.create_table(
         "follows",
@@ -52,24 +64,15 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
-    op.create_table(
-        "processed_entitlement_events",
-        sa.Column("event_id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("processed_at", sa.DateTime(timezone=True), nullable=False),
-    )
-
-    op.create_table(
-        "processed_recipe_events",
-        sa.Column("event_id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("processed_at", sa.DateTime(timezone=True), nullable=False),
-    )
+    _create_event_ledger_table("processed_entitlement_events")
+    _create_event_ledger_table("processed_recipe_events")
 
     op.create_table(
         "outbox",
         sa.Column("event_id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column("aggregate_id", sa.String(64), nullable=False),
         sa.Column("event_type", sa.String(128), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("aggregate_id", sa.String(64), nullable=False),
         sa.Column("payload", postgresql.JSONB(), nullable=False),
         sa.Column("metadata", postgresql.JSONB(), nullable=False),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),

@@ -1,9 +1,10 @@
-"""PostgresEntitlementCacheRepository -- implements
-EntitlementCacheRepositoryPort. `get()` returns `None` for a genuine
-cache-miss (no row yet), distinguishable from an explicit `False` row --
-this is what lets the application layer decide when to fall back to the
-synchronous `EntitlementCheckPort`. Mirrors recipe-service's identical
-adapter verbatim."""
+"""social-service's local read-through cache of billing-service's
+entitlement flag. The one thing that matters for callers
+(`application/entitlement_check.py`): `get()` returns `None` for a
+genuine cache-miss (no row written yet), which is distinguishable from an
+explicit, previously-cached `False` -- that distinction is exactly what
+lets `is_user_entitled` decide whether it needs to fall back to the
+synchronous `EntitlementCheckPort` at all."""
 
 from __future__ import annotations
 
@@ -23,13 +24,16 @@ class PostgresEntitlementCacheRepository:
 
     async def get(self, user_id: uuid.UUID) -> bool | None:
         row = await self._session.get(EntitlementCacheModel, user_id)
-        return row.entitled if row is not None else None
+        if row is None:
+            return None
+        return row.entitled
 
     async def upsert(self, user_id: uuid.UUID, entitled: bool, updated_at: datetime) -> None:
         row = await self._session.get(EntitlementCacheModel, user_id)
         if row is None:
             row = EntitlementCacheModel(user_id=user_id)
             self._session.add(row)
+
         row.entitled = entitled
         row.updated_at = updated_at
         await self._session.flush()

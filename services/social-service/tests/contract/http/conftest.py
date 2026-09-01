@@ -29,6 +29,7 @@ from infrastructure.http.routes.follow_routes import router as follow_router
 from tests.fixtures.factories import FakeEntitlementCheckPort
 
 _TEST_PRIVATE_KEY = generate_test_rsa_key_pair()
+_CONTRACT_ROUTERS = (follow_router, feed_router, health_router)
 
 
 class _FakeContainer:
@@ -37,14 +38,10 @@ class _FakeContainer:
         self.jwt_verifier = build_test_jwt_verifier(_TEST_PRIVATE_KEY)
 
 
-@pytest.fixture
-async def app_client(db_engine: AsyncEngine):
+def _build_app(container: _FakeContainer, db_engine: AsyncEngine) -> FastAPI:
     app = FastAPI()
-    app.include_router(follow_router)
-    app.include_router(feed_router)
-    app.include_router(health_router)
-
-    container = _FakeContainer()
+    for router in _CONTRACT_ROUTERS:
+        app.include_router(router)
     app.state.container = container
 
     async def override_get_session():
@@ -53,6 +50,13 @@ async def app_client(db_engine: AsyncEngine):
 
     app.dependency_overrides[deps.get_session] = override_get_session
     app.dependency_overrides[deps.get_container] = lambda: container
+    return app
+
+
+@pytest.fixture
+async def app_client(db_engine: AsyncEngine):
+    container = _FakeContainer()
+    app = _build_app(container, db_engine)
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -61,6 +65,4 @@ async def app_client(db_engine: AsyncEngine):
 
 def auth_headers(user_id: uuid.UUID) -> dict:
     token = build_signed_token(_TEST_PRIVATE_KEY, user_id)
-    headers: dict[str, str] = {}
-    headers["Authorization"] = f"Bearer {token}"
-    return headers
+    return {"Authorization": f"Bearer {token}"}

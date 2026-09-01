@@ -1,7 +1,15 @@
+"""HandleEntitlementGrantedHandler -- unit tests against fake ports
+(hexagonal-architecture SKILL.md). The idempotency case is parametrized
+over how many times the SAME event is replayed, rather than hard-coding
+"exactly twice", so the property under test is genuinely "at most one
+cache write no matter how many redeliveries" (test-plan section 1)."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+
+import pytest
 
 from application.commands.handle_entitlement_granted import (
     HandleEntitlementGrantedCommand,
@@ -12,33 +20,40 @@ from tests.fixtures.factories import (
     FakeProcessedEntitlementEventsRepository,
 )
 
-NOW = datetime(2026, 6, 1, tzinfo=timezone.utc)
+GRANTED_AT = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+
+def _build_handler() -> tuple[
+    HandleEntitlementGrantedHandler,
+    FakeEntitlementCacheRepository,
+    FakeProcessedEntitlementEventsRepository,
+]:
+    cache = FakeEntitlementCacheRepository()
+    processed = FakeProcessedEntitlementEventsRepository()
+    return HandleEntitlementGrantedHandler(processed, cache), cache, processed
 
 
 async def test_valid_event_upserts_cache_entitled_true_and_marks_processed():
-    cache = FakeEntitlementCacheRepository()
-    processed = FakeProcessedEntitlementEventsRepository()
-    handler = HandleEntitlementGrantedHandler(processed, cache)
-    user_id = uuid.uuid4()
-    event_id = uuid.uuid4()
+    handler, cache, processed = _build_handler()
+    user_id, event_id = uuid.uuid4(), uuid.uuid4()
 
     await handler.handle(
-        HandleEntitlementGrantedCommand(event_id=event_id, user_id=user_id, granted_at=NOW)
+        HandleEntitlementGrantedCommand(event_id=event_id, user_id=user_id, granted_at=GRANTED_AT)
     )
 
     assert cache.by_user[user_id] is True
     assert await processed.is_processed(event_id) is True
 
 
-async def test_same_event_id_processed_twice_writes_cache_exactly_once():
-    cache = FakeEntitlementCacheRepository()
-    processed = FakeProcessedEntitlementEventsRepository()
-    handler = HandleEntitlementGrantedHandler(processed, cache)
-    user_id = uuid.uuid4()
-    event_id = uuid.uuid4()
-    command = HandleEntitlementGrantedCommand(event_id=event_id, user_id=user_id, granted_at=NOW)
+@pytest.mark.parametrize("delivery_count", [1, 2, 5])
+async def test_replaying_the_same_event_id_writes_cache_at_most_once(delivery_count: int):
+    handler, cache, _processed = _build_handler()
+    user_id, event_id = uuid.uuid4(), uuid.uuid4()
+    command = HandleEntitlementGrantedCommand(
+        event_id=event_id, user_id=user_id, granted_at=GRANTED_AT
+    )
 
-    await handler.handle(command)
-    await handler.handle(command)
+    for _ in range(delivery_count):
+        await handler.handle(command)
 
     assert cache.upsert_calls == 1

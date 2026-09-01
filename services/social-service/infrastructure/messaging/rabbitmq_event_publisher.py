@@ -1,8 +1,8 @@
-"""RabbitMqEventPublisher -- implements EventPublisherPort.
-
-Naming convention (messaging-conventions SKILL.md):
-`{producing_service}.{aggregate}.{event_type_snake_case}`, published to a
-topic exchange per producing service (`social.events`)."""
+"""RabbitMqEventPublisher -- social-service's `EventPublisherPort` adapter,
+the far end of the outbox relay. Publishes to this service's own topic
+exchange (`social.events`), one routing key per event type following the
+repo-wide `{producing_service}.{aggregate}.{event_type_snake_case}`
+convention (messaging-conventions SKILL.md)."""
 
 from __future__ import annotations
 
@@ -18,10 +18,14 @@ _ROUTING_KEYS: dict[str, str] = {
     "UserFollowed": "social.follow.followed",
     "UserUnfollowed": "social.follow.unfollowed",
 }
+_FALLBACK_ROUTING_KEY_TEMPLATE = "social.follow.{event_type}"
 
 
 def routing_key_for(event_type: str) -> str:
-    return _ROUTING_KEYS.get(event_type, f"social.follow.{event_type.lower()}")
+    known = _ROUTING_KEYS.get(event_type)
+    if known is not None:
+        return known
+    return _FALLBACK_ROUTING_KEY_TEMPLATE.format(event_type=event_type.lower())
 
 
 class RabbitMqEventPublisher:
@@ -40,12 +44,16 @@ class RabbitMqEventPublisher:
         )
         return cls(exchange)
 
-    async def publish(self, event: DomainEvent) -> None:
-        body = json.dumps(event.to_wire()).encode("utf-8")
-        message = aio_pika.Message(
-            body=body,
+    @staticmethod
+    def _to_message(event: DomainEvent) -> aio_pika.Message:
+        return aio_pika.Message(
+            body=json.dumps(event.to_wire()).encode("utf-8"),
             content_type="application/json",
             message_id=str(event.event_id),
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
         )
-        await self._exchange.publish(message, routing_key=routing_key_for(event.event_type))
+
+    async def publish(self, event: DomainEvent) -> None:
+        await self._exchange.publish(
+            self._to_message(event), routing_key=routing_key_for(event.event_type)
+        )

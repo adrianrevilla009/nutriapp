@@ -92,8 +92,13 @@ class FakeFeedRepository:
 
 
 class FakeEntitlementCacheRepository:
+    """In-memory `EntitlementCacheRepositoryPort` -- `seed` pre-populates
+    `by_user` so a test can start from either a cache-hit or a genuine
+    cache-miss (`get()` on an absent key returns `None`, matching the
+    real Postgres adapter's contract)."""
+
     def __init__(self, seed: dict[uuid.UUID, bool] | None = None) -> None:
-        self.by_user: dict[uuid.UUID, bool] = dict(seed or {})
+        self.by_user: dict[uuid.UUID, bool] = dict(seed) if seed else {}
         self.upsert_calls = 0
 
     async def get(self, user_id: uuid.UUID) -> bool | None:
@@ -105,6 +110,10 @@ class FakeEntitlementCacheRepository:
 
 
 class FakeEntitlementCheckPort:
+    """In-memory `EntitlementCheckPort` -- set `raise_unavailable=True` to
+    exercise the fail-safe (not-entitled) path a real circuit-open/
+    transport failure would trigger."""
+
     def __init__(self, result: bool = False, raise_unavailable: bool = False) -> None:
         self.result = result
         self.raise_unavailable = raise_unavailable
@@ -118,6 +127,10 @@ class FakeEntitlementCheckPort:
 
 
 class FakeOutboxRepository:
+    """In-memory `OutboxRepositoryPort` -- tracks which enqueued events
+    have since been marked published, so `fetch_unpublished` can filter
+    them out the same way the real Postgres query does."""
+
     def __init__(self) -> None:
         self.enqueued: list[DomainEvent] = []
         self.published_ids: set[uuid.UUID] = set()
@@ -126,13 +139,21 @@ class FakeOutboxRepository:
         self.enqueued.append(event)
 
     async def fetch_unpublished(self, limit: int = 100) -> list[DomainEvent]:
-        return [e for e in self.enqueued if e.event_id not in self.published_ids][:limit]
+        still_pending = [e for e in self.enqueued if e.event_id not in self.published_ids]
+        return still_pending[:limit]
 
     async def mark_published(self, event_id: uuid.UUID) -> None:
         self.published_ids.add(event_id)
 
 
-class FakeProcessedEntitlementEventsRepository:
+class _FakeEventIdLedger:
+    """In-memory idempotency ledger shape shared by both
+    `ProcessedEntitlementEventsRepositoryPort` and
+    `ProcessedRecipeEventsRepositoryPort` -- the two real ports are
+    structurally identical (`is_processed`/`mark_processed` keyed by
+    `event_id` alone), so one fake implementation backs both aliases
+    below instead of two hand-duplicated nine-line classes."""
+
     def __init__(self) -> None:
         self.processed: set[uuid.UUID] = set()
 
@@ -143,12 +164,5 @@ class FakeProcessedEntitlementEventsRepository:
         self.processed.add(event_id)
 
 
-class FakeProcessedRecipeEventsRepository:
-    def __init__(self) -> None:
-        self.processed: set[uuid.UUID] = set()
-
-    async def is_processed(self, event_id: uuid.UUID) -> bool:
-        return event_id in self.processed
-
-    async def mark_processed(self, event_id: uuid.UUID) -> None:
-        self.processed.add(event_id)
+FakeProcessedEntitlementEventsRepository = _FakeEventIdLedger
+FakeProcessedRecipeEventsRepository = _FakeEventIdLedger

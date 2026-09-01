@@ -107,31 +107,41 @@ class Container:
         self._outbox_relay_worker: OutboxRelayWorker | None = None
         self._background_tasks: list[asyncio.Task[None]] = []
 
+    async def _start_consumer(self, consumer: BillingEventsConsumer | RecipeEventsConsumer) -> None:
+        assert self._rabbitmq_connection is not None
+        await consumer.setup(self._rabbitmq_connection)
+        await consumer.consume()
+
     async def startup(self) -> None:
         self._rabbitmq_connection = await aio_pika.connect_robust(self.settings.rabbitmq_url)
         self._event_publisher = await RabbitMqEventPublisher.create(self._rabbitmq_connection)
 
         self._billing_events_consumer = BillingEventsConsumer(self.session_factory)
-        await self._billing_events_consumer.setup(self._rabbitmq_connection)
-        await self._billing_events_consumer.consume()
+        await self._start_consumer(self._billing_events_consumer)
 
         self._recipe_events_consumer = RecipeEventsConsumer(self.session_factory)
-        await self._recipe_events_consumer.setup(self._rabbitmq_connection)
-        await self._recipe_events_consumer.consume()
+        await self._start_consumer(self._recipe_events_consumer)
 
         self._outbox_relay_worker = OutboxRelayWorker(self.session_factory, self._event_publisher)
         self._background_tasks.append(asyncio.create_task(self._outbox_relay_worker.run_forever()))
 
-    async def shutdown(self) -> None:
+    async def _cancel_background_tasks(self) -> None:
+        if not self._background_tasks:
+            return
+
         for task in self._background_tasks:
             task.cancel()
-        if self._background_tasks:
-            results = await asyncio.gather(*self._background_tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, BaseException) and not isinstance(
-                    result, asyncio.CancelledError
-                ):
-                    logger.exception("background_task_shutdown_error", exc_info=result)
+
+        outcomes = await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        for outcome in outcomes:
+            is_unexpected_failure = isinstance(outcome, BaseException) and not isinstance(
+                outcome, asyncio.CancelledError
+            )
+            if is_unexpected_failure:
+                logger.exception("background_task_shutdown_error", exc_info=outcome)
+
+    async def shutdown(self) -> None:
+        await self._cancel_background_tasks()
         if self._rabbitmq_connection is not None:
             await self._rabbitmq_connection.close()
         await self.entitlement_check.aclose()

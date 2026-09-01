@@ -29,6 +29,9 @@ class HandleEntitlementRevokedCommand:
     revoked_at: datetime
 
 
+_REVOKED_ENTITLED_VALUE = False
+
+
 class HandleEntitlementRevokedHandler:
     def __init__(
         self,
@@ -39,7 +42,11 @@ class HandleEntitlementRevokedHandler:
         self._entitlement_cache = entitlement_cache
 
     async def handle(self, command: HandleEntitlementRevokedCommand) -> None:
-        if await self._processed_events.is_processed(command.event_id):
+        already_applied = await self._processed_events.is_processed(command.event_id)
+        if already_applied:
             return
-        await self._entitlement_cache.upsert(command.user_id, False, command.revoked_at)
+
+        await self._entitlement_cache.upsert(
+            command.user_id, _REVOKED_ENTITLED_VALUE, command.revoked_at
+        )
         await self._processed_events.mark_processed(command.event_id)

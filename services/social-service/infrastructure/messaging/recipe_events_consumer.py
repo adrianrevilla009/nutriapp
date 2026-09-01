@@ -12,19 +12,20 @@ recipe event type (`RecipeCreated`/`RecipeUpdated`) is acknowledged and
 ignored -- this service only cares about published/unpublished state,
 never draft authoring.
 
-Failure handling identical to `billing_events_consumer.py` -- retried up
-to `MAX_DELIVERY_ATTEMPTS` then dead-lettered, never dropped silently."""
+Queue setup and retry-then-dead-letter mechanics are shared with
+`billing_events_consumer.py` via `resilient_topic_consumer.py`; unlike
+that consumer's if/elif dispatch, this one routes through a small
+per-event-type builder table (`_EVENT_BUILDERS`) since RecipePublished
+and RecipeUnpublished construct their commands from disjoint payload
+shapes."""
 
 from __future__ import annotations
 
-import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 
-import aio_pika
-import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.commands.handle_recipe_published import (
@@ -35,127 +36,87 @@ from application.commands.handle_recipe_unpublished import (
     HandleRecipeUnpublishedCommand,
     HandleRecipeUnpublishedHandler,
 )
+from infrastructure.messaging.resilient_topic_consumer import ResilientTopicConsumer
 from infrastructure.persistence.postgres_feed_repository import PostgresFeedRepository
 from infrastructure.persistence.postgres_processed_recipe_events_repository import (
     PostgresProcessedRecipeEventsRepository,
 )
-
-logger = structlog.get_logger()
 
 EXCHANGE_NAME = "recipe.events"
 BINDING_ROUTING_KEY = "recipe.recipe.*"
 QUEUE_NAME = "social-service.recipe_events"
 DLQ_NAME = "social-service.recipe_events.dlq"
 RETRY_HEADER = "x-social-service-recipe-retry-count"
-MAX_DELIVERY_ATTEMPTS = 5
 
-_HANDLED_EVENT_TYPES = {"RecipePublished", "RecipeUnpublished"}
+
+async def _apply_recipe_published(
+    processed_events: PostgresProcessedRecipeEventsRepository,
+    feed: PostgresFeedRepository,
+    event_id: uuid.UUID,
+    payload: dict[str, Any],
+) -> None:
+    await HandleRecipePublishedHandler(processed_events, feed).handle(
+        HandleRecipePublishedCommand(
+            event_id=event_id,
+            recipe_id=uuid.UUID(str(payload["recipe_id"])),
+            author_id=uuid.UUID(str(payload["user_id"])),
+            # Known gap -- RecipePublished (v1) does not carry a title
+            # today; see domain/value_objects/feed_entry.py's docstring.
+            title=payload.get("title"),
+            published_at=datetime.fromisoformat(payload["published_at"]),
+        )
+    )
+
+
+async def _apply_recipe_unpublished(
+    processed_events: PostgresProcessedRecipeEventsRepository,
+    feed: PostgresFeedRepository,
+    event_id: uuid.UUID,
+    payload: dict[str, Any],
+) -> None:
+    await HandleRecipeUnpublishedHandler(processed_events, feed).handle(
+        HandleRecipeUnpublishedCommand(
+            event_id=event_id,
+            recipe_id=uuid.UUID(str(payload["recipe_id"])),
+        )
+    )
+
+
+_EventApplier = Callable[
+    [PostgresProcessedRecipeEventsRepository, PostgresFeedRepository, uuid.UUID, dict[str, Any]],
+    Awaitable[None],
+]
+
+_EVENT_BUILDERS: dict[str, _EventApplier] = {
+    "RecipePublished": _apply_recipe_published,
+    "RecipeUnpublished": _apply_recipe_unpublished,
+}
 
 
 async def dispatch_recipe_event(
     session: AsyncSession, event_type: str, event_id: uuid.UUID, payload: dict[str, Any]
 ) -> None:
-    """Shared dispatch helper -- mirrors billing_events_consumer.py's
-    `dispatch_billing_event` precedent."""
-    if event_type not in _HANDLED_EVENT_TYPES:
+    """Standalone on purpose -- see `billing_events_consumer.dispatch_billing_event`
+    for why this stays reusable outside of a live consumer instance."""
+    apply_event = _EVENT_BUILDERS.get(event_type)
+    if apply_event is None:
         return
 
     processed_events = PostgresProcessedRecipeEventsRepository(session)
     feed = PostgresFeedRepository(session)
-
-    if event_type == "RecipePublished":
-        published_handler = HandleRecipePublishedHandler(processed_events, feed)
-        await published_handler.handle(
-            HandleRecipePublishedCommand(
-                event_id=event_id,
-                recipe_id=uuid.UUID(str(payload["recipe_id"])),
-                author_id=uuid.UUID(str(payload["user_id"])),
-                # Known gap -- RecipePublished (v1) does not carry a title
-                # today; see domain/value_objects/feed_entry.py's docstring.
-                title=payload.get("title"),
-                published_at=datetime.fromisoformat(payload["published_at"]),
-            )
-        )
-    elif event_type == "RecipeUnpublished":
-        unpublished_handler = HandleRecipeUnpublishedHandler(processed_events, feed)
-        await unpublished_handler.handle(
-            HandleRecipeUnpublishedCommand(
-                event_id=event_id,
-                recipe_id=uuid.UUID(str(payload["recipe_id"])),
-            )
-        )
+    await apply_event(processed_events, feed, event_id, payload)
 
 
-class RecipeEventsConsumer:
-    def __init__(
-        self, session_factory: Callable[[], AsyncSession], max_attempts: int = MAX_DELIVERY_ATTEMPTS
+class RecipeEventsConsumer(ResilientTopicConsumer):
+    exchange_name = EXCHANGE_NAME
+    binding_routing_key = BINDING_ROUTING_KEY
+    queue_name = QUEUE_NAME
+    dlq_name = DLQ_NAME
+    retry_header = RETRY_HEADER
+    processing_failed_log_event = "recipe_event_processing_failed"
+    dead_lettered_log_event = "recipe_event_dead_lettered"
+
+    async def dispatch(
+        self, session: AsyncSession, event_type: str, event_id: uuid.UUID, payload: dict[str, Any]
     ) -> None:
-        self._session_factory = session_factory
-        self._max_attempts = max_attempts
-        self._channel: aio_pika.abc.AbstractChannel | None = None
-        self._queue: aio_pika.abc.AbstractQueue | None = None
-
-    async def setup(
-        self, connection: aio_pika.abc.AbstractRobustConnection
-    ) -> aio_pika.abc.AbstractQueue:
-        channel = await connection.channel()
-        await channel.set_qos(prefetch_count=20)
-        exchange = await channel.declare_exchange(
-            EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
-        )
-        await channel.declare_queue(DLQ_NAME, durable=True)
-        queue = await channel.declare_queue(QUEUE_NAME, durable=True)
-        await queue.bind(exchange, routing_key=BINDING_ROUTING_KEY)
-
-        self._channel = channel
-        self._queue = queue
-        return queue
-
-    async def consume(self) -> None:
-        assert self._queue is not None, "call setup() first"
-        await self._queue.consume(self.on_message, no_ack=False)
-
-    async def on_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
-        try:
-            await self.process_body(json.loads(message.body.decode("utf-8")))
-            await message.ack()
-        except Exception:
-            logger.exception("recipe_event_processing_failed", message_id=message.message_id)
-            await self._retry_or_dead_letter(message)
-
-    async def process_body(self, body: dict[str, Any]) -> None:
-        """Public so integration tests can exercise processing without a
-        real broker connection."""
-        event_type = body["event_type"]
-        event_id = uuid.UUID(body["event_id"])
-        payload = body["payload"]
-
-        async with self._session_factory() as session:
-            await dispatch_recipe_event(session, event_type, event_id, payload)
-            await session.commit()
-
-    async def _retry_or_dead_letter(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
-        assert self._channel is not None
-        headers = dict(message.headers or {})
-        attempt = int(headers.get(RETRY_HEADER, 0)) + 1  # type: ignore[arg-type]
-
-        if attempt > self._max_attempts:
-            target_queue_name = DLQ_NAME
-            logger.error(
-                "recipe_event_dead_lettered", message_id=message.message_id, attempts=attempt
-            )
-        else:
-            target_queue_name = QUEUE_NAME
-            headers[RETRY_HEADER] = attempt
-
-        await self._channel.default_exchange.publish(
-            aio_pika.Message(
-                body=message.body,
-                headers=headers,
-                content_type=message.content_type,
-                message_id=message.message_id,
-                delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
-            ),
-            routing_key=target_queue_name,
-        )
-        await message.ack()
+        await dispatch_recipe_event(session, event_type, event_id, payload)

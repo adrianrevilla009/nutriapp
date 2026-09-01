@@ -19,6 +19,10 @@ from infrastructure.external.billing_entitlement_client import BillingEntitlemen
 USER_ID = uuid.uuid4()
 FIXTURES_DIR = Path(__file__).parents[2] / "fixtures" / "billing_responses"
 
+_DEFAULT_TEST_FAIL_MAX = 3
+_DEFAULT_TEST_RESET_TIMEOUT_SECONDS = 0.2
+_DEFAULT_TEST_CREDENTIAL = "test-credential"
+
 
 def _load_fixture(name: str) -> dict:
     return json.loads((FIXTURES_DIR / name).read_text())
@@ -26,23 +30,24 @@ def _load_fixture(name: str) -> dict:
 
 def _client_with_transport(
     handler,
-    fail_max: int = 3,
-    reset_timeout_seconds: float = 0.2,
-    credential: str = "test-credential",
-):
-    transport = httpx.MockTransport(handler)
-    http_client = httpx.AsyncClient(transport=transport, base_url="http://billing-service")
+    *,
+    fail_max: int = _DEFAULT_TEST_FAIL_MAX,
+    reset_timeout_seconds: float = _DEFAULT_TEST_RESET_TIMEOUT_SECONDS,
+    credential: str = _DEFAULT_TEST_CREDENTIAL,
+) -> BillingEntitlementClient:
     return BillingEntitlementClient(
         base_url="http://billing-service",
         credential=credential,
-        http_client=http_client,
+        http_client=httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), base_url="http://billing-service"
+        ),
         fail_max=fail_max,
         reset_timeout_seconds=reset_timeout_seconds,
     )
 
 
-async def test_entitled_user_returns_true_and_sends_credential_header():
-    received_headers = {}
+async def test_entitled_user_sends_credential_header():
+    received_headers: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         received_headers.update(request.headers)
@@ -50,79 +55,68 @@ async def test_entitled_user_returns_true_and_sends_credential_header():
         return httpx.Response(200, json={"user_id": str(USER_ID), "entitled": True})
 
     client = _client_with_transport(handler)
-    result = await client.check_entitlement(USER_ID)
+    await client.check_entitlement(USER_ID)
 
-    assert result is True
     assert received_headers.get("x-internal-service-credential") == "test-credential"
     await client.aclose()
 
 
-async def test_unentitled_user_returns_false():
+@pytest.mark.parametrize(
+    "response_body,expected_entitled",
+    [
+        pytest.param({"user_id": str(USER_ID), "entitled": True}, True, id="inline-entitled"),
+        pytest.param({"user_id": str(USER_ID), "entitled": False}, False, id="inline-unentitled"),
+        pytest.param(_load_fixture("entitled_true.json"), True, id="fixture-entitled"),
+        pytest.param(_load_fixture("entitled_false.json"), False, id="fixture-unentitled"),
+    ],
+)
+async def test_check_entitlement_reflects_billing_service_response(
+    response_body: dict, expected_entitled: bool
+):
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"user_id": str(USER_ID), "entitled": False})
+        return httpx.Response(200, json=response_body)
 
     client = _client_with_transport(handler)
     result = await client.check_entitlement(USER_ID)
-    assert result is False
+
+    assert result is expected_entitled
     await client.aclose()
 
 
-async def test_fixture_entitled_true_response():
-    body = _load_fixture("entitled_true.json")
-
+@pytest.mark.parametrize("rejection_status_code", [401, 403])
+async def test_invalid_credential_raises_unavailable(rejection_status_code: int):
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=body)
+        return httpx.Response(rejection_status_code)
 
     client = _client_with_transport(handler)
-    assert await client.check_entitlement(USER_ID) is True
+    with pytest.raises(EntitlementCheckUnavailableError):
+        await client.check_entitlement(USER_ID)
     await client.aclose()
-
-
-async def test_fixture_entitled_false_response():
-    body = _load_fixture("entitled_false.json")
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=body)
-
-    client = _client_with_transport(handler)
-    assert await client.check_entitlement(USER_ID) is False
-    await client.aclose()
-
-
-async def test_invalid_credential_raises_unavailable():
-    for status_code in (401, 403):
-
-        def handler(request: httpx.Request, code=status_code) -> httpx.Response:
-            return httpx.Response(code)
-
-        client = _client_with_transport(handler)
-        with pytest.raises(EntitlementCheckUnavailableError):
-            await client.check_entitlement(USER_ID)
-        await client.aclose()
 
 
 async def test_circuit_trips_after_consecutive_5xx_then_recovers_half_open():
-    call_count = {"n": 0}
+    responses_sent = {"n": 0}
+    failures_before_recovery = 2
 
     def handler(request: httpx.Request) -> httpx.Response:
-        call_count["n"] += 1
-        if call_count["n"] <= 2:
+        responses_sent["n"] += 1
+        if responses_sent["n"] <= failures_before_recovery:
             return httpx.Response(500)
         return httpx.Response(200, json={"user_id": str(USER_ID), "entitled": True})
 
-    client = _client_with_transport(handler, fail_max=2, reset_timeout_seconds=0.2)
+    client = _client_with_transport(
+        handler, fail_max=failures_before_recovery, reset_timeout_seconds=0.2
+    )
 
-    with pytest.raises(EntitlementCheckUnavailableError):
-        await client.check_entitlement(USER_ID)
-    with pytest.raises(EntitlementCheckUnavailableError):
-        await client.check_entitlement(USER_ID)
+    for _ in range(failures_before_recovery):
+        with pytest.raises(EntitlementCheckUnavailableError):
+            await client.check_entitlement(USER_ID)
 
-    calls_before = call_count["n"]
+    calls_while_breaker_open = responses_sent["n"]
     with pytest.raises(EntitlementCheckUnavailableError):
         await client.check_entitlement(USER_ID)
-    assert call_count["n"] == calls_before
+    assert responses_sent["n"] == calls_while_breaker_open  # fails fast, no transport call
 
     await asyncio.sleep(0.3)
-    result = await client.check_entitlement(USER_ID)
-    assert result is True
+    assert await client.check_entitlement(USER_ID) is True
     await client.aclose()
