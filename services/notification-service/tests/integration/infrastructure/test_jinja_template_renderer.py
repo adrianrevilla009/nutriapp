@@ -69,3 +69,16 @@ def test_water_reminder_push_escapes_and_produces_valid_json():
     assert rendered.title == "Water reminder"
     assert "<script>" not in rendered.data["category"]
     assert "&lt;script&gt;" in rendered.data["category"]
+
+
+def test_new_follower_push_escapes_and_produces_valid_json():
+    # social-service PR A (test-plan section 6): required fields present,
+    # and the same XSS-prevention guarantee every other push template has,
+    # even though follow_id is realistically always a UUID in production.
+    rendered = renderer.render_push(TemplateId("new_follower", 1), _load("new_follower_v1.json"))
+    assert rendered.title == "New follower"
+    assert rendered.body
+    assert rendered.data["category"] == "new_follower"
+    assert rendered.data["follower_id"] == "77777777-7777-7777-7777-777777777777"
+    assert "<script>" not in rendered.data["follow_id"]
+    assert "&lt;script&gt;" in rendered.data["follow_id"]

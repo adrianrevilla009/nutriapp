@@ -8,14 +8,17 @@ from datetime import datetime, time
 from typing import Any
 
 from domain.entities.notification_preference import NotificationPreference
+from domain.entities.pending_push_dispatch import PendingPushDispatch
 from domain.entities.reminder_schedule_entry import ReminderScheduleEntry
 from domain.ports.email_provider_port import EmailSendResult
 from domain.ports.push_provider_port import PushSendResult
 from domain.ports.template_renderer_port import RenderedEmail, RenderedPush
 from domain.ports.token_reveal_port import RevealedToken
 from domain.value_objects.notification_category import Channel, NotificationCategory
+from domain.value_objects.pending_dispatch_status import PendingDispatchStatus
 from domain.value_objects.quiet_hours_window import QuietHoursWindow
 from domain.value_objects.reminder_status import ReminderStatus
+from domain.value_objects.template_id import TemplateId
 
 
 class FakeTokenRevealPort:
@@ -203,6 +206,61 @@ class FakeTemplateRendererPort:
     def render_push(self, template_id: Any, context: Any) -> RenderedPush:
         self.push_calls.append((template_id, context))
         return RenderedPush(title=f"title-{template_id.name}", body="body", data={})
+
+
+class FakePendingPushDispatchRepositoryPort:
+    def __init__(self) -> None:
+        self._by_id: dict[uuid.UUID, PendingPushDispatch] = {}
+        self.added: list[PendingPushDispatch] = []
+
+    async def add(self, dispatch: PendingPushDispatch) -> None:
+        self._by_id[dispatch.dispatch_id] = dispatch
+        self.added.append(dispatch)
+
+    async def list_due(self, now: datetime) -> list[PendingPushDispatch]:
+        return [
+            dispatch
+            for dispatch in self._by_id.values()
+            if dispatch.status == PendingDispatchStatus.PENDING
+            and dispatch.earliest_dispatch_at <= now
+        ]
+
+    async def mark_status(
+        self,
+        dispatch_id: uuid.UUID,
+        status: PendingDispatchStatus,
+        earliest_dispatch_at: datetime | None = None,
+    ) -> None:
+        dispatch = self._by_id[dispatch_id]
+        dispatch.status = status
+        if earliest_dispatch_at is not None:
+            dispatch.earliest_dispatch_at = earliest_dispatch_at
+
+    def seed(self, dispatch: PendingPushDispatch) -> None:
+        self._by_id[dispatch.dispatch_id] = dispatch
+
+
+def make_pending_push_dispatch(
+    *,
+    user_id: uuid.UUID | None = None,
+    category_name: str = "new_follower",
+    template_name: str = "new_follower",
+    template_version: int = 1,
+    context: dict[str, str] | None = None,
+    correlation_id: str = "corr-1",
+    earliest_dispatch_at: datetime,
+    status: PendingDispatchStatus = PendingDispatchStatus.PENDING,
+) -> PendingPushDispatch:
+    return PendingPushDispatch(
+        dispatch_id=uuid.uuid4(),
+        user_id=user_id or uuid.uuid4(),
+        category=NotificationCategory.push(category_name),
+        template_id=TemplateId(template_name, template_version),
+        context=context or {},
+        correlation_id=correlation_id,
+        earliest_dispatch_at=earliest_dispatch_at,
+        status=status,
+    )
 
 
 def make_reminder_entry(

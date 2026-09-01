@@ -14,7 +14,7 @@ from datetime import datetime, time
 from typing import ClassVar
 
 from sqlalchemy import TIMESTAMP, Boolean, Index, String, Time, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -71,6 +71,32 @@ class SuppressionListModel(Base):
     address_or_device: Mapped[str] = mapped_column(String(320), primary_key=True)
     reason: Mapped[str] = mapped_column(String(32), nullable=False)
     suppressed_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class PendingPushDispatchModel(Base):
+    """Backs domain.entities.pending_push_dispatch.PendingPushDispatch --
+    a deferred one-shot push send, distinct from `reminder_schedule`
+    (see that entity's module docstring for why)."""
+
+    __tablename__ = "pending_push_dispatch"
+
+    dispatch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    template_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    template_version: Mapped[int] = mapped_column(nullable=False)
+    context: Mapped[dict[str, str]] = mapped_column(JSONB, nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    earliest_dispatch_at: Mapped[datetime] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+
+    __table_args__ = (
+        Index(
+            "ix_pending_push_dispatch_status_earliest_dispatch_at",
+            "status",
+            "earliest_dispatch_at",
+        ),
+    )
 
 
 class NotificationPreferenceModel(Base):

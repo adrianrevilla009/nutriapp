@@ -47,7 +47,27 @@ def test_settings_from_env_defaults_reminder_scan_interval(monkeypatch):
     assert settings.reminder_scan_interval_seconds == 60.0
 
 
-async def test_container_startup_and_shutdown_wires_both_consumers(
+def test_settings_from_env_reads_pending_push_dispatch_scan_interval(monkeypatch):
+    monkeypatch.setenv("NOTIFICATION_SERVICE_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("NOTIFICATION_SERVICE_PENDING_PUSH_DISPATCH_SCAN_INTERVAL_SECONDS", "45")
+
+    settings = Settings.from_env()
+
+    assert settings.pending_push_dispatch_scan_interval_seconds == 45.0
+
+
+def test_settings_from_env_defaults_pending_push_dispatch_scan_interval(monkeypatch):
+    monkeypatch.setenv("NOTIFICATION_SERVICE_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.delenv(
+        "NOTIFICATION_SERVICE_PENDING_PUSH_DISPATCH_SCAN_INTERVAL_SECONDS", raising=False
+    )
+
+    settings = Settings.from_env()
+
+    assert settings.pending_push_dispatch_scan_interval_seconds == 60.0
+
+
+async def test_container_startup_and_shutdown_wires_all_three_consumers(
     postgres_async_url, rabbitmq_url
 ):
     settings = Settings(
@@ -61,6 +81,7 @@ async def test_container_startup_and_shutdown_wires_both_consumers(
         ses_from_address="no-reply@nutriapp.example",
         sns_base_url="http://sns-fake.test",
         reminder_scan_interval_seconds=3600.0,
+        pending_push_dispatch_scan_interval_seconds=3600.0,
     )
     container = Container(settings)
 
