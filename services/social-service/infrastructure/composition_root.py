@@ -1,0 +1,175 @@
+"""Composition root -- the only place concrete adapters are wired to the
+ports they satisfy (hexagonal-architecture SKILL.md). Route handlers and
+both consumers all depend on this module, never the reverse."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from dataclasses import dataclass
+
+import aio_pika
+import structlog
+from shared_contracts.auth.jwt_verifier import JwtVerifier
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from infrastructure.external.billing_entitlement_client import BillingEntitlementClient
+from infrastructure.messaging.billing_events_consumer import BillingEventsConsumer
+from infrastructure.messaging.outbox_relay_worker import OutboxRelayWorker
+from infrastructure.messaging.rabbitmq_event_publisher import RabbitMqEventPublisher
+from infrastructure.messaging.recipe_events_consumer import RecipeEventsConsumer
+from infrastructure.persistence.postgres_entitlement_cache_repository import (
+    PostgresEntitlementCacheRepository,
+)
+from infrastructure.persistence.postgres_feed_repository import PostgresFeedRepository
+from infrastructure.persistence.postgres_follow_repository import PostgresFollowRepository
+from infrastructure.persistence.postgres_outbox_repository import PostgresOutboxRepository
+
+logger = structlog.get_logger()
+
+DEFAULT_IDENTITY_JWKS_URL = "http://identity-service:8000/.well-known/jwks.json"
+DEFAULT_IDENTITY_ISSUER = "identity-service"
+DEFAULT_BILLING_SERVICE_BASE_URL = "http://billing-service:8000"
+
+
+@dataclass(frozen=True, slots=True)
+class Settings:
+    database_url: str
+    rabbitmq_url: str
+    identity_jwks_url: str
+    identity_issuer: str
+    billing_service_base_url: str
+    # Checked against billing-service's internal
+    # `GET /internal/v1/billing/entitlements/{user_id}` route's
+    # `X-Internal-Service-Credential` header -- billing-service's OWN
+    # single shared internal-reveal credential (its route checks against
+    # exactly one value, recipe-service/identity-service/catalog-service
+    # precedent), read here via a narrow IAM grant on that same Secrets
+    # Manager ARN (infra/terraform/environments/dev/social-service.tf),
+    # not a new per-caller secret. Local-dev default only, the real value
+    # is a Terraform-managed secret, never checked in.
+    billing_entitlement_credential: str
+
+    @classmethod
+    def from_env(cls) -> Settings:
+        return cls(
+            database_url=os.environ["SOCIAL_SERVICE_DATABASE_URL"],
+            rabbitmq_url=os.environ.get(
+                "SOCIAL_SERVICE_RABBITMQ_URL", "amqp://guest:guest@localhost/"
+            ),
+            identity_jwks_url=os.environ.get(
+                "SOCIAL_SERVICE_IDENTITY_JWKS_URL", DEFAULT_IDENTITY_JWKS_URL
+            ),
+            identity_issuer=os.environ.get(
+                "SOCIAL_SERVICE_IDENTITY_ISSUER", DEFAULT_IDENTITY_ISSUER
+            ),
+            billing_service_base_url=os.environ.get(
+                "SOCIAL_SERVICE_BILLING_SERVICE_BASE_URL", DEFAULT_BILLING_SERVICE_BASE_URL
+            ),
+            billing_entitlement_credential=os.environ.get(
+                "SOCIAL_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL",
+                "local-dev-billing-entitlement-credential-change-me",
+            ),
+        )
+
+
+class Container:
+    """Holds long-lived infrastructure clients (DB engine, RabbitMQ, the
+    entitlement client, the JWT verifier) and request-scoped factories for
+    repositories/handlers. No `catalog_products`-equivalent client --
+    unlike recipe-service, this service makes no synchronous call to any
+    third domain service; feed composition is entirely async via consumed
+    events (implementation plan section 1.8/7)."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False)
+
+        self.jwt_verifier = JwtVerifier(
+            jwks_url=settings.identity_jwks_url, issuer=settings.identity_issuer
+        )
+
+        self.entitlement_check = BillingEntitlementClient(
+            base_url=settings.billing_service_base_url,
+            credential=settings.billing_entitlement_credential,
+        )
+
+        self._rabbitmq_connection: aio_pika.abc.AbstractRobustConnection | None = None
+        self._event_publisher: RabbitMqEventPublisher | None = None
+        self._billing_events_consumer: BillingEventsConsumer | None = None
+        self._recipe_events_consumer: RecipeEventsConsumer | None = None
+        self._outbox_relay_worker: OutboxRelayWorker | None = None
+        self._background_tasks: list[asyncio.Task[None]] = []
+
+    async def _start_consumer(self, consumer: BillingEventsConsumer | RecipeEventsConsumer) -> None:
+        assert self._rabbitmq_connection is not None
+        await consumer.setup(self._rabbitmq_connection)
+        await consumer.consume()
+
+    async def startup(self) -> None:
+        self._rabbitmq_connection = await aio_pika.connect_robust(self.settings.rabbitmq_url)
+        self._event_publisher = await RabbitMqEventPublisher.create(self._rabbitmq_connection)
+
+        self._billing_events_consumer = BillingEventsConsumer(self.session_factory)
+        await self._start_consumer(self._billing_events_consumer)
+
+        self._recipe_events_consumer = RecipeEventsConsumer(self.session_factory)
+        await self._start_consumer(self._recipe_events_consumer)
+
+        self._outbox_relay_worker = OutboxRelayWorker(self.session_factory, self._event_publisher)
+        self._background_tasks.append(asyncio.create_task(self._outbox_relay_worker.run_forever()))
+
+    async def _cancel_background_tasks(self) -> None:
+        if not self._background_tasks:
+            return
+
+        for task in self._background_tasks:
+            task.cancel()
+
+        outcomes = await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        for outcome in outcomes:
+            is_unexpected_failure = isinstance(outcome, BaseException) and not isinstance(
+                outcome, asyncio.CancelledError
+            )
+            if is_unexpected_failure:
+                logger.exception("background_task_shutdown_error", exc_info=outcome)
+
+    async def shutdown(self) -> None:
+        await self._cancel_background_tasks()
+        if self._rabbitmq_connection is not None:
+            await self._rabbitmq_connection.close()
+        await self.entitlement_check.aclose()
+        await self.engine.dispose()
+
+    def new_session(self) -> AsyncSession:
+        return self.session_factory()
+
+
+def build_repositories(
+    session: AsyncSession,
+) -> tuple[
+    PostgresFollowRepository,
+    PostgresFeedRepository,
+    PostgresEntitlementCacheRepository,
+    PostgresOutboxRepository,
+]:
+    """Convenience bundle of the request-scoped repository adapters --
+    every repository shares one AsyncSession (and therefore one DB
+    transaction) for outbox atomicity, same convention as every other
+    service's build_repositories. `ProcessedEntitlementEventsRepositoryPort`/
+    `ProcessedRecipeEventsRepositoryPort` are NOT part of this bundle --
+    they're only used by the two message consumers, which construct their
+    own repositories directly (mirrors recipe-service's
+    `billing_events_consumer.py` precedent)."""
+    return (
+        PostgresFollowRepository(session),
+        PostgresFeedRepository(session),
+        PostgresEntitlementCacheRepository(session),
+        PostgresOutboxRepository(session),
+    )

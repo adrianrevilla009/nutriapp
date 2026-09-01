@@ -1,0 +1,8 @@
+{{/*
+Helm pre-install/pre-upgrade hook Job that creates this service's own
+logical database + role inside the shared RDS instance (platform-infra
+plan section 9.1). Idempotent: safe to re-run on every `helm upgrade`.
+*/}}
+{{- if .Values.dbProvision.enabled }}
+{{ include "nutriapp-lib.dbProvisionJob" . }}
+{{- end }}

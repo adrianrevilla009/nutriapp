@@ -102,7 +102,8 @@ of every consumer calling it synchronously on every request.*
   consumer's processing, so a support investigation ("why can't this user
   publish a recipe") can trace the full fan-out in one trace.
 - **Implementation status** (`/plans/billing-service/implementation-plan.md`,
-  `/plans/recipe-service/implementation-plan.md`):
+  `/plans/recipe-service/implementation-plan.md`,
+  `/plans/social-service/implementation-plan.md`):
   `billing-service`'s own side of this saga is built —
   webhook-signature-verified, idempotent (dedupes by Stripe's own event
   `id`) `checkout.session.completed`/`invoice.paid`/
@@ -123,12 +124,24 @@ of every consumer calling it synchronously on every request.*
   back to the synchronous endpoint on a genuine cache miss (own
   `billing_entitlement_check` circuit breaker, never sharing state with
   the separate `catalog_product_lookup` breaker used for ingredient
-  resolution). `social-service`/`analytics-service` remain pending: neither
-  service exists yet, same deferral pattern as `activity-service`'s
-  `ExerciseLogged` consumers. This saga's choreography is now fully
-  exercised end-to-end for its one real consumer (`recipe-service`); the
-  remaining two consumers will exercise the same already-proven pattern
-  once built.
+  resolution). `social-service` is now the SECOND of the three documented
+  consumers to implement its side of the fan-out -- its own
+  `billing_events_consumer.py` (own queue/DLQ names, own `entitlement_cache`
+  table, own `processed_entitlement_events` idempotency ledger) is
+  structurally identical to `recipe-service`'s, checked cache-first by
+  `FollowUserHandler`/`UnfollowUserHandler`/`GetFeedHandler` before falling
+  back to the synchronous endpoint on a genuine cache miss (own,
+  independently-named `billing_entitlement_check` circuit breaker --
+  social-service has no `catalog_product_lookup`-equivalent breaker at
+  all, since it makes no other synchronous external call).
+  `HandleEntitlementRevokedHandler` is structurally non-destructive: it has
+  no reference to `FollowRepositoryPort` at all, so revocation can never
+  delete/hide an existing follow or feed entry. `analytics-service` remains
+  pending: that service doesn't exist yet, same deferral pattern as
+  `activity-service`'s `ExerciseLogged` consumers. This saga's choreography
+  is now fully exercised end-to-end for two of its three documented
+  consumers (`recipe-service`, `social-service`); the remaining consumer
+  will exercise the same already-proven pattern once built.
 
 ---
 

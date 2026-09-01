@@ -39,7 +39,7 @@ jwt_signing_key_service_names = ["identity-service"]
 # "recipe-service" is added now for the same reason (this session's
 # recipe-service implementation plan); the other three remain a
 # separately tracked follow-up, not silently expanded to fix here.
-db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service", "billing-service", "recipe-service"]
+db_credential_service_names = ["identity-service", "profile-service", "diary-service", "notification-service", "billing-service", "recipe-service", "social-service"]
 
 # billing-service's own internal, non-Kong-routed entitlement-check
 # endpoint (GET /internal/v1/billing/entitlements/{user_id}, implementation
