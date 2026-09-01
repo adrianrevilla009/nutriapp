@@ -12,10 +12,15 @@ Full rationale: ADR-0011. Agent: `notification-agent`. Skill:
 | Email     | `NewDeviceLoginDetected`         | Yes               | No                               |
 | Push      | Meal/water/fasting reminder due  | No                | Yes                              |
 | Push      | `NutrientDeficiencyDetected`     | No                | Yes (but on by default)          |
+| Push      | `UserFollowed` (social-service)  | No                | Yes                              |
 
 Any new event added to either row of the "No" column requires explicit
 sign-off in an ADR update, not a silent addition — transactional-vs-not is
-a legal/UX classification, not an implementation detail.
+a legal/UX classification, not an implementation detail. `UserFollowed`'s
+sign-off is recorded as a dated addendum to ADR-0011 rather than a new ADR
+number: it applies the already-established push
+(non-transactional/suppressible/quiet-hours-respecting) classification
+unchanged, it does not introduce a new classification of its own.
 
 ## 2. User Preferences & Quiet Hours
 
@@ -30,6 +35,14 @@ a legal/UX classification, not an implementation detail.
   action" reminder well after its usual time) is suppressed rather than sent late and
   confusing — this rule lives in the domain layer of
   `notification-service`, not the provider adapter.
+- For a **periodic** trigger (meal/water/fasting reminders), a quiet-hours
+  delay is naturally retried on the next scheduled scan of the
+  `reminder_schedule` projection. For a **one-shot** trigger with no next
+  occurrence (e.g. `UserFollowed`), the delayed send is persisted as a
+  `pending_push_dispatch` row instead and retried by its own periodic scan
+  worker until the recipient's quiet hours end — same guarantee (delayed,
+  never dropped), different mechanism, because the two triggers have no
+  natural "next occurrence" in common.
 
 ## 3. Templating
 

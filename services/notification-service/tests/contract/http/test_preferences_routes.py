@@ -16,7 +16,7 @@ async def test_get_preferences_returns_defaults_for_a_valid_jwt(app_client):
     assert response.status_code == 200
     body = response.json()
     categories = {item["category"] for item in body["preferences"]}
-    assert categories == {"fasting", "meal", "water"}
+    assert categories == {"fasting", "meal", "water", "new_follower"}
 
 
 async def test_get_preferences_requires_authentication(app_client):

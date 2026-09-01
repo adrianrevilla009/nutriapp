@@ -22,7 +22,7 @@ class InvalidNotificationCategoryError(ValueError):
     """Raised when a category name is not valid for the given channel."""
 
 
-PUSH_CATEGORIES: frozenset[str] = frozenset({"fasting", "meal", "water"})
+PUSH_CATEGORIES: frozenset[str] = frozenset({"fasting", "meal", "water", "new_follower"})
 EMAIL_CATEGORIES: frozenset[str] = frozenset({"verification", "password_reset", "new_device_alert"})
 
 
