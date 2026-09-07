@@ -621,6 +621,58 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  analytics-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${ANALYTICS_POSTGRES_DB:-analytics_service}
+      POSTGRES_USER: ${ANALYTICS_POSTGRES_USER:-analytics_service}
+      POSTGRES_PASSWORD: ${ANALYTICS_POSTGRES_PASSWORD:-analytics_service}
+    ports:
+      # 5443, not 5442 -- 5442 was already claimed by social-db above.
+      - "5443:5432"
+    volumes:
+      - analytics-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ANALYTICS_POSTGRES_USER:-analytics_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  analytics-service:
+    build:
+      # Build context is the repo root (not services/analytics-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      # 8013, not 8012 -- 8012 was already claimed by social-service above.
+      - "8013:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      ANALYTICS_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ANALYTICS_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      ANALYTICS_SERVICE_IDENTITY_ISSUER: identity-service
+      ANALYTICS_SERVICE_BILLING_SERVICE_BASE_URL: http://billing-service:8000
+      # Local-dev-only value for the outbound entitlement-check call's
+      # X-Internal-Service-Credential header (composition_root.py's
+      # Settings docstring) -- must match billing-service's own
+      # BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL for local dev to work
+      # end-to-end; production value comes from Secrets Manager, reading
+      # billing-service's own single shared internal_reveal_credential
+      # (same mechanism as social-service's identical env var above -- see
+      # analytics-service.tf's header comment).
+      ANALYTICS_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL: dev-billing-internal-entitlement-credential-change-me
+    depends_on:
+      analytics-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -633,3 +685,4 @@ volumes:
   billing-db-data:
   recipe-db-data:
   social-db-data:
+  analytics-db-data:

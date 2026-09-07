@@ -26,7 +26,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/recognition`              | `food-recognition-service`              | v1                    | active    |
 | `/api/v1/notifications`             | `notification-service`             | v1                    | active    |
 | `/api/v1/activity/exercises`             | `activity-service`             | v1                    | active    |
-| `/api/v1/analytics`             | `analytics-service`             | v1                    | planned    |
+| `/api/v1/analytics`             | `analytics-service` (`/plans/analytics-service/implementation-plan.md`) | v1                    | active    |
 | `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
 | `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
 | `/api/v1/billing`             | `billing-service` (ADR-0015)             | v1                    | active    |
@@ -38,12 +38,11 @@ an endpoint surface — enforced by `/implementation-review`.
 
 | Path prefix                     | Owning service       | Consumers                    | Status  |
 |-----------------------------------|-------------------------|---------------------------------|-----------|
-| `/internal/v1/nutrition/targets`     | `nutrition-calculation-service`        | `analytics-service` | planned    |
 | `/internal/v1/catalog/lookup`          | `catalog-service`            | `diary-service`, `food-recognition-service`   | active    |
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 | `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
 | `/internal/v1/billing/webhooks/stripe` | `billing-service` | Stripe (external, see Notes) | active |
-| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service` (both real, cache-miss fallback only), `analytics-service` (doesn't exist yet) | active |
+| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service`, `analytics-service` (all three real, cache-miss fallback only) | active |
 
 ## Notes
 
@@ -76,11 +75,18 @@ an endpoint surface — enforced by `/implementation-review`.
   purely to do the fan-out/composition the frontend would otherwise do
   itself in three separate requests (Open Host Service / Customer-
   Supplier, `docs/domain-glossary-and-context-map.md`). No new endpoint
-  was added to either downstream service for this. The
-  `/internal/v1/nutrition/targets` row above lists only
-  `analytics-service` as a consumer (not `bff-service`, corrected from
-  an earlier speculative placeholder) — `bff-service` uses the public
-  `GET /api/v1/nutrition/target` endpoint instead.
+  was added to either downstream service for this. `analytics-service`
+  is not a `bff-service` fan-out target — trend viewing is served
+  directly at `/api/v1/analytics/trends/weekly` via Kong, out of scope
+  for `bff-service`'s dashboard aggregation
+  (`/plans/analytics-service/implementation-plan.md` section 9, resolution 6).
+- The `/internal/v1/nutrition/targets` row this table previously carried
+  as `planned` (reserved for `analytics-service`) was removed, not
+  promoted: `analytics-service`'s implementation plan (section 9,
+  resolution 3) confirmed it gets current/historical targets entirely
+  via consuming `NutritionTargetUpdated` events, with no concrete
+  synchronous need surfacing during implementation. Revisit only if a
+  genuine synchronous-lookup need appears later.
 - `/api/v1/activity/exercises` (`activity-service`,
   `/plans/activity-service/implementation-plan.md`) covers four concrete
   routes: `POST /api/v1/activity/exercises` (log a manual entry),
@@ -113,15 +119,13 @@ an endpoint surface — enforced by `/implementation-review`.
 - `/internal/v1/billing/entitlements/{user_id}` (`billing-service`) was
   built with zero real callers (implementation plan section 1.4, same
   "publish the contract before any consumer exists" pattern as the six
-  billing events in `docs/events-catalog.md`) and now has two real
-  callers: `recipe-service` and `social-service` each call it (own,
-  independently-named `billing_entitlement_check` circuit breaker per
-  service) ONLY on an `entitlement_cache` miss — the documented
-  synchronous fallback compensation path for the
+  billing events in `docs/events-catalog.md`) and now has three real
+  callers: `recipe-service`, `social-service`, and `analytics-service`
+  each call it (own, independently-named `billing_entitlement_check`
+  circuit breaker per service) ONLY on an `entitlement_cache` miss — the
+  documented synchronous fallback compensation path for the
   `ProUpgradeEntitlementPropagation` saga
-  (`docs/sagas-and-distributed-transactions.md`). `analytics-service`
-  remains a documented, not-yet-implemented consumer (that service
-  doesn't exist yet).
+  (`docs/sagas-and-distributed-transactions.md`).
 - `/api/v1/recipes` (`recipe-service`, `/plans/recipe-service/implementation-plan.md`)
   covers seven routes: `POST /api/v1/recipes` (author, not Pro-gated),
   `PATCH /api/v1/recipes/{recipe_id}` (edit own, not Pro-gated),
@@ -148,3 +152,12 @@ an endpoint surface — enforced by `/implementation-review`.
   entitlement-rejection convention verbatim — now a repo-wide standard,
   not a per-service decision (implementation plan section 3); see
   `services/social-service/infrastructure/http/error_mapping.py`.
+- `/api/v1/analytics` (`analytics-service`,
+  `/plans/analytics-service/implementation-plan.md`) covers two routes:
+  `GET /api/v1/analytics/trends/weekly` (logging streak + macro/water
+  running totals vs. target, **not Pro-gated** -- every returned stat
+  carries `sample_size`/`window_days` explicitly), and
+  `GET /api/v1/analytics/reports/{report_type}?start_date=...&end_date=...`
+  (CSV export/report generation, **Pro-gated**). Reuses `recipe-service`'s
+  `402 Payment Required` / `NOT_ENTITLED` entitlement-rejection convention
+  verbatim; see `services/analytics-service/infrastructure/http/error_mapping.py`.
