@@ -116,11 +116,12 @@ variable "db_credential_service_names" {
     # architecture-agent visibility, not silently folded in.
     "recipe-service",
     "social-service",
+    "analytics-service",
   ]
 }
 
 variable "internal_reveal_credential_service_names" {
-  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- real callers now exist (recipe-service.tf, social-service.tf), each granted narrow IAM read access to this SAME credential ARN via their own inline policy, not a new entry in this list (this list is for the credential OWNER, not its callers). analytics-service remains a documented-not-yet-implemented future caller."
+  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- real callers now exist (recipe-service.tf, social-service.tf, analytics-service.tf), each granted narrow IAM read access to this SAME credential ARN via their own inline policy, not a new entry in this list (this list is for the credential OWNER, not its callers)."
   type        = list(string)
   default     = ["identity-service", "billing-service"]
 }

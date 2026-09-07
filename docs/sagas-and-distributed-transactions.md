@@ -78,7 +78,10 @@ of every consumer calling it synchronously on every request.*
      `EntitlementGranted`.
   2. `recipe-service`, `social-service`, and `analytics-service` each
      consume `EntitlementGranted` -> update their locally-cached
-     entitlement flag for that user.
+     entitlement flag for that user. All three are now real, built
+     consumers (`recipe-service` first, `social-service` second,
+     `analytics-service` third -- `/plans/analytics-service/implementation-plan.md`),
+     not documented-future ones.
 - Compensations:
   - If a consumer's entitlement-flag update fails after retries: it falls
     back to `billing-service`'s synchronous entitlement-check endpoint

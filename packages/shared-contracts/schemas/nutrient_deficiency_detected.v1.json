@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nutriapp.internal/schemas/nutrient_deficiency_detected.v1.json",
+  "title": "NutrientDeficiencyDetected",
+  "type": "object",
+  "required": ["event_id", "aggregate_id", "event_type", "version", "occurred_at", "payload", "metadata"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "aggregate_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "NutrientDeficiencyDetected" },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "signal", "window_days", "value", "target_min", "sample_size", "disclaimer"],
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "signal": { "type": "string", "minLength": 1 },
+        "window_days": { "type": "integer", "minimum": 1 },
+        "value": { "type": "number" },
+        "target_min": { "type": "number" },
+        "sample_size": { "type": "integer", "minimum": 0 },
+        "disclaimer": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["correlation_id"],
+      "properties": {
+        "correlation_id": { "type": "string" },
+        "causation_id": { "type": ["string", "null"] },
+        "user_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

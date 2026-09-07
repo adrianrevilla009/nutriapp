@@ -1,0 +1,18 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-0000000000d1",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000d2",
+  "event_type": "WaterIntakeLogged",
+  "version": 1,
+  "occurred_at": "2026-06-08T08:00:00+00:00",
+  "payload": {
+    "intake_id": "8f14e45f-ceea-467e-adc3-0000000000d2",
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "amount_ml": 250.0,
+    "occurred_at": "2026-06-08T08:00:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-4",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}

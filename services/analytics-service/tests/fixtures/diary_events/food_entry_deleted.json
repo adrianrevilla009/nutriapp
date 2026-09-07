@@ -1,0 +1,17 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-0000000000c1",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000a2",
+  "event_type": "FoodEntryDeleted",
+  "version": 1,
+  "occurred_at": "2026-06-08T12:10:00+00:00",
+  "payload": {
+    "entry_id": "8f14e45f-ceea-467e-adc3-0000000000a2",
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "deleted_at": "2026-06-08T12:10:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-3",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}
