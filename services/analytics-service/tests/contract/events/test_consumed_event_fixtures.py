@@ -22,7 +22,15 @@ import pytest
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "fixtures")
 SCHEMAS_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "..", "..", "..", "..", "packages", "shared-contracts", "schemas"
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "..",
+    "..",
+    "packages",
+    "shared-contracts",
+    "schemas",
 )
 
 # (fixture relative path, schema file name) -- covers all 9 consumed
@@ -34,8 +42,14 @@ CONSUMED_EVENT_FIXTURES: list[tuple[str, str]] = [
     ("diary_events/water_intake_logged.json", "water_intake_logged.v1.json"),
     ("diary_events/water_intake_removed.json", "water_intake_removed.v1.json"),
     ("profile_events/weight_recorded.json", "weight_recorded.v1.json"),
-    ("nutrition_calculation_events/nutrition_value_recomputed.json", "nutrition_value_recomputed.v1.json"),
-    ("nutrition_calculation_events/nutrition_target_updated.json", "nutrition_target_updated.v1.json"),
+    (
+        "nutrition_calculation_events/nutrition_value_recomputed.json",
+        "nutrition_value_recomputed.v1.json",
+    ),
+    (
+        "nutrition_calculation_events/nutrition_target_updated.json",
+        "nutrition_target_updated.v1.json",
+    ),
     ("billing_responses/entitlement_granted.json", "entitlement_granted.v1.json"),
     ("billing_responses/entitlement_revoked.json", "entitlement_revoked.v1.json"),
 ]
