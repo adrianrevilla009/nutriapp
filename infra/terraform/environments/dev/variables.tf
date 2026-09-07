@@ -117,11 +117,12 @@ variable "db_credential_service_names" {
     "recipe-service",
     "social-service",
     "analytics-service",
+    "nutrition-assistant-service",
   ]
 }
 
 variable "internal_reveal_credential_service_names" {
-  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- real callers now exist (recipe-service.tf, social-service.tf, analytics-service.tf), each granted narrow IAM read access to this SAME credential ARN via their own inline policy, not a new entry in this list (this list is for the credential OWNER, not its callers)."
+  description = "Service names that need a generated shared bearer credential for an internal, non-Kong-routed service-to-service call. \"billing-service\" backs GET /internal/v1/billing/entitlements/{user_id} (billing-service implementation plan section 1.4) -- real callers now exist (recipe-service.tf, social-service.tf, analytics-service.tf, nutrition-assistant-service.tf), each granted narrow IAM read access to this SAME credential ARN via their own inline policy, not a new entry in this list (this list is for the credential OWNER, not its callers)."
   type        = list(string)
   default     = ["identity-service", "billing-service"]
 }
@@ -153,9 +154,9 @@ variable "usda_fdc_api_key_service_names" {
 }
 
 variable "anthropic_api_key_service_names" {
-  description = "Service names that need a Secrets Manager container for a metered, third-party Anthropic API key (food-recognition-service implementation plan section 6(b)). Same externally-issued-secret shape as usda_fdc_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band."
+  description = "Service names that need a Secrets Manager container for a metered, third-party Anthropic API key (food-recognition-service implementation plan section 6(b); nutrition-assistant-service implementation plan section 4/9 resolution 5 -- ClaudeConversationAdapter's own metered key, distinct from food-recognition-service's own container of the same secret type, never shared). Same externally-issued-secret shape as usda_fdc_api_key_service_names -- cannot be Terraform-generated, populated manually out-of-band."
   type        = list(string)
-  default     = ["food-recognition-service"]
+  default     = ["food-recognition-service", "nutrition-assistant-service"]
 }
 
 variable "stripe_api_key_service_names" {

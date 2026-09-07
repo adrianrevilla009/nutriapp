@@ -673,6 +673,85 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  nutrition-assistant-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${NUTRITION_ASSISTANT_POSTGRES_DB:-nutrition_assistant_service}
+      POSTGRES_USER: ${NUTRITION_ASSISTANT_POSTGRES_USER:-nutrition_assistant_service}
+      POSTGRES_PASSWORD: ${NUTRITION_ASSISTANT_POSTGRES_PASSWORD:-nutrition_assistant_service}
+    ports:
+      # 5444, not 5443 -- 5443 was already claimed by analytics-db above.
+      - "5444:5432"
+    volumes:
+      - nutrition-assistant-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NUTRITION_ASSISTANT_POSTGRES_USER:-nutrition_assistant_service}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Self-hosted Qdrant (CLAUDE.md section 2.5, implementation plan section
+  # 9 resolution 3 -- shared platform-level instance, first vector-store
+  # footprint in this repo). Data is a rebuildable CQRS-style read model
+  # (.claude/agents/nutrition-assistant-agent.md) -- safe to lose in dev,
+  # rebuilt by re-running infrastructure/vectorstore/seed_knowledge_base.py.
+  nutrition-assistant-qdrant:
+    image: qdrant/qdrant:v1.11.3
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - nutrition-assistant-qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nutrition-assistant-service:
+    build:
+      # Build context is the repo root (not services/nutrition-assistant-service)
+      # because this service depends on packages/shared-contracts (the
+      # shared_contracts.auth.jwt_verifier package, ADR-0022) as a local
+      # path dependency -- the Dockerfile COPYs both.
+      context: .
+      dockerfile: services/nutrition-assistant-service/Dockerfile
+    env_file:
+      - .env
+    ports:
+      # 8014, not 8013 -- 8013 was already claimed by analytics-service above.
+      - "8014:8000"
+    environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
+      NUTRITION_ASSISTANT_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      NUTRITION_ASSISTANT_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
+      NUTRITION_ASSISTANT_SERVICE_IDENTITY_ISSUER: identity-service
+      NUTRITION_ASSISTANT_SERVICE_BILLING_SERVICE_BASE_URL: http://billing-service:8000
+      NUTRITION_ASSISTANT_SERVICE_QDRANT_URL: http://nutrition-assistant-qdrant:6333
+      NUTRITION_ASSISTANT_SERVICE_KNOWLEDGE_BASE_COLLECTION: nutrition_assistant_knowledge_base
+      # Cheapest/smallest tier as the starting default (implementation
+      # plan section 9 resolution 5) -- override locally to test a
+      # different tier against tests/evaluation/fixed_eval_set.py.
+      NUTRITION_ASSISTANT_SERVICE_CONVERSATION_MODEL: claude-haiku-4-5
+      # Local-dev-only placeholder -- a real key must be provided via .env
+      # for the chat endpoint to actually call Claude; without one, every
+      # chat request fails with ASSISTANT_UNAVAILABLE (never a silent
+      # fallback to a fake response).
+      NUTRITION_ASSISTANT_SERVICE_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Same local-dev-only entitlement-credential convention as
+      # analytics-service's identical env var above -- must match
+      # billing-service's own BILLING_INTERNAL_ENTITLEMENT_CREDENTIAL for
+      # local dev to work end-to-end.
+      NUTRITION_ASSISTANT_SERVICE_BILLING_ENTITLEMENT_CREDENTIAL: dev-billing-internal-entitlement-credential-change-me
+    depends_on:
+      nutrition-assistant-db:
+        condition: service_healthy
+      nutrition-assistant-qdrant:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   identity-db-data:
   profile-db-data:
@@ -686,3 +765,5 @@ volumes:
   recipe-db-data:
   social-db-data:
   analytics-db-data:
+  nutrition-assistant-db-data:
+  nutrition-assistant-qdrant-data:

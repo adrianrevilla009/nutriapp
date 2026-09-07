@@ -1,0 +1,35 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-0000000000a1",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000a2",
+  "event_type": "FoodEntryLogged",
+  "version": 1,
+  "occurred_at": "2026-06-08T12:00:00+00:00",
+  "payload": {
+    "entry_id": "8f14e45f-ceea-467e-adc3-0000000000a2",
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "source": {
+      "source_type": "catalog_product",
+      "source_reference_id": "prod-1",
+      "snapshot": {
+        "name": "Chicken breast",
+        "brand": null,
+        "quantity": 2.0,
+        "unit": "serving",
+        "macros_per_unit": {
+          "calories_kcal": 100.0,
+          "protein_g": 10.0,
+          "carbs_g": 0.0,
+          "fat_g": 2.0
+        }
+      }
+    },
+    "meal_slot": "lunch",
+    "occurred_at": "2026-06-08T12:00:00+00:00",
+    "planned_from_entry_id": null
+  },
+  "metadata": {
+    "correlation_id": "corr-1",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}

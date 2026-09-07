@@ -1,0 +1,132 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Built with the CORRECT env-list format and
+# envFrom->ExternalSecret wiring from the start, per the now-standard
+# convention (mirrors analytics-service/values.yaml's precedent).
+
+nameOverride: nutrition-assistant-service
+fullnameOverride: nutrition-assistant-service
+
+image:
+  repository: nutrition-assistant-service # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (nutrition-assistant-service.tf)
+  # with the IRSA role ARN granting access to this service's own Secrets
+  # Manager entries only (CLAUDE.md section 2.9, ADR-0007).
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi # higher than analytics-service's baseline -- the
+                   # self-hosted LocalEmbeddingAdapter (ONNX Runtime) loads
+                   # a real model into process memory (implementation plan
+                   # section 9 resolution 1), unlike any other service's
+                   # chart in this repo.
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 8000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 8000
+    # Higher than analytics-service's default -- LocalEmbeddingAdapter
+    # downloads/loads model weights on first startup (implementation plan
+    # section 9 resolution 1), needing more warm-up time before the pod is
+    # considered ready.
+    initialDelaySeconds: 20
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's only public HTTP surface is /api/v1/chat via Kong --
+  # Kong is the sole in-cluster ingress peer, same convention as every
+  # other service's chart.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 8000
+
+# _db-provision-job.tpl input (platform-infra plan section 9.1): creates
+# this service's own logical database + role inside the shared RDS
+# instance as a pre-install/pre-upgrade Helm hook, idempotent on every
+# upgrade.
+dbProvision:
+  enabled: true
+  image:
+    repository: "" # set by Terraform: module.ecr_db_provision.repository_url
+    tag: ""
+  awsRegion: "us-east-1"
+  rdsAdminDatabase: postgres
+  urlScheme: postgresql+asyncpg # this service's driver (pyproject.toml: asyncpg)
+  databaseName: nutrition_assistant_service
+  roleName: nutrition_assistant_service
+  rdsHost: "" # set by Terraform: module.rds.db_instance_address
+  rdsMasterSecretArn: "" # set by Terraform: module.rds.master_user_secret_arn
+  dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
+  irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["nutrition-assistant-service"]
+
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) -- the
+# CORRECT format _lib's _deployment.tpl expects, from the start (no
+# retrofit needed, per the now-standard convention this plan explicitly
+# calls out).
+env:
+  - name: NUTRITION_ASSISTANT_SERVICE_IDENTITY_JWKS_URL
+    value: "http://identity-service:8000/.well-known/jwks.json"
+  - name: NUTRITION_ASSISTANT_SERVICE_IDENTITY_ISSUER
+    value: "identity-service"
+  - name: NUTRITION_ASSISTANT_SERVICE_BILLING_SERVICE_BASE_URL
+    value: "http://billing-service:8000"
+  - name: NUTRITION_ASSISTANT_SERVICE_RABBITMQ_URL
+    value: "amqp://guest:guest@rabbitmq:5672/"
+  - name: NUTRITION_ASSISTANT_SERVICE_CONVERSATION_MODEL
+    value: "claude-haiku-4-5" # implementation plan section 9 resolution 5 --
+                              # cheapest/smallest tier as the starting default
+  - name: NUTRITION_ASSISTANT_SERVICE_QDRANT_URL
+    value: "" # set by Terraform: module.qdrant.qdrant_url
+  - name: NUTRITION_ASSISTANT_SERVICE_KNOWLEDGE_BASE_COLLECTION
+    value: "nutrition_assistant_knowledge_base"
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# as env vars.
+envFrom:
+  - secretRef:
+      name: nutrition-assistant-service-secrets
+
+# Secrets Manager entry ARNs (synced via External Secrets Operator per
+# ADR-0007) -- never a literal secret value in this file. Set by Terraform
+# (nutrition-assistant-service.tf) at deploy time.
+secretsManager:
+  dbCredentials: "" # set by Terraform: this service's db-credentials secret ARN
+  anthropicApiKey: "" # set by Terraform: module.secrets.anthropic_api_key_secret_arns["nutrition-assistant-service"] -- this service's OWN metered key container, distinct from food-recognition-service's
+  billingEntitlementCredential: "" # set by Terraform: module.secrets.internal_reveal_credential_secret_arns["billing-service"]

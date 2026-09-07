@@ -1,0 +1,21 @@
+{
+  "event_id": "8f14e45f-ceea-4a2d-8c17-4c8bd6b6a1a1",
+  "aggregate_id": "3d2f1a0e-1111-4a2d-8c17-4c8bd6b6a1a1",
+  "event_type": "NutrientDeficiencyDetected",
+  "version": 1,
+  "occurred_at": "2026-09-07T12:00:00+00:00",
+  "payload": {
+    "user_id": "3d2f1a0e-1111-4a2d-8c17-4c8bd6b6a1a1",
+    "signal": "protein_g",
+    "window_days": 7,
+    "value": 60.0,
+    "target_min": 100.0,
+    "sample_size": 6,
+    "disclaimer": "This is not a medical diagnosis. For any question about a possible nutrient deficiency, symptom, or health condition, please consult a qualified dietitian or physician."
+  },
+  "metadata": {
+    "correlation_id": "corr-nad-1",
+    "causation_id": null,
+    "user_id": "3d2f1a0e-1111-4a2d-8c17-4c8bd6b6a1a1"
+  }
+}

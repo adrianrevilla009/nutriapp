@@ -1,0 +1,45 @@
+# Base values. Environment overlays (values-{dev,staging,prod}.yaml) would
+# override only what differs, same convention as every app-service chart
+# -- not built this pass beyond the base file (dev-only scope, per
+# implementation plan section 9's overall dev-first posture).
+
+image:
+  repository: qdrant/qdrant
+  tag: "v1.11.3" # pin matches infra/terraform/modules/qdrant's appVersion;
+                 # keep the qdrant-client Python dependency's major.minor
+                 # within one of this tag on any future bump (client/server
+                 # compatibility warning surfaced during this plan's own
+                 # test run -- see README.md "Known gaps")
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  httpPort: 6333
+  grpcPort: 6334
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: "" # cluster default
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+probes:
+  liveness:
+    path: /healthz
+    port: 6333
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /readyz
+    port: 6333
+    initialDelaySeconds: 10
+    periodSeconds: 10

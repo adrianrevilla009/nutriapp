@@ -1,0 +1,10 @@
+apiVersion: v2
+name: nutrition-assistant-service
+description: NutriApp nutrition-assistant-service -- RAG-grounded conversational assistant over the user's own diary/nutrition/analytics history (CLAUDE.md section 2.2, ADR-0002 event-driven CRUD).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"
