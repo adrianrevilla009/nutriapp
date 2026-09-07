@@ -1,0 +1,17 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-000000000201",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+  "event_type": "EntitlementGranted",
+  "version": 1,
+  "occurred_at": "2026-06-08T09:00:00+00:00",
+  "payload": {
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "reason": "subscription_started",
+    "granted_at": "2026-06-08T09:00:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-9",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}

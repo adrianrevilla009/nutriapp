@@ -1,0 +1,31 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-000000000101",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+  "event_type": "NutritionValueRecomputed",
+  "version": 1,
+  "occurred_at": "2026-06-08T12:01:00+00:00",
+  "payload": {
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "scope": "day",
+    "entry_id": null,
+    "date": "2026-06-08",
+    "macros": {
+      "calories_kcal": 1800.0,
+      "protein_g": 40.0,
+      "carbs_g": 200.0,
+      "fat_g": 30.0
+    },
+    "micronutrients": null,
+    "micronutrients_status": "unavailable",
+    "is_estimated": false,
+    "confidence_range": null,
+    "formula_version": "v1",
+    "reason": "food_entry_logged",
+    "recomputed_at": "2026-06-08T12:01:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-7",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}

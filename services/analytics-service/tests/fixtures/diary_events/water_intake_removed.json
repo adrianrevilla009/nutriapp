@@ -1,0 +1,17 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-0000000000e1",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000d2",
+  "event_type": "WaterIntakeRemoved",
+  "version": 1,
+  "occurred_at": "2026-06-08T08:05:00+00:00",
+  "payload": {
+    "intake_id": "8f14e45f-ceea-467e-adc3-0000000000d2",
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "removed_at": "2026-06-08T08:05:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-5",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}

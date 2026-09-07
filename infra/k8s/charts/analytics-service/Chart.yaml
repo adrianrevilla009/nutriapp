@@ -1,0 +1,10 @@
+apiVersion: v2
+name: analytics-service
+description: NutriApp analytics-service -- CQRS read-side trend analysis, nutrient-deficiency anomaly detection, and Pro-gated CSV report/export (CLAUDE.md section 2.2).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+  - name: nutriapp-lib
+    version: "0.1.0"
+    repository: "file://../_lib"

@@ -135,10 +135,14 @@ yet implemented — the owning service doesn't exist yet).
 ### FoodEntryLogged (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: nutrition-calculation-service, analytics-service (both
-  documented, neither exists yet -- no live cross-service contract test
-  runs against them, only a payload-shape contract test against this
-  entry, per `/plans/diary-service/implementation-plan.md` section 5/6).
+- Consumers: nutrition-calculation-service (documented, not yet existing --
+  no live cross-service contract test runs against it, only a
+  payload-shape contract test against this entry, per
+  `/plans/diary-service/implementation-plan.md` section 5/6),
+  **analytics-service** (implemented -- `diary_events_consumer.py`,
+  projects `daily_log_summary`, idempotent by `event_id` via
+  `processed_diary_events`, per
+  `/plans/analytics-service/implementation-plan.md`).
 - Emitted when: a user logs a food entry against a `catalog-service`
   product reference or (reserved, not yet exercised) a `recipe`/
   `ai_detected` source.
@@ -161,8 +165,11 @@ yet implemented — the owning service doesn't exist yet).
 ### FoodEntryCorrected (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: nutrition-calculation-service, analytics-service (documented,
-  not yet existing).
+- Consumers: nutrition-calculation-service (documented, not yet existing),
+  **analytics-service** (implemented -- `diary_events_consumer.py`,
+  replaces rather than adds to the entry's prior contribution to
+  `daily_log_summary`, per
+  `/plans/analytics-service/implementation-plan.md`).
 - Emitted when: a user corrects a previously logged food entry. Never
   mutates the original `FoodEntryLogged` event -- a projector interprets
   the pair (CLAUDE.md: corrections are new events, never edits to history).
@@ -175,8 +182,13 @@ yet implemented — the owning service doesn't exist yet).
 ### FoodEntryDeleted (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: nutrition-calculation-service, analytics-service (documented,
-  not yet existing).
+- Consumers: nutrition-calculation-service (documented, not yet existing),
+  **analytics-service** (implemented -- `diary_events_consumer.py`. This
+  payload carries no macro data, only `entry_id` -- analytics-service
+  maintains its own internal `food_entry_contributions` ledger, keyed by
+  `entry_id`, purely so this event's effect can be exactly reversed;
+  see `services/analytics-service/domain/ports/daily_log_summary_repository_port.py`'s
+  docstring).
 - Emitted when: a user deletes a previously logged food entry. Never a
   destructive row delete -- a new event a projector interprets.
 - Aggregate: FoodEntry.
@@ -185,8 +197,8 @@ yet implemented — the owning service doesn't exist yet).
 ### WaterIntakeLogged (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing),
-  notification-service (active -- projected into the local
+- Consumers: **analytics-service** (implemented -- `diary_events_consumer.py`,
+  projects `daily_log_summary.water_ml`), notification-service (active -- projected into the local
   `reminder_schedule` read model as a no-op today, per
   `/plans/notification-service/implementation-plan.md`: a single log
   entry isn't itself a reminder trigger; the water-absence-reminder
@@ -200,7 +212,10 @@ yet implemented — the owning service doesn't exist yet).
 ### WaterIntakeRemoved (v1)
 - Status: Active
 - Producer: diary-service
-- Consumers: analytics-service (documented, not yet existing),
+- Consumers: **analytics-service** (implemented -- `diary_events_consumer.py`.
+  This payload carries no `amount_ml`, only `intake_id` -- analytics-service
+  maintains its own internal `water_intake_contributions` ledger, keyed by
+  `intake_id`, purely so this event's effect can be exactly reversed),
   notification-service (active -- same no-op projection note as
   `WaterIntakeLogged` above).
 - Emitted when: a user removes a previously logged water intake entry.
@@ -300,10 +315,12 @@ yet implemented — the owning service doesn't exist yet).
 ### WeightRecorded (v1)
 - Status: Active
 - Producer: profile-service
-- Consumers: nutrition-calculation-service, analytics-service (both
-  documented, neither exists yet -- no live cross-service contract test
-  runs against them, only a payload-shape contract test against this
-  entry).
+- Consumers: nutrition-calculation-service (documented, not yet existing --
+  no live cross-service contract test runs against it, only a
+  payload-shape contract test against this entry), **analytics-service**
+  (implemented -- `profile_events_consumer.py`, projects `weight_trend`,
+  storing the ciphertext field as-is -- analytics-service never decrypts
+  it, ADR-0023's non-decrypting posture).
 - Emitted when: a user records a weight reading (consent-gated).
 - Payload: `{ "user_id": "uuid", "weight_kg": "string (AES-256-GCM
   ciphertext, base64 -- per-user envelope-encrypted, GDPR Article 9
@@ -374,9 +391,20 @@ yet implemented — the owning service doesn't exist yet).
 ### NutritionValueRecomputed (v1)
 - Status: Active
 - Producer: nutrition-calculation-service
-- Consumers: analytics-service, nutrition-assistant-service (documented,
-  neither exists yet -- no live cross-service contract test runs against
-  them, only a payload-shape contract test against this entry).
+- Consumers: **analytics-service** (implemented --
+  `nutrition_calculation_events_consumer.py`, `scope == "day"` only,
+  projects `micronutrient_window` for tracked nutrients and triggers
+  deficiency evaluation, per
+  `/plans/analytics-service/implementation-plan.md` -- **known gap**:
+  this payload's `macros`/`micronutrients` fields carry computed values
+  but no corresponding target; analytics-service only evaluates
+  `protein_g`/`fat_g` today against `NutritionTargetUpdated`'s
+  `macro_targets.protein_g_min`/`fat_g_min`, since no micronutrient
+  `target_min` is published anywhere -- see
+  `services/analytics-service/domain/tracked_nutrients.py`),
+  nutrition-assistant-service (documented, not yet existing -- no live
+  cross-service contract test runs against it, only a payload-shape
+  contract test against this entry).
 - Emitted when: a user's per-entry or per-day nutrient total changes,
   triggered by `FoodEntryLogged`/`FoodEntryCorrected`/`FoodEntryDeleted`
   (diary-service) or (reserved, not built this pass) a formula correction.
@@ -395,9 +423,13 @@ yet implemented — the owning service doesn't exist yet).
 ### NutritionTargetUpdated (v1)
 - Status: Active
 - Producer: nutrition-calculation-service
-- Consumers: analytics-service, nutrition-assistant-service (documented,
-  neither exists yet -- no live cross-service contract test runs against
-  them, only a payload-shape contract test against this entry).
+- Consumers: **analytics-service** (implemented --
+  `nutrition_calculation_events_consumer.py`, updates the CURRENT
+  `protein_g`/`fat_g` target-min reference used by future
+  `NutritionValueRecomputed` upserts; never rewrites already-persisted
+  historical `micronutrient_window` rows), nutrition-assistant-service
+  (documented, not yet existing -- no live cross-service contract test
+  runs against it, only a payload-shape contract test against this entry).
 - Emitted when: a user's calculated calorie/macro target changes,
   triggered by `WeightRecorded`/`BodyMetricRecorded`/`GoalSet`/`GoalUpdated`
   (profile-service, via the internal reveal endpoint per implementation
@@ -624,10 +656,12 @@ yet implemented — the owning service doesn't exist yet).
   locally in `entitlement_cache`, checked before publish/search),
   **social-service** (implemented -- own `billing_events_consumer.py`, the
   SECOND real consumer; caches the entitlement flag locally, checked
-  before follow/unfollow/feed), plus analytics-service (documented, not
-  yet implemented -- that service doesn't exist yet). A lagging/absent
-  consumer falls back to `GET /internal/v1/billing/entitlements/{user_id}`,
-  per the `ProUpgradeEntitlementPropagation` saga.
+  before follow/unfollow/feed), **analytics-service** (implemented -- own
+  `billing_events_consumer.py`, the THIRD real consumer; caches the
+  entitlement flag locally, checked before report/export only -- trend
+  viewing is not gated). A lagging/absent consumer falls back to
+  `GET /internal/v1/billing/entitlements/{user_id}`, per the
+  `ProUpgradeEntitlementPropagation` saga.
 - Emitted when: `checkout.session.completed` succeeds, immediately after
   `SubscriptionStarted`. `aggregate_id` is the `user_id` (not the
   `subscription_id`) — entitlement is a per-user derived flag, matching
@@ -641,7 +675,10 @@ yet implemented — the owning service doesn't exist yet).
   `billing_events_consumer.py`), **social-service** (implemented -- own
   `billing_events_consumer.py`; only flips the cached flag, never touches
   existing `follows`/`feed_entries` rows -- non-destructive, structurally
-  guarded), plus analytics-service (documented, not yet implemented).
+  guarded), **analytics-service** (implemented -- own
+  `billing_events_consumer.py`; only flips the cached flag, never touches
+  `daily_log_summary`/`micronutrient_window`/`weight_trend`/
+  `anomaly_alerts` -- non-destructive, structurally guarded).
 - Emitted when: a scheduled revocation row's `revoke_at` (the
   subscription's `current_period_end` at the time it was canceled) is
   actually due — never synchronously from the cancellation webhook itself.
@@ -649,13 +686,40 @@ yet implemented — the owning service doesn't exist yet).
 - Payload: `{ "user_id": "uuid", "reason": "string", "revoked_at": "timestamp" }`
 
 ### NutrientDeficiencyDetected (v1)
+- Status: Active
 - Producer: analytics-service
-- Consumers: nutrition-assistant-service (to proactively surface it),
-  notification-service (opt-in alert)
-- Emitted when: a recurring nutrient-deficiency pattern or threshold
-  breach is detected over a rolling window.
+- Consumers: notification-service (real, live consumer -- opt-in
+  `nutrient_deficiency_alert` push category, idempotent on
+  `(event_id, channel="push")`, quiet-hours-respecting via the same
+  `pending_push_dispatch` mechanism `UserFollowed` uses; see
+  `/plans/analytics-service/implementation-plan.md` section 6 for the
+  two-PR sequencing note this landed under, same pattern `social-service`'s
+  `UserFollowed`→`notification-service` addition used --
+  `services/notification-service/infrastructure/messaging/analytics_events_consumer.py`),
+  nutrition-assistant-service (documented, not yet implemented -- that
+  service doesn't exist yet).
+- Emitted when: a tracked nutrient's value is below its `target_min` on
+  at least 5 of the last 7 calendar-days-with-data, and the same
+  (user, signal) pair has not already triggered within the last 14 days
+  (cooldown, deduplicated via the `anomaly_alerts` table). This is an
+  explicit **dev-default threshold, not clinically reviewed** --
+  `security-agent` sign-off required before this reaches staging/prod
+  (`/plans/analytics-service/implementation-plan.md` section 9 addendum,
+  resolution 2). `aggregate_id` is the `user_id` (a deficiency signal is
+  a per-user fact, same convention as `EntitlementGranted`).
+  **Known gap**: only `protein_g`/`fat_g` have real target data flowing
+  through this mechanism today -- `NutritionTargetUpdated`'s actual
+  payload has no micronutrient `target_min` field, so true
+  vitamin/mineral deficiency detection is not yet functionally live; see
+  `services/analytics-service/domain/tracked_nutrients.py`.
 - Payload: `{ "user_id": "uuid", "signal": "string", "window_days": "number",
-  "value": "number" }`
+  "value": "number", "target_min": "number", "sample_size": "number",
+  "disclaimer": "string" }` -- every payload carries an explicit
+  "not a medical diagnosis, consult a professional" disclaimer
+  (CLAUDE.md section 8's professional-advice boundary, applied here by
+  the same underlying principle even though this isn't
+  `nutrition-assistant-service`). See
+  `packages/shared-contracts/schemas/nutrient_deficiency_detected.v1.json`.
 
 ---
 
