@@ -1,0 +1,26 @@
+replicaCount: 3
+
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+
+pdb:
+  minAvailable: 2
+
+resources:
+  requests:
+    cpu: 300m
+    memory: 640Mi
+  limits:
+    cpu: 1500m
+    memory: 1Gi
+
+secretsManager:
+  dbCredentials: nutriapp/prod/nutrition-assistant-service/db-credentials
+  anthropicApiKey: nutriapp/prod/nutrition-assistant-service/anthropic-api-key
+  billingEntitlementCredential: nutriapp/prod/billing-service/internal-reveal-credential
+
+dbProvisionJob:
+  adminCredentialsSecretName: nutriapp/prod/rds/admin-credentials
+  appCredentialsSecretName: nutriapp/prod/nutrition-assistant-service/db-credentials

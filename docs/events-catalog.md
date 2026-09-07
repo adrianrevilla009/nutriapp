@@ -142,7 +142,17 @@ yet implemented — the owning service doesn't exist yet).
   **analytics-service** (implemented -- `diary_events_consumer.py`,
   projects `daily_log_summary`, idempotent by `event_id` via
   `processed_diary_events`, per
-  `/plans/analytics-service/implementation-plan.md`).
+  `/plans/analytics-service/implementation-plan.md`),
+  **nutrition-assistant-service** (implemented -- `diary_events_consumer.py`,
+  projects `diary_history` (a short human-readable summary, not the full
+  macro breakdown -- that lives in `nutrition_history`, fed separately
+  from `nutrition-calculation-service`'s own events), idempotent by
+  `event_id` via `processed_diary_events`, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`. **Note**:
+  this entry was not previously documented as a consumer of this event at
+  all -- the implementation plan that added this consumer incorrectly
+  assumed it already was; corrected here as a genuinely new addition, not
+  a flip of an existing placeholder).
 - Emitted when: a user logs a food entry against a `catalog-service`
   product reference or (reserved, not yet exercised) a `recipe`/
   `ai_detected` source.
@@ -169,7 +179,10 @@ yet implemented — the owning service doesn't exist yet).
   **analytics-service** (implemented -- `diary_events_consumer.py`,
   replaces rather than adds to the entry's prior contribution to
   `daily_log_summary`, per
-  `/plans/analytics-service/implementation-plan.md`).
+  `/plans/analytics-service/implementation-plan.md`),
+  **nutrition-assistant-service** (implemented -- `diary_events_consumer.py`,
+  replaces the entry's prior `diary_history` summary, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user corrects a previously logged food entry. Never
   mutates the original `FoodEntryLogged` event -- a projector interprets
   the pair (CLAUDE.md: corrections are new events, never edits to history).
@@ -188,7 +201,9 @@ yet implemented — the owning service doesn't exist yet).
   maintains its own internal `food_entry_contributions` ledger, keyed by
   `entry_id`, purely so this event's effect can be exactly reversed;
   see `services/analytics-service/domain/ports/daily_log_summary_repository_port.py`'s
-  docstring).
+  docstring), **nutrition-assistant-service** (implemented --
+  `diary_events_consumer.py`, removes the corresponding `diary_history`
+  row, per `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user deletes a previously logged food entry. Never a
   destructive row delete -- a new event a projector interprets.
 - Aggregate: FoodEntry.
@@ -202,7 +217,9 @@ yet implemented — the owning service doesn't exist yet).
   `reminder_schedule` read model as a no-op today, per
   `/plans/notification-service/implementation-plan.md`: a single log
   entry isn't itself a reminder trigger; the water-absence-reminder
-  mechanism is reserved as a documented follow-up).
+  mechanism is reserved as a documented follow-up), **nutrition-assistant-service**
+  (implemented -- `diary_events_consumer.py`, projects `diary_history`, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user logs water intake.
 - Aggregate: WaterIntakeEntry -- one instance per logged item
   (`aggregate_id = intake_id`).
@@ -217,7 +234,9 @@ yet implemented — the owning service doesn't exist yet).
   maintains its own internal `water_intake_contributions` ledger, keyed by
   `intake_id`, purely so this event's effect can be exactly reversed),
   notification-service (active -- same no-op projection note as
-  `WaterIntakeLogged` above).
+  `WaterIntakeLogged` above), **nutrition-assistant-service** (implemented
+  -- `diary_events_consumer.py`, removes the corresponding `diary_history`
+  row, per `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user removes a previously logged water intake entry.
   Never a destructive row delete.
 - Aggregate: WaterIntakeEntry.
@@ -402,9 +421,12 @@ yet implemented — the owning service doesn't exist yet).
   `macro_targets.protein_g_min`/`fat_g_min`, since no micronutrient
   `target_min` is published anywhere -- see
   `services/analytics-service/domain/tracked_nutrients.py`),
-  nutrition-assistant-service (documented, not yet existing -- no live
-  cross-service contract test runs against it, only a payload-shape
-  contract test against this entry).
+  **nutrition-assistant-service** (implemented --
+  `nutrition_calculation_events_consumer.py`, projects `nutrition_history`
+  keyed by `(user_id, scope, reference_id)`, upserted per event -- unlike
+  analytics-service, does not filter to `scope == "day"` only, since a
+  chat question may reasonably be about a single entry, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user's per-entry or per-day nutrient total changes,
   triggered by `FoodEntryLogged`/`FoodEntryCorrected`/`FoodEntryDeleted`
   (diary-service) or (reserved, not built this pass) a formula correction.
@@ -427,9 +449,11 @@ yet implemented — the owning service doesn't exist yet).
   `nutrition_calculation_events_consumer.py`, updates the CURRENT
   `protein_g`/`fat_g` target-min reference used by future
   `NutritionValueRecomputed` upserts; never rewrites already-persisted
-  historical `micronutrient_window` rows), nutrition-assistant-service
-  (documented, not yet existing -- no live cross-service contract test
-  runs against it, only a payload-shape contract test against this entry).
+  historical `micronutrient_window` rows), **nutrition-assistant-service**
+  (implemented -- `nutrition_calculation_events_consumer.py`, projects a
+  one-row-per-user `nutrition_target_history` current-target summary,
+  overwritten on every update, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a user's calculated calorie/macro target changes,
   triggered by `WeightRecorded`/`BodyMetricRecorded`/`GoalSet`/`GoalUpdated`
   (profile-service, via the internal reveal endpoint per implementation
@@ -696,8 +720,12 @@ yet implemented — the owning service doesn't exist yet).
   two-PR sequencing note this landed under, same pattern `social-service`'s
   `UserFollowed`→`notification-service` addition used --
   `services/notification-service/infrastructure/messaging/analytics_events_consumer.py`),
-  nutrition-assistant-service (documented, not yet implemented -- that
-  service doesn't exist yet).
+  **nutrition-assistant-service** (implemented --
+  `infrastructure/messaging/analytics_events_consumer.py`, projects
+  `analytics_signal_history` keyed by `(user_id, signal)`; the
+  `disclaimer` field is stored and surfaced verbatim in any chat response
+  referencing it, never re-worded, per
+  `/plans/nutrition-assistant-service/implementation-plan.md`).
 - Emitted when: a tracked nutrient's value is below its `target_min` on
   at least 5 of the last 7 calendar-days-with-data, and the same
   (user, signal) pair has not already triggered within the last 14 days

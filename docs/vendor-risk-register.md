@@ -31,24 +31,60 @@ an audit.
 ## Registered Vendors
 
 ### LLM/Vision Provider (used by `nutrition-assistant-service` and `food-recognition-service`)
-- Purpose: RAG assistant response generation, and food-photo/barcode
-  recognition (`.claude/agents/food-recognition-agent.md`).
-- Data shared: the user's own retrieved diary/profile context (assistant),
-  and uploaded food photos (recognition) — per
-  `docs/data-protection-and-privacy.md` section 3.
-- Data processing agreement: status to be confirmed once a specific
-  provider is selected during `nutrition-assistant-service`'s and
-  `food-recognition-service`'s implementation plans — do not assume one
-  exists until verified and linked here.
-- Data retention/training policy: document the provider's actual policy
-  here once selected — do not assume a zero-retention/no-training tier
-  without verifying it against the provider's current terms.
+- Purpose: RAG assistant response generation (Claude Messages API, model
+  `claude-haiku-4-5` starting tier per
+  `/plans/nutrition-assistant-service/implementation-plan.md` section 9
+  resolution 5), and food-photo/barcode recognition
+  (`.claude/agents/food-recognition-agent.md`).
+- Provider selected: Anthropic (same vendor `food-recognition-service`
+  already uses for `ClaudeVisionAdapter`; `nutrition-assistant-service`'s
+  `ClaudeConversationAdapter` is a separate metered API-key container per
+  service, never a shared credential).
+- Data shared: the user's own retrieved diary/nutrition/analytics context
+  assembled into the prompt (assistant), and uploaded food photos
+  (recognition) — per `docs/data-protection-and-privacy.md` section 3.
+  **Embeddings are NOT sent to this vendor** — `nutrition-assistant-service`'s
+  embedding step is a separate, self-hosted, open-source model with no
+  external network call at all (see the new entry below); only the final
+  generation call (structured context + query) goes to Anthropic.
+- Data processing agreement: status still to be formally confirmed/signed
+  — implementation carries the same Anthropic commercial-API data
+  handling assumption `food-recognition-service`'s own entry already
+  documents (reviewed 2026-08-27 per that service's README, due for
+  re-verification on any terms update) — do not treat this as a signed
+  DPA until `security-agent` confirms one exists.
+- Data retention/training policy: same as `food-recognition-service`'s
+  existing entry — Anthropic's commercial Messages API does not train on
+  submitted content by default and retains inputs/outputs only
+  transiently for abuse monitoring, per that service's README (verified
+  2026-08-27) — re-verify on any major terms update, not treated as
+  permanently settled for this service either.
 - Compliance relevance: GDPR (ADR-0020) — processor agreement required
-  before any real user data (including photos) is sent.
+  before any real user data is sent.
 - Risk tier: High (core-function-critical + processes user data directly)
 - Review cadence: Annual, or on any provider policy change
 - Owner: `nutrition-assistant-agent` / `food-recognition-agent` (technical
   integration), `security-agent` (agreement review)
+
+### Embedding model (used by `nutrition-assistant-service`)
+- Purpose: embeds the curated knowledge-base corpus and chat queries for
+  Qdrant similarity search (`domain/ports/embedding_port.py`).
+- Provider selected: NONE — self-hosted, open-source
+  `sentence-transformers/all-MiniLM-L6-v2` (Apache-2.0 license), run
+  in-process via `fastembed` (ONNX Runtime backend). No third-party
+  vendor, no network call, no new DPA needed — implementation plan
+  section 9 resolution 1's explicit reasoning for avoiding a second
+  vendor relationship.
+- Data shared: none (no external call at all).
+- Data processing agreement: not applicable — no vendor involved.
+- Data retention/training policy: not applicable.
+- Compliance relevance: none — flagged here only so a future reviewer
+  doesn't assume embeddings are silently going to Anthropic or another
+  third party.
+- Risk tier: Low (no data leaves the cluster for this step)
+- Review cadence: revisit if this pass's small hand-authored knowledge
+  base ever grows enough to need a different/larger model.
+- Owner: `nutrition-assistant-agent`
 
 ### AWS (infrastructure: EKS, RDS, S3, Secrets Manager, SES, SNS)
 - Purpose: Core infrastructure hosting (CLAUDE.md section 2.9)

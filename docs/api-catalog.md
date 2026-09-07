@@ -27,7 +27,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/api/v1/notifications`             | `notification-service`             | v1                    | active    |
 | `/api/v1/activity/exercises`             | `activity-service`             | v1                    | active    |
 | `/api/v1/analytics`             | `analytics-service` (`/plans/analytics-service/implementation-plan.md`) | v1                    | active    |
-| `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | planned    |
+| `/api/v1/chat`                     | `nutrition-assistant-service`                  | v1                    | active    |
 | `/api/v1/bff/dashboard`               | `bff-service` (ADR-0008)             | v1                    | active    |
 | `/api/v1/billing`             | `billing-service` (ADR-0015)             | v1                    | active    |
 | `/api/v1/recipes`             | `recipe-service` (CLAUDE.md section 2.2)             | v1                    | active    |
@@ -42,7 +42,7 @@ an endpoint surface — enforced by `/implementation-review`.
 | `/internal/v1/auth/tokens/{reference_id}/reveal` | `identity-service` | `notification-service` | active |
 | `/internal/v1/profile/{user_id}/reveal-metrics` | `profile-service` | `nutrition-calculation-service` | active |
 | `/internal/v1/billing/webhooks/stripe` | `billing-service` | Stripe (external, see Notes) | active |
-| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service`, `analytics-service` (all three real, cache-miss fallback only) | active |
+| `/internal/v1/billing/entitlements/{user_id}` | `billing-service` | `recipe-service`, `social-service`, `analytics-service`, `nutrition-assistant-service` (all four real, cache-miss fallback only -- nutrition-assistant-service's own `entitlement_cache` currently has no live writer, see its README.md "Known gaps", so every request falls through to this endpoint this pass) | active |
 
 ## Notes
 
@@ -119,13 +119,20 @@ an endpoint surface — enforced by `/implementation-review`.
 - `/internal/v1/billing/entitlements/{user_id}` (`billing-service`) was
   built with zero real callers (implementation plan section 1.4, same
   "publish the contract before any consumer exists" pattern as the six
-  billing events in `docs/events-catalog.md`) and now has three real
-  callers: `recipe-service`, `social-service`, and `analytics-service`
-  each call it (own, independently-named `billing_entitlement_check`
-  circuit breaker per service) ONLY on an `entitlement_cache` miss — the
-  documented synchronous fallback compensation path for the
-  `ProUpgradeEntitlementPropagation` saga
-  (`docs/sagas-and-distributed-transactions.md`).
+  billing events in `docs/events-catalog.md`) and now has four real
+  callers: `recipe-service`, `social-service`, `analytics-service`, and
+  `nutrition-assistant-service` each call it (own, independently-named
+  `billing_entitlement_check` circuit breaker per service) ONLY on an
+  `entitlement_cache` miss — the documented synchronous fallback
+  compensation path for the `ProUpgradeEntitlementPropagation` saga
+  (`docs/sagas-and-distributed-transactions.md`). **Note**:
+  `nutrition-assistant-service`'s own `entitlement_cache` currently has no
+  live writer (no consumer of `EntitlementGranted`/`EntitlementRevoked`
+  exists for that service yet, see its README.md "Known gaps"), so in
+  practice every one of its requests is a cache miss and calls this
+  endpoint — functionally correct (fail-safe, never stale) but without the
+  latency/load benefit the other three callers get from their populated
+  caches.
 - `/api/v1/recipes` (`recipe-service`, `/plans/recipe-service/implementation-plan.md`)
   covers seven routes: `POST /api/v1/recipes` (author, not Pro-gated),
   `PATCH /api/v1/recipes/{recipe_id}` (edit own, not Pro-gated),

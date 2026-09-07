@@ -170,7 +170,9 @@ Spec -> /implementation-plan -> [human approval] -> /test-plan ->
                 |            v         v                |
                 |  +---------------+ +----------------+ |
                 |  | RabbitMQ (Helm) | | Qdrant (Helm,   | |
-                |  |                 | |  if AI assistant)| |
+                |  |                 | |  shared, used by | |
+                |  |                 | |  nutrition-      | |
+                |  |                 | |  assistant-svc)  | |
                 |  +---------------+ +----------------+ |
                 +--------------------------------+
                                 |

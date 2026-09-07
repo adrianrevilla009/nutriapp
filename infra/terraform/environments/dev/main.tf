@@ -109,6 +109,19 @@ module "ecr_db_provision" {
   tags = local.common_tags
 }
 
+module "qdrant" {
+  source = "../../modules/qdrant"
+
+  # Shared platform-level instance (nutrition-assistant-service
+  # implementation plan section 9 resolution 3) -- one Qdrant release,
+  # not per-service, since nutrition-assistant-service is the only
+  # consumer under the current spec. Deployed into the same app
+  # namespace every service's own Helm release uses.
+  namespace = var.namespace
+
+  tags = local.common_tags
+}
+
 module "scale_to_zero" {
   source = "../../modules/scale-to-zero"
 

@@ -81,7 +81,14 @@ of every consumer calling it synchronously on every request.*
      entitlement flag for that user. All three are now real, built
      consumers (`recipe-service` first, `social-service` second,
      `analytics-service` third -- `/plans/analytics-service/implementation-plan.md`),
-     not documented-future ones.
+     not documented-future ones. `nutrition-assistant-service` (also
+     Pro-gated, and also built) is deliberately NOT a fourth fan-out
+     consumer here — its implementation plan's approved file list never
+     included a billing events consumer, so its `entitlement_cache` has
+     no live writer and it always falls through to step 3's synchronous
+     path below on every request (safe, but not part of this saga's
+     choreography) — see its README.md "Known gaps" and
+     `docs/api-catalog.md`'s entitlements-endpoint row for the same note.
 - Compensations:
   - If a consumer's entitlement-flag update fails after retries: it falls
     back to `billing-service`'s synchronous entitlement-check endpoint
