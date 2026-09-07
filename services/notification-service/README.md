@@ -29,6 +29,16 @@ token-reveal call). Not event-sourced.
   to a separate `pending_push_dispatch` row (not the periodic
   `reminder_schedule` projection) and retried by its own
   `PendingPushDispatchScanWorker` until due.
+- `NutrientDeficiencyDetected` (analytics-service) -> `nutrient_deficiency_alert`
+  push, opt-in only, quiet-hours-respecting, same one-shot
+  `pending_push_dispatch` shape as `UserFollowed` above
+  (/plans/analytics-service/implementation-plan.md section 6, two-PR
+  sequencing -- this PR merged before analytics-service's own so the
+  event was never live with zero consumers). The rendered push content is
+  informational only, never diagnostic, and always names a qualified
+  professional to consult (CLAUDE.md section 8) -- this service's own
+  reviewed template copy, never the upstream event's raw `disclaimer`
+  payload field forwarded verbatim.
 
 This service publishes no domain events of its own.
 

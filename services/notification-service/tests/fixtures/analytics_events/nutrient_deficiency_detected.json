@@ -1,0 +1,21 @@
+{
+  "event_id": "99999999-9999-9999-9999-999999999991",
+  "aggregate_id": "33333333-3333-3333-3333-333333333331",
+  "event_type": "NutrientDeficiencyDetected",
+  "version": 1,
+  "occurred_at": "2026-09-07T09:10:00+00:00",
+  "payload": {
+    "user_id": "33333333-3333-3333-3333-333333333331",
+    "signal": "protein_g",
+    "window_days": 7,
+    "value": 32.5,
+    "target_min": 50.0,
+    "sample_size": 6,
+    "disclaimer": "This is not a medical diagnosis. Consult a qualified healthcare professional or registered dietitian for personalized advice."
+  },
+  "metadata": {
+    "correlation_id": "44444444-4444-4444-4444-444444444448",
+    "causation_id": "44444444-4444-4444-4444-444444444448",
+    "user_id": "33333333-3333-3333-3333-333333333331"
+  }
+}

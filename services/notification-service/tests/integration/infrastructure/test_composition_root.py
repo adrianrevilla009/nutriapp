@@ -67,7 +67,7 @@ def test_settings_from_env_defaults_pending_push_dispatch_scan_interval(monkeypa
     assert settings.pending_push_dispatch_scan_interval_seconds == 60.0
 
 
-async def test_container_startup_and_shutdown_wires_all_three_consumers(
+async def test_container_startup_and_shutdown_wires_all_four_consumers(
     postgres_async_url, rabbitmq_url
 ):
     settings = Settings(

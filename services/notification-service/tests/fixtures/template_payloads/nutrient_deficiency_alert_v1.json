@@ -1,0 +1,5 @@
+{
+  "category": "nutrient_deficiency_alert",
+  "signal": "<script>alert(\"xss\")</script>&'quote'",
+  "window_days": "7"
+}

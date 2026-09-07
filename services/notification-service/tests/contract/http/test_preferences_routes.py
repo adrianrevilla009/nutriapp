@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import uuid
 
+from domain.value_objects.notification_category import PUSH_CATEGORIES
 from tests.contract.http.conftest import auth_headers
 
 
@@ -16,7 +17,12 @@ async def test_get_preferences_returns_defaults_for_a_valid_jwt(app_client):
     assert response.status_code == 200
     body = response.json()
     categories = {item["category"] for item in body["preferences"]}
-    assert categories == {"fasting", "meal", "water", "new_follower"}
+    # Sourced from PUSH_CATEGORIES itself (test-plan section 3), not a
+    # hardcoded literal set, so this contract test tracks any newly added
+    # push category automatically (e.g. `nutrient_deficiency_alert`,
+    # /plans/analytics-service/implementation-plan.md section 6) instead of
+    # silently going stale.
+    assert categories == set(PUSH_CATEGORIES)
 
 
 async def test_get_preferences_requires_authentication(app_client):
