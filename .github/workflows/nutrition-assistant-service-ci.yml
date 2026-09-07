@@ -200,6 +200,13 @@ jobs:
     # this chart has no synthetic-values.yaml/ci-fixture ARNs to inject
     # (it is not a Terraform-driven per-service app chart).
     runs-on: ubuntu-latest
+    # Overrides the workflow-level `defaults.run.working-directory:
+    # services/nutrition-assistant-service` -- this job's paths are
+    # repo-root-relative (infra/k8s/charts/qdrant), unlike every other job
+    # in this file which operates inside the service directory.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: helm lint (qdrant)
