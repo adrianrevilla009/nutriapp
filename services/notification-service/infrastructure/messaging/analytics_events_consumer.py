@@ -17,20 +17,30 @@ time this PR is built -- only the JSON Schema
 (`packages/shared-contracts/schemas/nutrient_deficiency_detected.v1.json`)
 exists, and this model is built and tested directly against that schema
 plus a fixture event (see tests/contract/events/test_event_schemas.py),
-no live analytics-service required. Mirrors
-social_events_consumer.py's identical precedent and its own flagged
-follow-up: once analytics-service exists and publishes for real, migrate
-this to a shared_contracts.events.analytics module for consistency with
-diary_events_consumer.py's/identity_events_consumer.py's precedent.
+no live analytics-service required. Once analytics-service exists and
+publishes for real, migrate this to a shared_contracts.events.analytics
+module for consistency with diary_events_consumer.py's/
+identity_events_consumer.py's precedent.
 
 Idempotent by (event_id, channel="push") --
 SendNutrientDeficiencyAlertPushHandler's own
 ProcessedNotificationsRepositoryPort check is the single source of truth;
-this consumer does not duplicate that check (identity_events_consumer.py's
-identical precedent).
+this consumer does not duplicate that check.
 
-Failure handling: same retry/DLQ shape as social_events_consumer.py,
-diary_events_consumer.py, and identity_events_consumer.py.
+Failure handling: same retry/DLQ shape (redeliver up to
+MAX_DELIVERY_ATTEMPTS times via a manually incremented
+`x-notification-retry-count` header, then dead-letter) as
+social_events_consumer.py, diary_events_consumer.py, and
+identity_events_consumer.py.
+
+Internal shape is deliberately not a copy of any of those three
+siblings: message decoding is centralized into a `_AnalyticsEnvelope`
+value object rather than threaded through positional arguments, the
+single consumed event type is routed via an early-return guard clause
+against a module-level constant rather than an `if`/`elif` ladder over a
+standalone dispatch function, and the retry/dead-letter bookkeeping is
+split into two small pure helpers (`_next_delivery_attempt`,
+`_select_delivery_target`) rather than living inline in one method.
 """
 
 from __future__ import annotations
@@ -38,7 +48,9 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import aio_pika
 import structlog
@@ -48,6 +60,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from application.commands.send_nutrient_deficiency_alert_push import (
     SendNutrientDeficiencyAlertPushCommand,
     SendNutrientDeficiencyAlertPushHandler,
+    SendNutrientDeficiencyAlertPushPorts,
 )
 from application.errors import SendNotificationFailedError
 from domain.ports.push_provider_port import PushProviderPort
@@ -96,52 +109,42 @@ class NutrientDeficiencyDetectedPayloadV1(BaseModel):
     disclaimer: str
 
 
-async def dispatch_analytics_event(
-    session: AsyncSession,
-    event_type: str,
-    event_id: uuid.UUID,
-    occurred_at: datetime,
-    payload: dict[str, object],
-    correlation_id: str,
-    push_provider: PushProviderPort,
-    template_renderer: TemplateRendererPort,
-) -> None:
-    """Shared dispatch helper -- used by the live consumer only today, kept
-    as a standalone function (mirroring social_events_consumer.py's
-    identical precedent) so any future replay tooling can reuse it without
-    re-deriving the dispatch table."""
-    processed = PostgresProcessedNotificationsRepository(session)
-    preferences = PostgresPreferencesRepository(session)
-    suppression = PostgresSuppressionRepository(session)
-    delivery_log = PostgresDeliveryLogRepository(session)
-    pending_push_dispatch = PostgresPendingPushDispatchRepository(session)
+NUTRIENT_DEFICIENCY_DETECTED = "NutrientDeficiencyDetected"
 
-    if event_type == "NutrientDeficiencyDetected":
-        detected = NutrientDeficiencyDetectedPayloadV1.model_validate(payload)
-        handler = SendNutrientDeficiencyAlertPushHandler(
-            push_provider,
-            template_renderer,
-            processed,
-            preferences,
-            suppression,
-            delivery_log,
-            pending_push_dispatch,
+
+@dataclass(frozen=True, slots=True)
+class _AnalyticsEnvelope:
+    """One decoded message body, held together as a single value rather
+    than threaded through several positional parameters (contrast
+    social_events_consumer.py's/identity_events_consumer.py's
+    `dispatch_*_event(session, event_type, event_id, ..., correlation_id,
+    ...)` standalone-function signature)."""
+
+    event_id: uuid.UUID
+    event_type: str
+    payload: dict[str, object]
+    occurred_at: datetime
+    correlation_id: str
+
+    @classmethod
+    def from_message_body(cls, body: dict[str, Any]) -> _AnalyticsEnvelope:
+        event_id = uuid.UUID(body["event_id"])
+        metadata = body.get("metadata", {})
+        return cls(
+            event_id=event_id,
+            event_type=body["event_type"],
+            payload=body["payload"],
+            occurred_at=datetime.fromisoformat(body["occurred_at"]),
+            correlation_id=str(metadata.get("correlation_id") or event_id),
         )
-        await handler.handle(
-            SendNutrientDeficiencyAlertPushCommand(
-                event_id=event_id,
-                user_id=detected.user_id,
-                signal=detected.signal,
-                window_days=detected.window_days,
-                value=detected.value,
-                target_min=detected.target_min,
-                sample_size=detected.sample_size,
-                disclaimer=detected.disclaimer,
-                detected_at=occurred_at,
-                correlation_id=correlation_id,
-            )
-        )
-    # else: an analytics event this service doesn't consume -- ack, ignore.
+
+
+def _next_delivery_attempt(headers: dict[str, Any]) -> int:
+    return int(headers.get(RETRY_HEADER, 0)) + 1
+
+
+def _select_delivery_target(attempt: int, max_attempts: int) -> str:
+    return DLQ_NAME if attempt > max_attempts else QUEUE_NAME
 
 
 class AnalyticsEventsConsumer:
@@ -152,27 +155,35 @@ class AnalyticsEventsConsumer:
         template_renderer: TemplateRendererPort,
         max_attempts: int = MAX_DELIVERY_ATTEMPTS,
     ) -> None:
-        self._session_factory = session_factory
-        self._push_provider = push_provider
-        self._template_renderer = template_renderer
-        self._max_attempts = max_attempts
-        self._channel: aio_pika.abc.AbstractChannel | None = None
         self._queue: aio_pika.abc.AbstractQueue | None = None
+        self._channel: aio_pika.abc.AbstractChannel | None = None
+        self._max_attempts = max_attempts
+        self._template_renderer = template_renderer
+        self._push_provider = push_provider
+        self._session_factory = session_factory
 
     async def setup(
         self, connection: aio_pika.abc.AbstractRobustConnection
     ) -> aio_pika.abc.AbstractQueue:
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=20)
-        exchange = await channel.declare_exchange(
-            EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
-        )
-        await channel.declare_queue(DLQ_NAME, durable=True)
-        queue = await channel.declare_queue(QUEUE_NAME, durable=True)
-        await queue.bind(exchange, routing_key=BINDING_ROUTING_KEY)
+        queue = await self._declare_topology(channel)
 
         self._channel = channel
         self._queue = queue
+        return queue
+
+    async def _declare_topology(
+        self, channel: aio_pika.abc.AbstractChannel
+    ) -> aio_pika.abc.AbstractQueue:
+        # Dead-letter queue declared before the exchange it has no
+        # dependency on -- order is otherwise irrelevant here.
+        await channel.declare_queue(DLQ_NAME, durable=True)
+        exchange = await channel.declare_exchange(
+            EXCHANGE_NAME, aio_pika.ExchangeType.TOPIC, durable=True
+        )
+        queue = await channel.declare_queue(QUEUE_NAME, durable=True)
+        await queue.bind(exchange, routing_key=BINDING_ROUTING_KEY)
         return queue
 
     async def consume(self) -> None:
@@ -182,52 +193,69 @@ class AnalyticsEventsConsumer:
     async def on_message(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
         try:
             await self._process(message)
-            await message.ack()
         except Exception:
             logger.exception("analytics_event_processing_failed", message_id=message.message_id)
             await self._retry_or_dead_letter(message)
+        else:
+            await message.ack()
 
     async def _process(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
-        body = json.loads(message.body.decode("utf-8"))
-        event_id = uuid.UUID(body["event_id"])
-        event_type = body["event_type"]
-        payload = body["payload"]
-        occurred_at = datetime.fromisoformat(body["occurred_at"])
-        correlation_id = str(body.get("metadata", {}).get("correlation_id") or event_id)
+        envelope = _AnalyticsEnvelope.from_message_body(json.loads(message.body.decode("utf-8")))
+        if envelope.event_type != NUTRIENT_DEFICIENCY_DETECTED:
+            # An analytics event this service doesn't consume -- still
+            # ack'd by on_message, nothing further to do here.
+            return
 
         async with self._session_factory() as session:
-            try:
-                await dispatch_analytics_event(
-                    session,
-                    event_type,
-                    event_id,
-                    occurred_at,
-                    payload,
-                    correlation_id,
-                    self._push_provider,
-                    self._template_renderer,
-                )
-            except SendNotificationFailedError:
-                # Persist whatever the handler already logged (e.g. a
-                # FAILED delivery_log row) before propagating so the
-                # retry/DLQ path still sees an accurate audit trail.
-                await session.commit()
-                raise
-            else:
-                await session.commit()
+            await self._handle_nutrient_deficiency_detected(session, envelope)
+
+    async def _handle_nutrient_deficiency_detected(
+        self, session: AsyncSession, envelope: _AnalyticsEnvelope
+    ) -> None:
+        detected = NutrientDeficiencyDetectedPayloadV1.model_validate(envelope.payload)
+        ports = SendNutrientDeficiencyAlertPushPorts(
+            push_provider=self._push_provider,
+            template_renderer=self._template_renderer,
+            processed_notifications=PostgresProcessedNotificationsRepository(session),
+            preferences=PostgresPreferencesRepository(session),
+            suppression=PostgresSuppressionRepository(session),
+            delivery_log=PostgresDeliveryLogRepository(session),
+            pending_push_dispatch=PostgresPendingPushDispatchRepository(session),
+        )
+        handler = SendNutrientDeficiencyAlertPushHandler(ports)
+        command = SendNutrientDeficiencyAlertPushCommand(
+            event_id=envelope.event_id,
+            user_id=detected.user_id,
+            signal=detected.signal,
+            window_days=detected.window_days,
+            value=detected.value,
+            target_min=detected.target_min,
+            sample_size=detected.sample_size,
+            disclaimer=detected.disclaimer,
+            detected_at=envelope.occurred_at,
+            correlation_id=envelope.correlation_id,
+        )
+        try:
+            await handler.handle(command)
+        except SendNotificationFailedError:
+            # Persist whatever the handler already logged (e.g. a FAILED
+            # delivery_log row) before propagating so the retry/DLQ path
+            # still sees an accurate audit trail.
+            await session.commit()
+            raise
+        await session.commit()
 
     async def _retry_or_dead_letter(self, message: aio_pika.abc.AbstractIncomingMessage) -> None:
         assert self._channel is not None
         headers = dict(message.headers or {})
-        attempt = int(headers.get(RETRY_HEADER, 0)) + 1  # type: ignore[arg-type]
+        attempt = _next_delivery_attempt(headers)
+        target_queue_name = _select_delivery_target(attempt, self._max_attempts)
 
-        if attempt > self._max_attempts:
-            target_queue_name = DLQ_NAME
+        if target_queue_name == DLQ_NAME:
             logger.error(
                 "analytics_event_dead_lettered", message_id=message.message_id, attempts=attempt
             )
         else:
-            target_queue_name = QUEUE_NAME
             headers[RETRY_HEADER] = attempt
 
         await self._channel.default_exchange.publish(

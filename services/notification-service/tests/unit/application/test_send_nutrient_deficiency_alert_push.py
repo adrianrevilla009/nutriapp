@@ -24,6 +24,7 @@ import pytest
 from application.commands.send_nutrient_deficiency_alert_push import (
     SendNutrientDeficiencyAlertPushCommand,
     SendNutrientDeficiencyAlertPushHandler,
+    SendNutrientDeficiencyAlertPushPorts,
 )
 from application.errors import SendNotificationFailedError
 from domain.ports.push_provider_port import PushProviderUnavailableError
@@ -51,16 +52,16 @@ def _build_handler():
     suppression = FakeSuppressionRepositoryPort()
     delivery_log = FakeDeliveryLogRepositoryPort()
     pending_push_dispatch = FakePendingPushDispatchRepositoryPort()
-    handler = SendNutrientDeficiencyAlertPushHandler(
-        push_provider,
-        template_renderer,
-        processed,
-        preferences,
-        suppression,
-        delivery_log,
-        pending_push_dispatch,
-        now_fn=lambda: NOW,
+    ports = SendNutrientDeficiencyAlertPushPorts(
+        push_provider=push_provider,
+        template_renderer=template_renderer,
+        processed_notifications=processed,
+        preferences=preferences,
+        suppression=suppression,
+        delivery_log=delivery_log,
+        pending_push_dispatch=pending_push_dispatch,
     )
+    handler = SendNutrientDeficiencyAlertPushHandler(ports, now_fn=lambda: NOW)
     return (
         handler,
         push_provider,

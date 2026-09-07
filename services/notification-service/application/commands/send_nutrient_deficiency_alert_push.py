@@ -47,6 +47,19 @@ narrow, documented placeholder as scan_and_send_due_reminders.py /
 send_new_follower_push.py) -- the suppression-list check and the
 push-provider call both use the affected user's user id itself as the
 device identifier.
+
+`handle()` is deliberately decomposed into a short sequence of small,
+single-purpose private methods (`_resolve_opted_in_preference`,
+`_is_suppressed`, `_build_render_context`, `_defer_for_quiet_hours`,
+`_send_and_log`) rather than one long procedural method -- a different
+internal shape from `SendNewFollowerPushHandler`'s sibling
+implementation of the same guard-clause sequence. The constructor also
+takes its collaborator ports as one bundled
+`SendNutrientDeficiencyAlertPushPorts` value rather than seven flat
+positional parameters, for the same reason: this handler happens to
+depend on the exact same port set as `SendNewFollowerPushHandler`, so a
+flat parameter list would be a verbatim structural copy of that sibling
+constructor.
 """
 
 from __future__ import annotations
@@ -58,6 +71,7 @@ from datetime import datetime, timezone
 
 from application.errors import SendNotificationFailedError
 from domain.entities.delivery_log_record import DeliveryLogRecord
+from domain.entities.notification_preference import NotificationPreference
 from domain.entities.pending_push_dispatch import PendingPushDispatch
 from domain.ports.delivery_log_repository_port import DeliveryLogRepositoryPort
 from domain.ports.pending_push_dispatch_repository_port import (
@@ -94,106 +108,136 @@ class SendNutrientDeficiencyAlertPushCommand:
     correlation_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class SendNutrientDeficiencyAlertPushPorts:
+    """This handler's collaborator ports, bundled into one value (see
+    module docstring) rather than accepted as separate constructor
+    parameters."""
+
+    push_provider: PushProviderPort
+    template_renderer: TemplateRendererPort
+    processed_notifications: ProcessedNotificationsRepositoryPort
+    preferences: PreferencesRepositoryPort
+    suppression: SuppressionRepositoryPort
+    delivery_log: DeliveryLogRepositoryPort
+    pending_push_dispatch: PendingPushDispatchRepositoryPort
+
+
 class SendNutrientDeficiencyAlertPushHandler:
     def __init__(
         self,
-        push_provider: PushProviderPort,
-        template_renderer: TemplateRendererPort,
-        processed_notifications: ProcessedNotificationsRepositoryPort,
-        preferences: PreferencesRepositoryPort,
-        suppression: SuppressionRepositoryPort,
-        delivery_log: DeliveryLogRepositoryPort,
-        pending_push_dispatch: PendingPushDispatchRepositoryPort,
+        ports: SendNutrientDeficiencyAlertPushPorts,
         now_fn: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
-        self._push_provider = push_provider
-        self._template_renderer = template_renderer
-        self._processed = processed_notifications
-        self._preferences = preferences
-        self._suppression = suppression
-        self._delivery_log = delivery_log
-        self._pending_push_dispatch = pending_push_dispatch
+        self._ports = ports
         self._now_fn = now_fn
 
     async def handle(self, command: SendNutrientDeficiencyAlertPushCommand) -> None:
-        if await self._processed.already_processed(command.event_id, CHANNEL):
+        if await self._already_delivered(command.event_id):
             return
 
-        preference = await self._preferences.get_category(command.user_id, CATEGORY_NAME)
+        preference = await self._resolve_opted_in_preference(command.user_id)
+        if preference is None or await self._is_suppressed(command.user_id):
+            # Opted out, never explicitly opted in (opt-in only, see module
+            # docstring), or on the suppression list: no dispatch attempt.
+            await self._mark_delivered(command.event_id)
+            return
+
+        context = self._build_render_context(command)
+        if await self._defer_for_quiet_hours(command, preference, context):
+            await self._mark_delivered(command.event_id)
+            return
+
+        await self._send_and_log(command, context)
+        await self._mark_delivered(command.event_id)
+
+    async def _already_delivered(self, event_id: uuid.UUID) -> bool:
+        return await self._ports.processed_notifications.already_processed(event_id, CHANNEL)
+
+    async def _mark_delivered(self, event_id: uuid.UUID) -> None:
+        await self._ports.processed_notifications.mark_processed(event_id, CHANNEL)
+
+    async def _resolve_opted_in_preference(
+        self, user_id: uuid.UUID
+    ) -> NotificationPreference | None:
+        preference = await self._ports.preferences.get_category(user_id, CATEGORY_NAME)
         if preference is None or not preference.push_enabled:
-            # Opted out (or never explicitly opted in -- opt-in only, see
-            # module docstring): no dispatch attempt at all.
-            await self._processed.mark_processed(command.event_id, CHANNEL)
-            return
+            return None
+        return preference
 
-        device_identifier = str(command.user_id)
-        if await self._suppression.is_suppressed(command.user_id, Channel.PUSH, device_identifier):
-            await self._processed.mark_processed(command.event_id, CHANNEL)
-            return
+    async def _is_suppressed(self, user_id: uuid.UUID) -> bool:
+        return await self._ports.suppression.is_suppressed(user_id, Channel.PUSH, str(user_id))
 
-        context = {
+    @staticmethod
+    def _build_render_context(command: SendNutrientDeficiencyAlertPushCommand) -> dict[str, str]:
+        return {
             "category": CATEGORY_NAME,
             "signal": command.signal,
             "window_days": str(command.window_days),
         }
 
+    async def _defer_for_quiet_hours(
+        self,
+        command: SendNutrientDeficiencyAlertPushCommand,
+        preference: NotificationPreference,
+        context: dict[str, str],
+    ) -> bool:
         now = self._now_fn()
-        if preference.quiet_hours.contains(now):
-            # Non-transactional -- delayed to the next allowed window, never
-            # dropped (docs/notifications.md section 2). One-shot event, no
-            # natural "next occurrence" to retry against, so it is persisted
-            # here for PendingPushDispatchScanWorker to pick up once due.
-            next_allowed = quiet_hours_policy.next_allowed_send_time(
-                preference.category, preference.quiet_hours, now
-            )
-            await self._pending_push_dispatch.add(
-                PendingPushDispatch(
-                    dispatch_id=uuid.uuid4(),
-                    user_id=command.user_id,
-                    category=preference.category,
-                    template_id=TEMPLATE_ID,
-                    context=context,
-                    correlation_id=command.correlation_id,
-                    earliest_dispatch_at=next_allowed,
-                )
-            )
-            await self._processed.mark_processed(command.event_id, CHANNEL)
-            return
+        if not preference.quiet_hours.contains(now):
+            return False
 
-        rendered = self._template_renderer.render_push(TEMPLATE_ID, context)
+        # Non-transactional -- delayed to the next allowed window, never
+        # dropped (docs/notifications.md section 2). One-shot event, no
+        # natural "next occurrence" to retry against, so it is persisted
+        # here for PendingPushDispatchScanWorker to pick up once due.
+        next_allowed = quiet_hours_policy.next_allowed_send_time(
+            preference.category, preference.quiet_hours, now
+        )
+        deferred = PendingPushDispatch(
+            earliest_dispatch_at=next_allowed,
+            correlation_id=command.correlation_id,
+            context=context,
+            template_id=TEMPLATE_ID,
+            category=preference.category,
+            user_id=command.user_id,
+            dispatch_id=uuid.uuid4(),
+        )
+        await self._ports.pending_push_dispatch.add(deferred)
+        return True
 
+    async def _send_and_log(
+        self, command: SendNutrientDeficiencyAlertPushCommand, context: dict[str, str]
+    ) -> None:
+        rendered = self._ports.template_renderer.render_push(TEMPLATE_ID, context)
         try:
-            await self._push_provider.send(
-                device_token=device_identifier,
-                title=rendered.title,
-                body=rendered.body,
-                data=rendered.data,
+            await self._ports.push_provider.send(
                 correlation_id=command.correlation_id,
+                data=rendered.data,
+                body=rendered.body,
+                title=rendered.title,
+                device_token=str(command.user_id),
             )
         except PushProviderUnavailableError as exc:
-            await self._delivery_log.record(
-                DeliveryLogRecord(
-                    delivery_id=uuid.uuid4(),
-                    user_id=command.user_id,
-                    channel=Channel.PUSH,
-                    template_id=TEMPLATE_ID,
-                    status=DeliveryStatus.FAILED,
-                    attempted_at=self._now_fn(),
-                    failure_reason=str(exc),
-                )
-            )
+            await self._record_delivery(command, DeliveryStatus.FAILED, failure_reason=str(exc))
             raise SendNotificationFailedError(
                 "Could not send the nutrient-deficiency-alert push notification."
             ) from exc
 
-        await self._delivery_log.record(
-            DeliveryLogRecord(
-                delivery_id=uuid.uuid4(),
-                user_id=command.user_id,
-                channel=Channel.PUSH,
-                template_id=TEMPLATE_ID,
-                status=DeliveryStatus.SENT,
-                attempted_at=self._now_fn(),
-            )
+        await self._record_delivery(command, DeliveryStatus.SENT)
+
+    async def _record_delivery(
+        self,
+        command: SendNutrientDeficiencyAlertPushCommand,
+        status: DeliveryStatus,
+        failure_reason: str | None = None,
+    ) -> None:
+        record = DeliveryLogRecord(
+            failure_reason=failure_reason,
+            attempted_at=self._now_fn(),
+            status=status,
+            template_id=TEMPLATE_ID,
+            channel=Channel.PUSH,
+            user_id=command.user_id,
+            delivery_id=uuid.uuid4(),
         )
-        await self._processed.mark_processed(command.event_id, CHANNEL)
+        await self._ports.delivery_log.record(record)
