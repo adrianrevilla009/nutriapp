@@ -1,0 +1,32 @@
+{
+  "event_id": "8f14e45f-ceea-467e-adc3-000000000102",
+  "aggregate_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+  "event_type": "NutritionTargetUpdated",
+  "version": 1,
+  "occurred_at": "2026-06-08T07:01:00+00:00",
+  "payload": {
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3",
+    "bmr_kcal": 1600.0,
+    "tdee_kcal": 2200.0,
+    "calorie_target_kcal": 2000.0,
+    "macro_targets": {
+      "protein_g_min": 50.0,
+      "protein_g_max": 150.0,
+      "fat_g_min": 44.0,
+      "carbs_g": 250.0
+    },
+    "goal_type": "MAINTAIN",
+    "activity_level": "MODERATE",
+    "activity_adjustment_kcal": null,
+    "clamped": false,
+    "clamp_reason": null,
+    "formula_version": "v1",
+    "reason": "weight_recorded",
+    "effective_from": "2026-06-08T07:01:00+00:00"
+  },
+  "metadata": {
+    "correlation_id": "corr-8",
+    "causation_id": null,
+    "user_id": "8f14e45f-ceea-467e-adc3-0000000000a3"
+  }
+}
