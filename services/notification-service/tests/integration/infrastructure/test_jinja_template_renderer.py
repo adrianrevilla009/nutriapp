@@ -82,3 +82,24 @@ def test_new_follower_push_escapes_and_produces_valid_json():
     assert rendered.data["follower_id"] == "77777777-7777-7777-7777-777777777777"
     assert "<script>" not in rendered.data["follow_id"]
     assert "&lt;script&gt;" in rendered.data["follow_id"]
+
+
+def test_nutrient_deficiency_alert_push_escapes_and_carries_the_disclaimer():
+    # analytics-service's NutrientDeficiencyDetected PR (two-PR sequencing,
+    # /plans/analytics-service/implementation-plan.md section 6): the
+    # rendered body must be clearly informational, never diagnostic
+    # (CLAUDE.md section 8), and the same XSS-prevention guarantee every
+    # other push template has, even though `signal` is realistically
+    # always a controlled nutrient-key string in production.
+    rendered = renderer.render_push(
+        TemplateId("nutrient_deficiency_alert", 1), _load("nutrient_deficiency_alert_v1.json")
+    )
+    assert rendered.title
+    assert "not a medical diagnosis" in rendered.body
+    assert "healthcare professional" in rendered.body or "dietitian" in rendered.body
+    assert rendered.data["category"] == "nutrient_deficiency_alert"
+    assert rendered.data["window_days"] == "7"
+    assert "<script>" not in rendered.body
+    assert "<script>" not in rendered.data["signal"]
+    assert "&lt;script&gt;" in rendered.body
+    assert "&lt;script&gt;" in rendered.data["signal"]

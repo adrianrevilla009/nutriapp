@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import (
 from infrastructure.external.identity_token_reveal_client import IdentityTokenRevealClient
 from infrastructure.external.ses_email_adapter import SesEmailAdapter
 from infrastructure.external.sns_push_adapter import SnsPushAdapter
+from infrastructure.messaging.analytics_events_consumer import AnalyticsEventsConsumer
 from infrastructure.messaging.diary_events_consumer import DiaryEventsConsumer
 from infrastructure.messaging.identity_events_consumer import IdentityEventsConsumer
 from infrastructure.messaging.social_events_consumer import SocialEventsConsumer
@@ -138,6 +139,7 @@ class Container:
         self._identity_events_consumer: IdentityEventsConsumer | None = None
         self._diary_events_consumer: DiaryEventsConsumer | None = None
         self._social_events_consumer: SocialEventsConsumer | None = None
+        self._analytics_events_consumer: AnalyticsEventsConsumer | None = None
         self._reminder_scan_worker: ReminderScanWorker | None = None
         self._pending_push_dispatch_scan_worker: PendingPushDispatchScanWorker | None = None
         self._background_tasks: list[asyncio.Task[None]] = []
@@ -167,6 +169,18 @@ class Container:
         )
         await self._social_events_consumer.setup(self._rabbitmq_connection)
         await self._social_events_consumer.consume()
+
+        # analytics-service's NutrientDeficiencyDetected addition
+        # (/plans/analytics-service/implementation-plan.md section 6,
+        # two-PR sequencing): a real, live consumer wired here so the
+        # event is never published (once analytics-service exists) with
+        # nothing listening -- same rationale as SocialEventsConsumer
+        # above.
+        self._analytics_events_consumer = AnalyticsEventsConsumer(
+            self.session_factory, self.push_provider, self.template_renderer
+        )
+        await self._analytics_events_consumer.setup(self._rabbitmq_connection)
+        await self._analytics_events_consumer.consume()
 
         self._reminder_scan_worker = ReminderScanWorker(
             self.session_factory,

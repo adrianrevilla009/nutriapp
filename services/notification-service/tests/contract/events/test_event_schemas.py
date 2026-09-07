@@ -9,7 +9,15 @@ validated against the locally-defined `UserFollowedPayloadV1` in
 shared_contracts model -- social-service does not exist in this repository
 yet (implementation-plan.md section 6's two-PR sequencing), so there is no
 independently-published schema to source from. See that module's docstring
-for the flagged follow-up once social-service exists for real."""
+for the flagged follow-up once social-service exists for real.
+
+Same exception applies to `NutrientDeficiencyDetected`
+(/plans/analytics-service/implementation-plan.md section 6, same two-PR
+sequencing precedent): validated against the locally-defined
+`NutrientDeficiencyDetectedPayloadV1` in
+`infrastructure/messaging/analytics_events_consumer.py`, matching
+`packages/shared-contracts/schemas/nutrient_deficiency_detected.v1.json`
+field-for-field."""
 
 from __future__ import annotations
 
@@ -32,6 +40,9 @@ from shared_contracts.events.identity import (
     UserRegisteredPayloadV1,
 )
 
+from infrastructure.messaging.analytics_events_consumer import (
+    NutrientDeficiencyDetectedPayloadV1,
+)
 from infrastructure.messaging.social_events_consumer import UserFollowedPayloadV1
 
 FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures"
@@ -60,6 +71,11 @@ _CASES = [
     ("diary_events/meal_plan_updated.json", "MealPlanUpdated", MealPlanUpdatedPayloadV1),
     ("diary_events/meal_plan_removed.json", "MealPlanRemoved", MealPlanRemovedPayloadV1),
     ("social_events/user_followed.json", "UserFollowed", UserFollowedPayloadV1),
+    (
+        "analytics_events/nutrient_deficiency_detected.json",
+        "NutrientDeficiencyDetected",
+        NutrientDeficiencyDetectedPayloadV1,
+    ),
 ]
 
 
