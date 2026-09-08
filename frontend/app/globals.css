@@ -1,0 +1,186 @@
+/* Minimal, unstyled-but-accessible default (implementation plan resolution 3
+   -- no .claude/skills/frontend-design convention exists in this repo).
+   Theme-aware tokens (light default, dark via prefers-color-scheme), system
+   font stack, WCAG AA contrast defaults, visible focus rings everywhere. */
+
+:root {
+  --color-bg: #ffffff;
+  --color-fg: #1a1a1a;
+  --color-muted: #595959; /* ~7:1 on white, comfortably AA/AAA for normal text */
+  --color-border: #767676; /* 4.54:1 on white -- meets AA for UI components */
+  --color-primary: #0b5fff;
+  --color-primary-fg: #ffffff;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fceceb;
+  --color-focus: #0b5fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #121212;
+    --color-fg: #f2f2f2;
+    --color-muted: #b8b8b8;
+    --color-border: #9a9a9a;
+    --color-primary: #6ea8ff;
+    --color-primary-fg: #0b1a33;
+    --color-danger: #ffb4ab;
+    --color-danger-bg: #3a0f0c;
+    --color-focus: #6ea8ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.field {
+  margin-block: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field label {
+  font-weight: 600;
+}
+
+.field input,
+.field select {
+  padding: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 1rem;
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+.field-error {
+  color: var(--color-danger);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.field-hint {
+  color: var(--color-muted);
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.error-banner {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-block: 1rem;
+}
+
+.loading-skeleton {
+  color: var(--color-muted);
+  padding: 1rem 0;
+}
+
+.notice {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-block: 1rem;
+}
+
+.result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+nav.app-nav {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}

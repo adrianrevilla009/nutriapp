@@ -752,6 +752,43 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  frontend:
+    build:
+      # Build context is the repo root (not frontend/) because the image
+      # is built via a pnpm workspace (pnpm-workspace.yaml at repo root)
+      # -- the Dockerfile COPYs pnpm-workspace.yaml/pnpm-lock.yaml first,
+      # same "repo-root context for a monorepo-aware build" convention
+      # every backend service's Dockerfile already follows.
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Container-internal service DNS names/ports (lib/server/backend-config.ts's
+      # defaults already match these -- set explicitly here anyway, same
+      # convention as every backend service's env block, rather than relying
+      # on the code's own fallback).
+      IDENTITY_SERVICE_BASE_URL: http://identity-service:8000
+      CATALOG_SERVICE_BASE_URL: http://catalog-service:8000
+      DIARY_SERVICE_BASE_URL: http://diary-service:8000
+      BFF_SERVICE_BASE_URL: http://bff-service:8000
+      NODE_ENV: production
+      # This is local dev over plain HTTP, not a real TLS-terminated edge
+      # (ADR-0010's CloudFront/Kong) -- a real browser silently refuses to
+      # PERSIST a `Secure` cookie set over plain HTTP (confirmed empirically
+      # while validating the login flow end-to-end against this exact
+      # stack: the login call itself returned 200 with a real access token,
+      # but the refresh-token cookie was never actually stored, so the very
+      # next navigation's middleware session check failed and silently
+      # bounced back to /login). Never set this to "false" in a real
+      # deployment -- see lib/server/backend-config.ts's COOKIE_SECURE doc.
+      COOKIE_SECURE: "false"
+    depends_on:
+      - identity-service
+      - catalog-service
+      - diary-service
+      - bff-service
+
 volumes:
   identity-db-data:
   profile-db-data:

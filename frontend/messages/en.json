@@ -1,0 +1,87 @@
+{
+  "common": {
+    "appName": "NutriApp",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "requiredField": "This field is required.",
+    "genericError": "Something went wrong. Please try again."
+  },
+  "register": {
+    "title": "Create your account",
+    "emailLabel": "Email address",
+    "passwordLabel": "Password",
+    "submit": "Register",
+    "invalidEmail": "Enter a valid email address.",
+    "passwordRequired": "Enter a password.",
+    "successTitle": "Check your email",
+    "successBody": "We sent a verification link to {email}. Follow it to activate your account, then sign in.",
+    "loginLink": "Already have an account? Sign in",
+    "genericError": "We couldn't create your account. Please check your details and try again."
+  },
+  "verifyEmail": {
+    "title": "Verifying your email",
+    "invalidLink": "This verification link is invalid or incomplete. Check the link in your email, or request a new one.",
+    "success": "Your email is verified. You can now sign in.",
+    "failure": "We couldn't verify this link. It may have already been used or expired.",
+    "loginLink": "Go to sign in"
+  },
+  "login": {
+    "title": "Sign in",
+    "emailLabel": "Email address",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "registerLink": "New here? Create an account",
+    "invalidCredentials": "Invalid email or password, or your email isn't verified yet."
+  },
+  "search": {
+    "title": "Find a food to log",
+    "inputLabel": "Search products",
+    "placeholder": "e.g. plain yogurt",
+    "emptyPrompt": "Search by product name to find something to log.",
+    "noResults": "No products found for \"{query}\".",
+    "resultsError": "We couldn't load search results.",
+    "logAction": "Log {name}",
+    "perHundredGrams": "per 100 g: {calories} kcal, {protein} g protein, {carbs} g carbs, {fat} g fat"
+  },
+  "log": {
+    "title": "Log {name}",
+    "quantityLabel": "Quantity (grams)",
+    "quantityInvalid": "Enter a quantity greater than 0.",
+    "mealSlotLabel": "Meal",
+    "occurredAtLabel": "When",
+    "submit": "Log entry",
+    "noNutritionData": "This product has no nutrition data on file, so it can't be logged yet.",
+    "successTitle": "Logged",
+    "successBody": "Your dashboard may take a moment to update while your totals recompute.",
+    "viewDashboard": "View dashboard",
+    "mealSlots": {
+      "breakfast": "Breakfast",
+      "lunch": "Lunch",
+      "dinner": "Dinner",
+      "snack": "Snack"
+    }
+  },
+  "dashboard": {
+    "title": "Today's totals",
+    "refresh": "Refresh",
+    "diarySummary": "Diary summary",
+    "nutrientTotals": "Nutrient totals",
+    "target": "Target",
+    "calories": "Calories",
+    "protein": "Protein",
+    "carbs": "Carbs",
+    "fat": "Fat",
+    "water": "Water",
+    "micronutrients": "Micronutrients",
+    "micronutrientsUnavailable": "Micronutrient detail isn't available for this day yet.",
+    "unavailableNotYetComputed": "Still catching up — this section will update shortly.",
+    "unavailableDownstreamError": "This section couldn't be loaded right now."
+  },
+  "nav": {
+    "search": "Search",
+    "dashboard": "Dashboard",
+    "logout": "Sign out"
+  }
+}

@@ -1,0 +1,16 @@
+# First JS/TS workspace root file in the monorepo (frontend implementation
+# plan section 3, resolution 6 / .claude/skills/monorepo-tooling/SKILL.md:
+# "Frontend: pnpm workspaces"). Python services use independent
+# pyproject.toml/uv workspaces instead -- this file governs only
+# frontend/.
+packages:
+  - "frontend"
+
+# next@15.5.25 pulls a transitively vulnerable postcss@8.4.31 (path
+# traversal / arbitrary source-map file read, GHSA-r28c-9q8g-f849 and
+# GHSA-6g55-p6wh-862q) that next's own package.json pins internally --
+# forced up to a patched version repo-wide since next has no newer patch
+# release yet. Flagged for architecture-agent: drop this override once a
+# next release bumps its own postcss dependency past 8.5.18.
+overrides:
+  postcss: ">=8.5.18"
