@@ -169,6 +169,34 @@ jobs:
           severity: "CRITICAL,HIGH"
           exit-code: "1"
           ignore-unfixed: "true"
+      - name: Smoke test image starts and passes /health/live
+        run: |
+          set -euo pipefail
+          # bff-service is the one exception to the RabbitMQ-sidecar pattern
+          # used by every other service's build-and-scan-image job:
+          # Container.startup() (infrastructure/composition_root.py) is a
+          # documented no-op -- "Nothing to start -- no DB engine, no
+          # broker connection, no background worker" -- so the ASGI server
+          # starts listening immediately. Verified empirically: `docker run`
+          # with zero env vars serves /health/live within seconds.
+          docker run -d --name smoke-app -p 8000:8000 bff-service:${{ github.sha }}
+          READY=""
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live > /dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$READY" ]; then
+            echo "::error::bff-service did not pass /health/live after container start"
+            docker logs smoke-app
+            exit 1
+          fi
+          echo "bff-service /health/live OK"
+      - name: Smoke test teardown
+        if: always()
+        run: docker rm -f smoke-app 2>/dev/null || true
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this
