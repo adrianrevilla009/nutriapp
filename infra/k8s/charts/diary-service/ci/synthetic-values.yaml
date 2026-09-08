@@ -22,6 +22,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bff-service
       ports:
         - protocol: TCP
           port: 8000

@@ -18,19 +18,15 @@ resource also allows DNS, the only other egress this service needs (it
 has no database, no message broker, no third-party dependency of its
 own, implementation plan section 2).
 
-KNOWN, DOCUMENTED GAP (not silently worked around): this resource only
-covers THIS service's own egress side. diary-service's and
+FORMERLY a known, documented gap (STATUS.md, now closed): this resource
+only covers THIS service's own egress side. diary-service's and
 nutrition-calculation-service's own ingress NetworkPolicies
 (infra/k8s/charts/diary-service/values.yaml,
-infra/k8s/charts/nutrition-calculation-service/values.yaml) currently
-allow ingress ONLY from Kong's pod selector -- calling them directly
-(bypassing Kong, as this service does) would be blocked by those
-policies in a real cluster today. Adding an allow-rule for bff-service's
-pod selector to each of those two charts is a follow-up change scoped to
-those services' own owning agents (diary-agent,
-nutrition-calculation-agent), out of scope for this plan, same as
-ADR-0008's own "write Kong's declarative config" follow-up action --
-flagged here rather than silently deployed broken.
+infra/k8s/charts/nutrition-calculation-service/values.yaml) now also
+allow ingress from bff-service's pod selector (`app.kubernetes.io/name:
+bff-service`), in addition to Kong's -- the missing other half of this
+rule. See those two charts' `networkPolicy.ingressRules` for the actual
+allow-rule.
 */}}
 {{- if .Values.downstreamEgress.enabled }}
 apiVersion: networking.k8s.io/v1

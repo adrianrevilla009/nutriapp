@@ -92,8 +92,23 @@ dbProvision:
   dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
   irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["catalog-service"]
 
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) --
+# the format _lib's _deployment.tpl's `env: {{- toYaml .Values.env }}`
+# actually requires (a flat map here renders an invalid Deployment spec
+# neither `helm lint` nor `helm template` catches on its own -- STATUS.md's
+# flagged bug, fixed here; see food-recognition-service/values.yaml's
+# identical note for the precedent this backports).
 env:
-  CATALOG_SERVICE_USDA_FDC_BASE_URL: "https://api.nal.usda.gov/fdc/v1"
+  - name: CATALOG_SERVICE_USDA_FDC_BASE_URL
+    value: "https://api.nal.usda.gov/fdc/v1"
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# (CATALOG_SERVICE_DATABASE_URL/CATALOG_SERVICE_USDA_FDC_API_KEY) as env
+# vars -- previously missing entirely (STATUS.md's flagged bug), so
+# DATABASE_URL never reached this container on a real deploy.
+envFrom:
+  - secretRef:
+      name: catalog-service-secrets
 
 # Secrets Manager entry ARNs (synced via External Secrets Operator per
 # ADR-0007) — never a literal secret value in this file. Set by Terraform

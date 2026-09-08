@@ -1,0 +1,23 @@
+-- Local-dev-only equivalent of the role creation
+-- infra/k8s/charts/_lib/templates/_db-provision-job.tpl performs against
+-- the shared RDS instance in a real deploy (as the RDS master user, which
+-- has CREATEROLE -- this service's own DB_ROLE does not).
+--
+-- Creates the NOLOGIN `identity_service_audit_writer` role and grants it
+-- to the identity-db POSTGRES_USER (identity_service), so that:
+--   1. migrations/versions/0001_create_identity_tables.py's
+--      `GRANT INSERT ON audit_log TO identity_service_audit_writer;` has a
+--      role to grant to (it fails with "role does not exist" otherwise --
+--      see that migration's own header comment), and
+--   2. infrastructure/composition_root.py's `Container.audit_engine`,
+--      which opens every audit-write connection with
+--      `SET ROLE identity_service_audit_writer`, can actually switch into
+--      it at runtime (`SET ROLE` requires membership in the target role).
+--
+-- Runs automatically on first cluster init via Postgres's own
+-- /docker-entrypoint-initdb.d/ mechanism (docker-compose.yml mounts this
+-- file there) -- it only ever runs against a fresh, empty data volume, so
+-- no idempotency guard is needed here (unlike the Helm hook, which must
+-- tolerate re-running on every `helm upgrade`).
+CREATE ROLE identity_service_audit_writer NOLOGIN;
+GRANT identity_service_audit_writer TO identity_service;
