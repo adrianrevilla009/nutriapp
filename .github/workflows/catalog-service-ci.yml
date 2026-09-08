@@ -192,6 +192,69 @@ jobs:
           severity: "CRITICAL,HIGH"
           exit-code: "1"
           ignore-unfixed: "true"
+      - name: Smoke test image starts and passes /health/live
+        run: |
+          set -euo pipefail
+          docker network create smoke-net
+          # Every service's FastAPI lifespan awaits aio_pika.connect_robust()
+          # in Container.startup() BEFORE the ASGI server starts listening
+          # (infrastructure/composition_root.py) -- /health/live never
+          # responds, and the container exits outright, without a reachable
+          # broker, even though the /health/live handler itself never
+          # touches DB or broker (infrastructure/http/health.py). Confirmed
+          # empirically while authoring this step: without this sidecar the
+          # container crashes with aiormq.exceptions.AMQPConnectionError
+          # before Uvicorn ever binds the port -- this is exactly the class
+          # of failure (image builds, container doesn't actually run) that
+          # let the Dockerfile shebang bug ship invisibly. Postgres is
+          # deliberately NOT started here -- SQLAlchemy's
+          # create_async_engine() never connects eagerly, so a syntactically
+          # valid but unreachable DATABASE_URL is sufficient for this
+          # liveness-only check.
+          # --restart on-failure:5: the official image occasionally fails
+          # its very first boot on a fresh anonymous volume with an
+          # .erlang.cookie permission race (observed locally) -- a
+          # transient RabbitMQ-image quirk unrelated to what this step
+          # verifies, so it self-heals rather than flaking the whole job.
+          docker run -d --name smoke-rabbitmq --network smoke-net --restart on-failure:5 rabbitmq:3.13-management-alpine
+          # `rabbitmq-diagnostics ping` only proves the Erlang node is
+          # alive -- it succeeds well before the AMQP listener on 5672 is
+          # actually bound (confirmed locally: a service container
+          # connecting right after a bare `ping` success still hit
+          # ECONNREFUSED). `check_port_connectivity` is the check that
+          # actually proves 5672 is accepting connections.
+          for i in $(seq 1 40); do
+            docker exec smoke-rabbitmq rabbitmq-diagnostics -q check_port_connectivity >/dev/null 2>&1 && break
+            if [ "$i" -eq 40 ]; then
+              echo "::error::RabbitMQ sidecar never became ready"
+              docker logs smoke-rabbitmq
+              exit 1
+            fi
+            sleep 2
+          done
+          docker run -d --name smoke-app --network smoke-net -p 8000:8000 \
+            -e CATALOG_SERVICE_DATABASE_URL="postgresql+asyncpg://smoketest:smoketest@smoke-db-unused:5432/smoketest" \
+            -e CATALOG_SERVICE_RABBITMQ_URL="amqp://guest:guest@smoke-rabbitmq:5672/" \
+            catalog-service:${{ github.sha }}
+          READY=""
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live > /dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$READY" ]; then
+            echo "::error::catalog-service did not pass /health/live after container start"
+            docker logs smoke-app
+            exit 1
+          fi
+          echo "catalog-service /health/live OK"
+      - name: Smoke test teardown
+        if: always()
+        run: |
+          docker rm -f smoke-app smoke-rabbitmq 2>/dev/null || true
+          docker network rm smoke-net 2>/dev/null || true
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this

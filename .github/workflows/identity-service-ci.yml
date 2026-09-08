@@ -185,6 +185,72 @@ jobs:
           severity: "CRITICAL,HIGH"
           exit-code: "1"
           ignore-unfixed: "true"
+      - name: Smoke test image starts and passes /health/live
+        run: |
+          set -euo pipefail
+          docker network create smoke-net
+          # Same RabbitMQ-blocks-startup rationale as every other service's
+          # build-and-scan-image job (see composition_root.py's
+          # Container.startup()) -- see e.g. diary-service-ci.yml's
+          # identical step for the full explanation.
+          # --restart on-failure:5: the official image occasionally fails
+          # its very first boot on a fresh anonymous volume with an
+          # .erlang.cookie permission race (observed locally) -- a
+          # transient RabbitMQ-image quirk unrelated to what this step
+          # verifies, so it self-heals rather than flaking the whole job.
+          docker run -d --name smoke-rabbitmq --network smoke-net --restart on-failure:5 rabbitmq:3.13-management-alpine
+          # `rabbitmq-diagnostics ping` only proves the Erlang node is
+          # alive -- it succeeds well before the AMQP listener on 5672 is
+          # actually bound (confirmed locally: a service container
+          # connecting right after a bare `ping` success still hit
+          # ECONNREFUSED). `check_port_connectivity` is the check that
+          # actually proves 5672 is accepting connections.
+          for i in $(seq 1 40); do
+            docker exec smoke-rabbitmq rabbitmq-diagnostics -q check_port_connectivity >/dev/null 2>&1 && break
+            if [ "$i" -eq 40 ]; then
+              echo "::error::RabbitMQ sidecar never became ready"
+              docker logs smoke-rabbitmq
+              exit 1
+            fi
+            sleep 2
+          done
+          # identity-service also requires a readable RS256 keypair
+          # (ADR-0022) -- IDENTITY_JWT_PRIVATE_KEY_PATH/
+          # IDENTITY_JWT_PUBLIC_KEY_PATH are both required with no default
+          # (composition_root.py's Settings.from_env) -- same keypair shape
+          # as `make dev-keys` generates for local docker compose, never a
+          # real/committed key.
+          mkdir -p "$RUNNER_TEMP/smoke-dev-keys"
+          openssl genrsa -out "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_private_key.pem" 2048
+          openssl rsa -in "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_private_key.pem" \
+            -pubout -out "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_public_key.pem"
+          docker run -d --name smoke-app --network smoke-net -p 8000:8000 \
+            -v "$RUNNER_TEMP/smoke-dev-keys:/run/secrets:ro" \
+            -e IDENTITY_SERVICE_DATABASE_URL="postgresql+asyncpg://smoketest:smoketest@smoke-db-unused:5432/smoketest" \
+            -e IDENTITY_SERVICE_RABBITMQ_URL="amqp://guest:guest@smoke-rabbitmq:5672/" \
+            -e IDENTITY_JWT_PRIVATE_KEY_PATH="/run/secrets/identity_jwt_private_key.pem" \
+            -e IDENTITY_JWT_PUBLIC_KEY_PATH="/run/secrets/identity_jwt_public_key.pem" \
+            -e IDENTITY_INTERNAL_REVEAL_CREDENTIAL="smoke-test-credential" \
+            identity-service:${{ github.sha }}
+          READY=""
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live > /dev/null; then
+              READY=1
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$READY" ]; then
+            echo "::error::identity-service did not pass /health/live after container start"
+            docker logs smoke-app
+            exit 1
+          fi
+          echo "identity-service /health/live OK"
+      - name: Smoke test teardown
+        if: always()
+        run: |
+          docker rm -f smoke-app smoke-rabbitmq 2>/dev/null || true
+          docker network rm smoke-net 2>/dev/null || true
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this

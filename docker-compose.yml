@@ -48,7 +48,15 @@ services:
       - "5672:5672"
       - "15672:15672" # management UI
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # `rabbitmq-diagnostics ping` only proves the Erlang node is alive --
+      # it can report success before the AMQP listener on 5672 is actually
+      # bound (confirmed while building the CI smoke-test step: a
+      # dependent container started right after this healthcheck flips
+      # green can still hit ECONNREFUSED). `check_port_connectivity` is
+      # the check that actually proves 5672 (and the other advertised
+      # ports) are accepting connections -- every `depends_on: rabbitmq:
+      # condition: service_healthy` in this file relies on that guarantee.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
       interval: 10s
       timeout: 5s
       retries: 10
