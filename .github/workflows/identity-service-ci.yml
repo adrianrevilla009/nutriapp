@@ -224,6 +224,17 @@ jobs:
           openssl genrsa -out "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_private_key.pem" 2048
           openssl rsa -in "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_private_key.pem" \
             -pubout -out "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_public_key.pem"
+          # openssl's default umask leaves the private key at 600, owned by
+          # the runner's own user -- unreadable by the container's non-root
+          # `app` user (uid 1000, Dockerfile's `useradd --uid 1000`) once
+          # bind-mounted, since the uid doesn't match. Confirmed on a real
+          # GitHub-hosted runner: PermissionError: [Errno 13] Permission
+          # denied reading /run/secrets/identity_jwt_private_key.pem.
+          # world-readable is fine -- this is a throwaway keypair generated
+          # fresh per CI run, discarded with $RUNNER_TEMP, never a real
+          # secret.
+          chmod 644 "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_private_key.pem" \
+            "$RUNNER_TEMP/smoke-dev-keys/identity_jwt_public_key.pem"
           docker run -d --name smoke-app --network smoke-net -p 8000:8000 \
             -v "$RUNNER_TEMP/smoke-dev-keys:/run/secrets:ro" \
             -e IDENTITY_SERVICE_DATABASE_URL="postgresql+asyncpg://smoketest:smoketest@smoke-db-unused:5432/smoketest" \
