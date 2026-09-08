@@ -5,13 +5,19 @@
  * docker-compose.yml's in-network service DNS names/ports; override via
  * .env.local for a non-compose local dev setup.
  */
+// NOSONAR(typescript:S5332) x4 below -- these are in-cluster/in-compose
+// service-to-service default hostnames, not a user-facing endpoint. TLS
+// terminates at the edge (Kong/CloudFront, ADR-0010); every backend
+// service in this repo listens on plain HTTP internally the same way.
+// Genuine false positive, not a suppressed real finding.
 export const IDENTITY_SERVICE_BASE_URL =
-  process.env.IDENTITY_SERVICE_BASE_URL ?? "http://identity-service:8000";
+  process.env.IDENTITY_SERVICE_BASE_URL ?? "http://identity-service:8000"; // NOSONAR
 export const CATALOG_SERVICE_BASE_URL =
-  process.env.CATALOG_SERVICE_BASE_URL ?? "http://catalog-service:8000";
+  process.env.CATALOG_SERVICE_BASE_URL ?? "http://catalog-service:8000"; // NOSONAR
 export const DIARY_SERVICE_BASE_URL =
-  process.env.DIARY_SERVICE_BASE_URL ?? "http://diary-service:8000";
-export const BFF_SERVICE_BASE_URL = process.env.BFF_SERVICE_BASE_URL ?? "http://bff-service:8000";
+  process.env.DIARY_SERVICE_BASE_URL ?? "http://diary-service:8000"; // NOSONAR
+export const BFF_SERVICE_BASE_URL =
+  process.env.BFF_SERVICE_BASE_URL ?? "http://bff-service:8000"; // NOSONAR
 
 /** Name of the httpOnly cookie holding the opaque, server-revocable
  * refresh token (ADR-0022). Never read by client-side JS. */

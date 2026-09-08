@@ -10,7 +10,11 @@
  * empirically while wiring this up against a real Playwright run).
  */
 export const SEEDED_USER_EMAIL = "e2e-seed-user@example.com";
-export const SEEDED_USER_PASSWORD = "correct-horse-battery-staple";
+// NOSONAR(typescript:S2068) -- a fixed, throwaway credential for a
+// test-only seeded user in a local docker-compose stack, never a real
+// secret. Committing it is the point: the Playwright spec and the seed
+// script must agree on the same literal value.
+export const SEEDED_USER_PASSWORD = "correct-horse-battery-staple"; // NOSONAR
 export const SEEDED_PRODUCT_NAME = "E2E Seed Yogurt";
 
 /**
