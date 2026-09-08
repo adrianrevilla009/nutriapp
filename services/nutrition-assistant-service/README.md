@@ -113,7 +113,23 @@ using a fake LLM response that omits the disclaimer entirely.
 `tests/unit/domain/test_health_topic_classifier.py::TestKnownPrecisionRecallGap`,
 which documents actual known false negatives) -- flagged for
 `security-agent`/`architecture-agent` review before staging/prod, same
-posture as `analytics-service`'s deficiency-threshold sign-off. Not a
+posture as `analytics-service`'s deficiency-threshold sign-off.
+
+A 2026-09-08 security review closed three concrete false-negative gaps
+in the pattern set: indirect causal/symptom phrasing that avoids the
+literal string "caused by" ("could low iron be why I'm so tired"),
+pregnancy/breastfeeding/infant-nutrition questions (previously zero
+coverage), and restrictive-eating phrasing that avoids the word
+"disorder" ("I've been skipping meals and barely eating, is that
+okay"). See `TestIndirectCausalPhrasingCoverage`,
+`TestPregnancyBreastfeedingInfantCoverage`, and
+`TestRestrictiveEatingWithoutDisorderWordCoverage` in the same test
+file. `TestKnownPrecisionRecallGap`'s remaining two cases ("I've been
+really tired lately", "how am I doing") are still open -- vague
+tiredness/wellbeing statements with no symptom, causation, or
+restrictive-eating keyword at all resist this rule-based approach
+without a much higher false-positive rate; they are not closed by this
+pass. Not a
 solved problem; a first cut.
 
 ## Cross-user isolation
