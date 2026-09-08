@@ -1,0 +1,46 @@
+# infra/k8s/charts/frontend/ci/synthetic-values.yaml
+#
+# Checked-in fixture used ONLY by .github/workflows/frontend-ci.yml's
+# helm-lint-and-template job to fill the fields Terraform normally injects
+# at deploy time (frontend.tf) -- ARNs/hosts below are syntactically valid
+# but point at nothing real. Never use these values outside CI (same
+# pattern/rationale as every other service's own ci/synthetic-values.yaml).
+# No secretsManager block, no dbProvision block -- this service has
+# neither (same shape as bff-service's own fixture).
+
+image:
+  repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/nutriapp/frontend"
+  tag: "ci-fixture"
+
+serviceAccount:
+  irsaRoleArn: "arn:aws:iam::123456789012:role/nutriapp-dev-frontend-app"
+
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 3000
+
+downstreamEgress:
+  enabled: true
+  identityServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: identity-service
+  identityServicePort: 8000
+  catalogServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-service
+  catalogServicePort: 8000
+  diaryServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: diary-service
+  diaryServicePort: 8000
+  bffServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: bff-service
+  bffServicePort: 8000

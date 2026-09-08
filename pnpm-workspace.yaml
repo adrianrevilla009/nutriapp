@@ -1,0 +1,7 @@
+# First JS/TS workspace root file in the monorepo (frontend implementation
+# plan section 3, resolution 6 / .claude/skills/monorepo-tooling/SKILL.md:
+# "Frontend: pnpm workspaces"). Python services use independent
+# pyproject.toml/uv workspaces instead -- this file governs only
+# frontend/.
+packages:
+  - "frontend"

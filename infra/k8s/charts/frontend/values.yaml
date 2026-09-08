@@ -1,0 +1,128 @@
+# Base values -- environment overlays in values-{dev,staging,prod}.yaml
+# override only what differs. Mirrors bff-service's chart shape (no
+# database, no message broker -- implementation plan section 3) with one
+# difference: this service has FOUR outbound calls (identity-service,
+# catalog-service, diary-service, bff-service -- resolution 1's Route
+# Handler proxies), not two, and listens on port 3000 (Next.js), not 8000.
+
+nameOverride: frontend
+fullnameOverride: frontend
+
+image:
+  repository: frontend # replaced with the ECR URI at deploy time
+  tag: "" # set to the git SHA by CI (ci-cd-conventions SKILL.md: never `latest`)
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  # Populated per environment by Terraform (frontend.tf). This service
+  # needs NO AWS permission at all (no Secrets Manager read, no S3,
+  # nothing) -- every credential it needs (none) or forwards (the caller's
+  # own JWT) comes from the request itself, same "empty IRSA policy"
+  # precedent as bff-service.tf.
+  irsaRoleArn: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    cpu: 500m
+    memory: 384Mi
+
+probes:
+  liveness:
+    path: /health/live
+    port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    path: /health/ready
+    port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 10
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  # This is the browser's own entry point for every screen load -- scales
+  # at least as aggressively as bff-service, the aggregation layer behind
+  # it.
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: true
+  minAvailable: 1
+
+networkPolicy:
+  enabled: true
+  # This service's public HTTP surface is the whole app, reached via Kong
+  # (or a future CDN-direct path -- see this chart's own README note in
+  # ARCHITECTURE.md / implementation plan section 9 resolution 1's flagged
+  # revisit-once-Kong-exists item). Bare podSelector (no namespaceSelector)
+  # scopes to the shared namespace, same convention as every other
+  # service's chart.
+  ingressRules:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kong
+      ports:
+        - protocol: TCP
+          port: 3000
+
+# downstreamEgress: this service's FOUR outbound calls (implementation
+# plan section 3/4 resolution 1) -- this service's pods may reach OTHER
+# PODS ONLY via these four services' pod selectors, on their normal
+# (single, public) service port -- never lateral movement to any other
+# in-cluster service. See templates/networkpolicy-egress-downstream.yaml's
+# header comment for the same documented gap bff-service's own chart
+# carries (those four services' OWN ingress NetworkPolicies currently only
+# allow Kong, not this service, as a follow-up for each owning agent).
+downstreamEgress:
+  enabled: true
+  identityServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: identity-service
+  identityServicePort: 8000
+  catalogServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalog-service
+  catalogServicePort: 8000
+  diaryServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: diary-service
+  diaryServicePort: 8000
+  bffServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: bff-service
+  bffServicePort: 8000
+
+# NO dbProvision block -- this service has no database (implementation
+# plan section 2/3), same as bff-service's chart.
+
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) --
+# the CORRECT format _lib's _deployment.tpl expects.
+env:
+  - name: IDENTITY_SERVICE_BASE_URL
+    value: "http://identity-service:8000"
+  - name: CATALOG_SERVICE_BASE_URL
+    value: "http://catalog-service:8000"
+  - name: DIARY_SERVICE_BASE_URL
+    value: "http://diary-service:8000"
+  - name: BFF_SERVICE_BASE_URL
+    value: "http://bff-service:8000"
+  - name: NODE_ENV
+    value: "production"
+
+# NO envFrom / secretsManager block -- this service has no Secrets Manager
+# entry of its own to sync (no ExternalSecret resource in this chart,
+# same as bff-service's).

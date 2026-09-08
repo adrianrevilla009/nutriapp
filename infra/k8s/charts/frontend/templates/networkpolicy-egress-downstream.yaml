@@ -1,0 +1,82 @@
+{{/*
+Narrow egress restriction for this service's FOUR outbound calls
+(implementation plan section 4/5, resolution 1's Route Handler proxies):
+identity-service, catalog-service, diary-service, bff-service. This
+service's pods may reach OTHER PODS in the namespace ONLY via these four
+services' pod selectors, on their normal (public, Kong-routable) service
+port -- never arbitrary lateral movement to any other service's pods.
+Declared as its own plain NetworkPolicy resource (not via the shared
+`_lib` `_networkpolicy.tpl`, which only renders `policyTypes: [Ingress]`
+today), mirroring bff-service's networkpolicy-egress-downstream.yaml /
+notification-service's networkpolicy-egress-identity-reveal.yaml /
+food-recognition-service's networkpolicy-egress-catalog-lookup.yaml
+precedent.
+
+Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
+Kubernetes default-denies ALL egress from it except what some policy
+explicitly allows (the union across every such policy) -- so this
+resource also allows DNS, the only other egress this service needs (it
+has no database, no message broker, no third-party dependency of its
+own, implementation plan section 2/3).
+
+KNOWN, DOCUMENTED GAP (not silently worked around, same as bff-service's
+own chart): this resource only covers THIS service's own egress side.
+identity-service's/catalog-service's/diary-service's/bff-service's own
+ingress NetworkPolicies currently allow ingress ONLY from Kong's pod
+selector -- calling them directly (as this service's Route Handlers do,
+resolution 1) would be blocked by those policies in a real cluster today.
+Adding an allow-rule for frontend's pod selector to each of those four
+charts is a follow-up change scoped to each owning agent
+(identity-agent, catalog-agent, diary-agent, bff-agent), out of scope for
+this plan -- flagged here rather than silently deployed broken, same
+posture bff-service's own chart took for its two downstream calls.
+*/}}
+{{- if .Values.downstreamEgress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "nutriapp-lib.fullname" . }}-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nutriapp-lib.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "nutriapp-lib.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS -- otherwise this pod cannot resolve any hostname at all,
+    # including any of the four downstream services' own ClusterIP DNS
+    # names.
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.identityServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.identityServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.catalogServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.catalogServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.diaryServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.diaryServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.bffServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.bffServicePort }}
+{{- end }}

@@ -1,0 +1,5 @@
+# Reserved, empty this pass -- no Zustand store is needed for journey 1's
+# scope (implementation plan section 2: the only cross-component state,
+# session presence, is handled by lib/session.ts + lib/hooks/useSession.ts,
+# not a separate store). Kept as a placeholder directory per
+# docs/frontend-architecture.md section 1's structure.

@@ -1,0 +1,217 @@
+name: frontend-ci
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "infra/k8s/charts/frontend/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "infra/k8s/charts/frontend/**"
+      - "infra/k8s/charts/_lib/**"
+      - ".github/workflows/frontend-ci.yml"
+
+defaults:
+  run:
+    working-directory: frontend
+
+# Stage order mirrors every backend service's own *-ci.yml (per
+# ci-cd-conventions SKILL.md: lint -> type-check -> secret-scan -> unit ->
+# dep-vuln-scan -> integration -> coverage-gate -> build-image ->
+# image-scan -> helm-lint-and-template), JS-toolchain equivalents per
+# implementation plan section 7: eslint/prettier, tsc --noEmit, vitest,
+# pnpm audit, Testing Library + MSW, vitest --coverage against the 80%
+# overall threshold (resolution 5 -- no per-layer split, this codebase has
+# no domain/application/infrastructure layering). No separate "contract"
+# stage: schema-mirroring accuracy is enforced by the Zod schemas +
+# MSW fixtures built from the real backend shapes (schemas/*.ts,
+# tests/fixtures/*.ts), not a Pact-style contract test this pass.
+#
+# push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
+# promote-prod: follow-up once infra/terraform's platform-infra plan is
+# applied and an ECR repo + EKS cluster exist, same as every backend
+# service's own workflow. The Playwright E2E spec (tests/e2e/) is NOT run
+# in this CI pass -- it requires a full docker-compose stack including a
+# seeded pre-verified user (implementation plan resolution 2); wiring that
+# into CI is a devops-agent follow-up, tracked, not silently skipped.
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: ESLint
+        run: pnpm lint
+      - name: Prettier check
+        run: pnpm format:check
+
+  type-check:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: tsc --noEmit (strict)
+        run: pnpm typecheck
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@44c470ffc35caa8b1eb3e8012ca53c2f9bea4eb5 # v2.3.6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: [lint, type-check]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Unit tests (schemas, pure helpers -- no I/O)
+        run: pnpm test:unit
+
+  dep-vuln-scan:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: pnpm audit (high+ severity)
+        run: pnpm audit --audit-level=high
+        working-directory: .
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: dep-vuln-scan
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Integration tests (Testing Library + MSW, incl. axe-core accessibility checks)
+        run: pnpm test:integration
+
+  coverage-gate:
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+      # 80% overall threshold (implementation plan resolution 5), enforced
+      # by vitest.config.ts's `coverage.thresholds` -- this step fails the
+      # job on its own if not met, no separate `coverage report` step
+      # needed (unlike the backend's per-layer coverage.py invocation).
+      - name: Full suite with coverage (80% overall threshold)
+        run: pnpm test:coverage
+
+  build-and-scan-image:
+    runs-on: ubuntu-latest
+    needs: coverage-gate
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image
+        run: docker build -f frontend/Dockerfile -t frontend:${{ github.sha }} .
+        working-directory: .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: frontend:${{ github.sha }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: "true"
+
+  helm-lint-and-template:
+    # Not part of the lint->...->coverage-gate->build chain above (this
+    # validates infra/k8s/charts/, not frontend/'s own code) -- runs
+    # independently so a chart-only change doesn't need to wait on/
+    # duplicate the Node stages, same as every backend service's workflow.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/k8s/charts/frontend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+        with:
+          version: "v3.16.2"
+      - name: helm dependency update (vendors _lib)
+        run: helm dependency update .
+      - name: helm lint (dev values + checked-in CI fixture)
+        run: helm lint . -f values-dev.yaml -f ci/synthetic-values.yaml
+      - name: helm template (fails on any render error)
+        run: helm template frontend . -f values-dev.yaml -f ci/synthetic-values.yaml > /dev/null
+
+  # push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
+  # promote-prod: follow-up once infra/terraform's platform-infra plan is
+  # applied and an ECR repo + EKS cluster exist (docs/ci-cd-strategy.md).
