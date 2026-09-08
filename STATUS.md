@@ -70,18 +70,39 @@ ingress `NetworkPolicy`s now also allow `bff-service`'s pod selector
 alongside Kong's. Verified via `helm template` on all three charts,
 confirming the rendered rules exist on both sides with matching labels.
 
-**NEW, found and fixed 2026-09-08 (discovered during frontend E2E work):**
-`diary-service`, `nutrition-calculation-service`, `bff-service`,
-`analytics-service`, and `food-recognition-service`'s Dockerfiles all had
-a broken venv shebang between the build and runtime stages (`uv sync`
-bakes an absolute shebang pointing at the builder stage's path into every
+**RESOLVED 2026-09-08 (discovered during frontend E2E work, closed in two
+passes the same day):** all 11 services with a `packages/shared-contracts`
+build dependency (`diary-service`, `nutrition-calculation-service`,
+`bff-service`, `analytics-service`, `food-recognition-service`,
+`notification-service`, `activity-service`, `billing-service`,
+`recipe-service`, `social-service`, `nutrition-assistant-service`) had a
+broken venv shebang between the build and runtime stages (`uv sync` bakes
+an absolute shebang pointing at the builder stage's path into every
 `.venv/bin/<script>`, which doesn't exist in the runtime stage) — every
-container crashed on start with `exec: no such file or directory`. Fixed
-by invoking `python -m uvicorn` instead of relying on the venv's own
-shebang'd entry-point script, across all five services. Verified with a
-real `docker build` + `docker run`/`docker compose up` for each,
-confirming `Application startup complete` and a real `200` from
-`/health/live`, not just a successful build.
+container crashed on start with `exec: no such file or directory`. The
+first 5 were found and fixed via `docker build`/`docker compose up`
+verification during frontend E2E work; an `architecture-agent` review
+pass the same day found the remaining 6 had never actually been
+build-verified and carried the identical bug. Fixed by invoking
+`python -m uvicorn` instead of relying on the venv's own shebang'd
+entry-point script, across all 11 services. Verified with a real
+`docker build` + `docker run`/`docker compose up` for each, confirming
+`Application startup complete` and a real `200` from `/health/live`, not
+just a successful build. `.claude/skills/containerization/SKILL.md`'s
+reference template — the actual root cause of the bug recurring via
+copy-paste — updated to show the correct form with an explanation, so a
+future service's Dockerfile doesn't regress it. `catalog-service`,
+`identity-service` (no `shared-contracts` dependency, builder/runtime
+`WORKDIR` already match) and `profile-service` (never invokes the
+`uvicorn` console script at all) were never affected.
+
+**Process gap flagged, not yet fixed:** no service's CI runs its built
+image at all today — this class of bug is structurally invisible until a
+manual/E2E run catches it, which is how both passes above were found.
+Recommended follow-up for `devops-agent`: a cheap smoke step
+(`docker run` + curl `/health/live`) in each `*-ci.yml`'s `build-image`
+job, which doesn't require EKS/the deferred `deploy-dev`/`smoke-e2e`
+stages and would have caught this at PR time.
 
 Also fixed, same investigation: `identity-service`'s Alembic migration
 needs a Postgres role (`identity_service_audit_writer`) `docker-compose.yml`

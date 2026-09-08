@@ -33,4 +33,11 @@ COPY services/social-service/alembic.ini ./
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Invoked via `python -m uvicorn`, not the `.venv/bin/uvicorn` console-script
+# directly: that script's shebang is hardcoded at `uv sync` time to the
+# BUILDER stage's absolute venv path (/repo/services/social-service/.venv/bin/python),
+# which does not exist in this runtime stage (/app/.venv) -- running it
+# directly fails with "exec ...: no such file or directory". `python -m`
+# resolves the interpreter via PATH (the venv's actual python binary, not a
+# shebang'd script), sidestepping the mismatch entirely.
+CMD ["python", "-m", "uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]
