@@ -22,10 +22,30 @@ COPY . .
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Always invoke via `python -m uvicorn`, never the bare `uvicorn` console
+# script -- see note below.
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 Adapt the runtime base and start command per service; keep the two-stage
 split and non-root `USER` line non-negotiable.
+
+**Always use `CMD ["python", "-m", "uvicorn", ...]`, never the bare
+`CMD ["uvicorn", ...]` form.** `uv sync` hardcodes an absolute shebang into
+`.venv/bin/uvicorn` pointing at the *builder* stage's venv path. If the
+runtime stage's `WORKDIR` differs from the builder stage's `WORKDIR` --
+which happens for any service that depends on `packages/shared-contracts`,
+since its builder stage needs a `/repo`-rooted `WORKDIR` (e.g.
+`/repo/services/<name>`) for `pyproject.toml`'s `[tool.uv.sources]` relative
+path to resolve, while the runtime stage uses `/app` — that shebang points
+at a path that doesn't exist in the runtime stage, and the container
+crashes on start with `exec: no such file or directory`. `python -m
+uvicorn` resolves the interpreter via `PATH` (the venv's real `python` ELF
+binary, set by `ENV PATH="/app/.venv/bin:$PATH"` above) instead of the
+shebang'd script, sidestepping the mismatch entirely — with no behavioral
+difference. This bug bit 11 services (fixed in PR #36 and the
+notification/activity/billing/recipe/social/nutrition-assistant follow-up)
+before this template was corrected; don't regress it in a new service's
+Dockerfile.
 
 ## Rules
 - No secrets as `ARG`/`ENV` baked at build time — only injected at runtime via
