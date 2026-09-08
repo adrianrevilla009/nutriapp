@@ -75,9 +75,11 @@ auth dependency) throughout.
   statistic carries `sample_size`/`window_days` explicitly.
 - `GET /api/v1/analytics/reports/{report_type}?start_date=...&end_date=...`
   -- CSV export of `daily_log_summary` + `micronutrient_window` rows for
-  the requested range (v1 ships CSV only). **Pro-gated.** Every
-  successful export is recorded in `export_audit_log` (CLAUDE.md section
-  2.8) -- every call, never deduplicated.
+  the requested range (v1 ships CSV only). **Pro-gated.** Every call --
+  success OR rejection (invalid request, not entitled) -- is recorded in
+  `analytics_audit.export_audit_log` (CLAUDE.md section 2.8,
+  docs/observability-and-audit.md section 4.1) -- every call, never
+  deduplicated.
 
 **Entitlement-rejection status code**: `402 Payment Required`, code
 `NOT_ENTITLED` -- reuses `recipe-service`'s repo-wide convention verbatim.
@@ -112,8 +114,8 @@ uv run pytest --cov=domain --cov=application --cov=infrastructure --cov-report=t
 ```
 
 Coverage floors: domain >= 90%, application >= 85%, infrastructure >= 70%.
-Actual (2026-09-07): domain 99%, application 98%, infrastructure 85%,
-84/84 tests passing.
+Actual (2026-09-08, after the export-audit-trail compliance fix): domain
+99%, application 99%, infrastructure 86%, 110/110 tests passing.
 
 ## Flagged for review before prod promotion
 
@@ -125,10 +127,19 @@ Actual (2026-09-07): domain 99%, application 98%, infrastructure 85%,
    confirm whether extending `NutritionTargetUpdated` (a
    `nutrition-calculation-service` change) is worth reopening that
    already-merged service's formula surface.
-3. **`export_audit_log` schema** is a first-cut (`export_id`, `user_id`,
-   `report_type`, `requested_at`, `format`, date range) -- flagged for
-   `security-agent` review given GDPR Article 9 data (weight/
-   biometric-derived trends) flows into exportable reports.
+3. ~~**`export_audit_log` schema** is a first-cut...~~ **Fixed** (2026-09-08,
+   security review): `analytics_audit.export_audit_log` now carries the
+   full docs/observability-and-audit.md section 4.2 shape
+   (`outcome`/`actor_id`/`action`/`target_type`/`target_id`/
+   `correlation_id`, in addition to the pre-existing `export_id`/`user_id`/
+   `report_type`/`requested_at`/`export_format`/date-range/`row_count`),
+   lives in a separate schema with `UPDATE`/`DELETE` genuinely revoked at
+   the Postgres level from the connection the app writes through
+   (`analytics_service_audit_writer`, `SET ROLE`-per-connection --
+   `infrastructure/composition_root.py`'s `Container.audit_engine`,
+   migrations/versions/0002_export_audit_log_compliance.py), and now
+   audits rejected/probing export attempts too, not just successful ones
+   (`application/queries/get_report.py`).
 4. **`notification-service` consumer for `NutrientDeficiencyDetected`** is
    a separate, coordinated change (not part of this service's own PR) --
    this service's own tests never assume a live consumer exists.

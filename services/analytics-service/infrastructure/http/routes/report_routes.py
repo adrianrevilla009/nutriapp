@@ -15,7 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.queries.get_report import GetReportHandler, GetReportQuery
 from infrastructure.composition_root import Container, build_repositories
-from infrastructure.http.dependencies import get_authenticated_user_id, get_container, get_session
+from infrastructure.http.dependencies import (
+    get_authenticated_user_id,
+    get_container,
+    get_correlation_id,
+    get_session,
+)
 from infrastructure.http.error_mapping import map_exception
 from infrastructure.http.schemas.analytics_schemas import ReportRequest
 
@@ -33,36 +38,47 @@ async def get_report(
     session: Annotated[AsyncSession, Depends(get_session)],
     container: Annotated[Container, Depends(get_container)],
     request: Annotated[ReportRequest, Query()],
+    correlation_id: Annotated[str, Depends(get_correlation_id)],
 ) -> Response | JSONResponse:
-    (
-        daily_log_summary,
-        micronutrient_window,
-        _anomaly_alerts,
-        entitlement_cache,
-        export_audit,
-        _outbox,
-    ) = build_repositories(session)
-    handler = GetReportHandler(
-        daily_log_summary,
-        micronutrient_window,
-        entitlement_cache,
-        container.entitlement_check,
-        export_audit,
-    )
+    # A dedicated session bound to `Container.audit_engine`
+    # (AUDIT_WRITER_ROLE, INSERT/SELECT-only) -- never the request's shared
+    # `session` -- so every audit write (success AND rejection, see
+    # `GetReportHandler.handle`) commits independently and durably,
+    # regardless of what happens to the rest of this request.
+    audit_session = container.new_audit_session()
     try:
-        result = await handler.handle(
-            GetReportQuery(
-                user_id=user_id,
-                report_type=report_type,
-                start_date=request.start_date,
-                end_date=request.end_date,
-            )
+        (
+            daily_log_summary,
+            micronutrient_window,
+            _anomaly_alerts,
+            entitlement_cache,
+            export_audit,
+            _outbox,
+        ) = build_repositories(session, audit_session)
+        handler = GetReportHandler(
+            daily_log_summary,
+            micronutrient_window,
+            entitlement_cache,
+            container.entitlement_check,
+            export_audit,
         )
-        await session.commit()
-    except Exception as exc:  # noqa: BLE001
-        return map_exception(exc)
-    return Response(
-        content=result.csv_content,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="analytics_{report_type}.csv"'},
-    )
+        try:
+            result = await handler.handle(
+                GetReportQuery(
+                    user_id=user_id,
+                    report_type=report_type,
+                    start_date=request.start_date,
+                    end_date=request.end_date,
+                    correlation_id=correlation_id,
+                )
+            )
+            await session.commit()
+        except Exception as exc:  # noqa: BLE001
+            return map_exception(exc)
+        return Response(
+            content=result.csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="analytics_{report_type}.csv"'},
+        )
+    finally:
+        await audit_session.close()

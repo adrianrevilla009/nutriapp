@@ -51,6 +51,17 @@ DEFAULT_IDENTITY_JWKS_URL = "http://identity-service:8000/.well-known/jwks.json"
 DEFAULT_IDENTITY_ISSUER = "identity-service"
 DEFAULT_BILLING_SERVICE_BASE_URL = "http://billing-service:8000"
 
+# Append-only export-audit privilege separation (CLAUDE.md section 2.8,
+# docs/observability-and-audit.md section 4.3, .claude/skills/
+# observability-audit/SKILL.md) -- exact same mechanism as
+# identity-service's `AUDIT_WRITER_ROLE`/`Container.audit_engine` and
+# profile-service's own copy of it. The role itself is created by
+# infra/k8s/charts/_lib/templates/_db-provision-job.tpl (running as the
+# RDS master user, which has CREATEROLE) as "<DB_ROLE>_audit_writer" ==
+# "analytics_service_audit_writer" for this service -- this module never
+# creates the role, only connects as it.
+AUDIT_WRITER_ROLE = "analytics_service_audit_writer"
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -102,6 +113,24 @@ class Container:
         self.settings = settings
         self.engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=True)
         self.session_factory = async_sessionmaker(self.engine, expire_on_commit=False)
+
+        # Dedicated engine/pool for export-audit writes: every connection it
+        # hands out runs `SET ROLE analytics_service_audit_writer` at the
+        # Postgres protocol level (`connect_args["server_settings"]`, applied
+        # once per physical connection, not a `SET ROLE` on the shared
+        # session), so `PostgresExportAuditRepository` is *genuinely*
+        # restricted to INSERT/SELECT on `analytics_audit.export_audit_log`
+        # for the lifetime of that connection, not just a role switch on the
+        # shared session -- an audit write must never silently gain
+        # UPDATE/DELETE just because it shares a connection with a read
+        # repository (identity-service's/profile-service's identical
+        # precedent; observability-audit SKILL.md, CLAUDE.md section 2.8).
+        self.audit_engine: AsyncEngine = create_async_engine(
+            settings.database_url,
+            pool_pre_ping=True,
+            connect_args={"server_settings": {"role": AUDIT_WRITER_ROLE}},
+        )
+        self.audit_session_factory = async_sessionmaker(self.audit_engine, expire_on_commit=False)
 
         self.jwt_verifier = JwtVerifier(
             jwks_url=settings.identity_jwks_url, issuer=settings.identity_issuer
@@ -157,13 +186,20 @@ class Container:
             await self._rabbitmq_connection.close()
         await self.entitlement_check.aclose()
         await self.engine.dispose()
+        await self.audit_engine.dispose()
 
     def new_session(self) -> AsyncSession:
         return self.session_factory()
 
+    def new_audit_session(self) -> AsyncSession:
+        """Separate session bound to `Container.audit_engine` (never the
+        shared `session_factory`) -- see that attribute's docstring."""
+        return self.audit_session_factory()
+
 
 def build_repositories(
     session: AsyncSession,
+    audit_session: AsyncSession | None = None,
 ) -> tuple[
     PostgresDailyLogSummaryRepository,
     PostgresMicronutrientWindowRepository,
@@ -173,17 +209,26 @@ def build_repositories(
     PostgresOutboxRepository,
 ]:
     """Convenience bundle of the request-scoped repository adapters used by
-    the HTTP routes -- every repository shares one AsyncSession (and
-    therefore one DB transaction), same convention as every other
-    service's `build_repositories`. The four `Processed*EventsRepositoryPort`
-    ledgers are NOT part of this bundle -- only the four message consumers
-    use them, which construct their own repositories directly (mirrors
-    recipe-service's/social-service's consumer precedent)."""
+    the HTTP routes -- every repository except the export-audit one shares
+    one AsyncSession (and therefore one DB transaction), same convention as
+    every other service's `build_repositories`. `PostgresExportAuditRepository`
+    is deliberately given its own session (`audit_session`, expected to be
+    `Container.new_audit_session()`) so an audit write can never run with
+    more than INSERT/SELECT privilege on `export_audit_log`, and never
+    accidentally shares a transaction whose rollback would also erase an
+    already-recorded audit entry -- callers that don't care about the
+    export-audit repository (e.g. `trend_routes.py`, which never touches
+    Pro-gated exports) may omit `audit_session` and get the shared session
+    instead, since the returned repository is simply discarded there. The
+    four `Processed*EventsRepositoryPort` ledgers are NOT part of this
+    bundle -- only the four message consumers use them, which construct
+    their own repositories directly (mirrors recipe-service's/
+    social-service's consumer precedent)."""
     return (
         PostgresDailyLogSummaryRepository(session),
         PostgresMicronutrientWindowRepository(session),
         PostgresAnomalyAlertsRepository(session),
         PostgresEntitlementCacheRepository(session),
-        PostgresExportAuditRepository(session),
+        PostgresExportAuditRepository(audit_session or session),
         PostgresOutboxRepository(session),
     )
