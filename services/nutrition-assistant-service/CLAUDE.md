@@ -89,5 +89,6 @@ or `application/queries/answer_chat_query.py`.
 ## Coverage floors
 
 Domain >= 90%, application >= 85%, infrastructure >= 70% (CLAUDE.md
-section 3). Actual as of 2026-09-07: 98.0% / 100.0% / 87.9%, 149/149
-tests passing.
+section 3). Actual as of 2026-09-08: 98.0% / 100.0% / 87.9%, 164/164
+tests passing (excludes `tests/evaluation`, which is a fixed-set RAG
+retrieval-quality eval, not a pass/fail coverage-contributing suite).
