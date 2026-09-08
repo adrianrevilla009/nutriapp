@@ -4,6 +4,7 @@ integration and contract suites (testing-strategy SKILL.md)."""
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
@@ -31,6 +32,11 @@ def postgres_async_url(postgres_container: PostgresContainer) -> str:
 async def db_engine(postgres_async_url: str) -> AsyncEngine:
     engine = create_async_engine(postgres_async_url)
     async with engine.begin() as connection:
+        # `ExportAuditLogModel` lives in the `analytics_audit` schema
+        # (docs/observability-and-audit.md section 4.3, migrations/versions/
+        # 0002_export_audit_log_compliance.py) -- `create_all` does not
+        # create schemas itself, only tables within an already-existing one.
+        await connection.execute(text("CREATE SCHEMA IF NOT EXISTS analytics_audit"))
         await connection.run_sync(Base.metadata.create_all)
 
     try:

@@ -51,9 +51,20 @@ four message consumers or `application/entitlement_check.py`.
   target -- only `micronutrient_current_targets` (a separate table)
   changes; historical rows keep the target that was in effect when
   written.
-- Never skip the `export_audit_log` write on a successful report/export --
-  every call logs, this is not idempotency-deduplicated like event
-  consumption.
+- Never skip the `export_audit_log` write on a report/export request --
+  every call to `GetReportHandler.handle` logs exactly one row, success
+  OR rejection (invalid request, not entitled), this is not
+  idempotency-deduplicated like event consumption. A security review
+  (2026-09-08) found rejected/probing attempts left zero audit trail;
+  don't reintroduce that gap by adding a new early-return path in
+  `get_report.py` that skips `self._audit(...)`.
+- Never construct `PostgresExportAuditRepository` over the request's
+  shared `session` in `report_routes.py` -- always over
+  `container.new_audit_session()` (bound to `AUDIT_WRITER_ROLE` via
+  `SET ROLE` at connect time, `infrastructure/composition_root.py`). The
+  shared session has no such restriction; routing audit writes through it
+  would silently defeat the Postgres-level append-only enforcement in
+  migrations/versions/0002_export_audit_log_compliance.py.
 - Never make a live call to a real `billing-service` instance in this
   service's own test suite -- `httpx.MockTransport` fixtures only.
 
@@ -76,4 +87,5 @@ four message consumers or `application/entitlement_check.py`.
 ## Coverage floors
 
 Domain >= 90%, application >= 85%, infrastructure >= 70% (CLAUDE.md
-section 3). Actual as of 2026-09-07: 99% / 98% / 85%.
+section 3). Actual as of 2026-09-08 (after the export-audit-trail
+compliance fix): 99% / 99% / 86%, 110/110 tests passing.

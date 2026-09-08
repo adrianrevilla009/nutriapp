@@ -29,9 +29,21 @@ _CONTRACT_ROUTERS = (trend_router, report_router, health_router)
 
 
 class _FakeContainer:
-    def __init__(self) -> None:
+    def __init__(self, db_engine: AsyncEngine) -> None:
         self.entitlement_check = FakeEntitlementCheckPort()
         self.jwt_verifier = build_test_jwt_verifier(_TEST_PRIVATE_KEY)
+        self._db_engine = db_engine
+
+    def new_audit_session(self) -> AsyncSession:
+        # Contract tests exercise `report_routes.py` end-to-end (real
+        # Postgres via `db_engine`, not a fake) -- there is no separate
+        # AUDIT_WRITER_ROLE-restricted engine in this fixture (that
+        # genuinely-restricted-connection behavior is proven by
+        # tests/integration/infrastructure/test_postgres_export_audit_repository.py
+        # instead); this just needs its own session object so
+        # report_routes.py's `finally: await audit_session.close()` and
+        # independent `.commit()` semantics work the same as in production.
+        return AsyncSession(self._db_engine, expire_on_commit=False)
 
 
 def _build_app(container: _FakeContainer, db_engine: AsyncEngine) -> FastAPI:
@@ -51,7 +63,7 @@ def _build_app(container: _FakeContainer, db_engine: AsyncEngine) -> FastAPI:
 
 @pytest.fixture
 async def app_client(db_engine: AsyncEngine):
-    container = _FakeContainer()
+    container = _FakeContainer(db_engine)
     app = _build_app(container, db_engine)
 
     transport = httpx.ASGITransport(app=app)

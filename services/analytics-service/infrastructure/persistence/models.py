@@ -170,11 +170,34 @@ class ProcessedEntitlementEventModel(Base):
 
 class ExportAuditLogModel(Base):
     """Immutable, append-only -- CLAUDE.md section 2.8's mandatory
-    data-export audit trail. First-cut schema (implementation plan
-    section 9 addendum, resolution 7) -- flagged for security-agent
-    review before prod promotion."""
+    data-export audit trail. Lives in the `analytics_audit` schema
+    (separate from every operational projection table above), with
+    `UPDATE`/`DELETE` revoked at the Postgres level from the connection
+    the application actually writes through -- see
+    migrations/versions/0002_export_audit_log_compliance.py and
+    `infrastructure/composition_root.py`'s `AUDIT_WRITER_ROLE`/
+    `Container.audit_engine` (same `SET ROLE`-per-connection mechanism as
+    identity-service's/profile-service's own audit tables -- CLAUDE.md
+    section 2.8, docs/observability-and-audit.md section 4.3).
+
+    `export_id`/`requested_at` play the role of the standard
+    `audit_id`/`occurred_at` fields from docs/observability-and-audit.md
+    section 4.2; `outcome`/`actor_id`/`action`/`target_type`/`target_id`/
+    `correlation_id` were added to close a schema-drift gap a security
+    review found (the table previously had none of them). `user_id` is
+    kept as-is for backward compatibility with the already-applied 0001
+    migration and is always equal to `actor_id` for this service today
+    (every export is self-service -- there is no on-behalf-of actor in
+    NutriApp's single-tenant B2C model, ADR-0018); `actor_id` is the
+    schema-mandated field name and the one new code should read.
+    """
 
     __tablename__ = "export_audit_log"
+    __table_args__ = (
+        Index("ix_export_audit_log_user_id", "user_id"),
+        Index("ix_export_audit_log_correlation_id", "correlation_id"),
+        {"schema": "analytics_audit"},
+    )
 
     export_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -186,8 +209,16 @@ class ExportAuditLogModel(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     row_count: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    __table_args__ = (Index("ix_export_audit_log_user_id", "user_id"),)
+    # -- fields added by migrations/versions/0002_export_audit_log_compliance.py --
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False, server_default="success")
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    audit_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
 
 
 class OutboxModel(Base):

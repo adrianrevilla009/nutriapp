@@ -30,6 +30,7 @@ class FakeDailyLogSummaryRepository:
         self.remove_food_entry_calls = 0
         self.apply_water_intake_calls = 0
         self.remove_water_intake_calls = 0
+        self.list_window_call_count = 0
 
     def _day(self, user_id: uuid.UUID, on_date: date) -> dict[str, float]:
         return self.days.setdefault(
@@ -156,6 +157,7 @@ class FakeDailyLogSummaryRepository:
     async def list_window(
         self, user_id: uuid.UUID, start_date: date, end_date: date
     ) -> list[DailyMacroTotals]:
+        self.list_window_call_count += 1
         results = []
         for (uid, on_date), totals in sorted(self.days.items(), key=lambda kv: kv[0][1]):
             if uid != user_id or not (start_date <= on_date <= end_date):
@@ -286,7 +288,21 @@ class FakeExportAuditRepository:
         self.records: list[dict] = []
 
     async def record(
-        self, user_id, report_type, requested_at, export_format, start_date, end_date, row_count
+        self,
+        user_id,
+        report_type,
+        requested_at,
+        export_format,
+        start_date,
+        end_date,
+        row_count,
+        outcome,
+        actor_id,
+        action,
+        target_type,
+        target_id,
+        correlation_id,
+        rejection_reason=None,
     ) -> None:
         self.records.append(
             dict(
@@ -297,6 +313,13 @@ class FakeExportAuditRepository:
                 start_date=start_date,
                 end_date=end_date,
                 row_count=row_count,
+                outcome=outcome,
+                actor_id=actor_id,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                correlation_id=correlation_id,
+                rejection_reason=rejection_reason,
             )
         )
 
