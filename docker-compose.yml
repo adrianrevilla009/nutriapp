@@ -16,6 +16,13 @@ services:
       - "5432:5432"
     volumes:
       - identity-db-data:/var/lib/postgresql/data
+      # Local-dev equivalent of infra/k8s/charts/_lib/templates/_db-provision-job.tpl's
+      # role creation (see that file mounted below for the full why) --
+      # Postgres runs every *.sql file here automatically, exactly once,
+      # against a fresh data volume before identity-service's own Alembic
+      # migration (0001_create_identity_tables.py) needs the
+      # `identity_service_audit_writer` role to already exist.
+      - ./services/identity-service/db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-identity_service}"]
       interval: 5s
@@ -201,7 +208,11 @@ services:
     ports:
       - "8003:8000"
     environment:
+      # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
+      # via env_file above, same convention as every other service.
       DIARY_SERVICE_REDIS_URL: redis://diary-redis:6379/0
+      DIARY_SERVICE_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      DIARY_SERVICE_IDENTITY_JWKS_URL: http://identity-service:8000/.well-known/jwks.json
     depends_on:
       diary-db:
         condition: service_healthy

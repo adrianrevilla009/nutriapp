@@ -68,13 +68,21 @@ pdb:
 
 networkPolicy:
   enabled: true
-  # diary-service's only public HTTP surface is /api/v1/diary/* via Kong --
-  # it has no other inbound synchronous dependency in this scope
-  # (nutrition-calculation-service/analytics-service, the documented
-  # future consumers of its events, integrate asynchronously via RabbitMQ,
-  # not a synchronous call into this service). Bare podSelector (no
-  # namespaceSelector) scopes to the shared namespace, same convention as
-  # identity-service's/profile-service's charts.
+  # diary-service's public HTTP surface is /api/v1/diary/* via Kong, PLUS
+  # bff-service's dashboard-aggregation call (implementation plan section
+  # 1/6 of bff-service's own plan) -- it has no other inbound synchronous
+  # dependency in this scope (nutrition-calculation-service/analytics-service,
+  # the documented future consumers of its events, integrate asynchronously
+  # via RabbitMQ, not a synchronous call into this service). Bare
+  # podSelector (no namespaceSelector) scopes to the shared namespace, same
+  # convention as identity-service's/profile-service's charts.
+  #
+  # bff-service's own egress NetworkPolicy
+  # (infra/k8s/charts/bff-service/templates/networkpolicy-egress-downstream.yaml)
+  # already allows its pods to reach this service's pod selector on this
+  # port -- this ingress rule was the missing other half (STATUS.md's
+  # flagged gap), without which bff-service's calls here would be blocked
+  # in a real cluster despite its own egress policy allowing them out.
   #
   # NOTE (same known _lib-level gap identity-service's/profile-service's
   # charts document): _lib only renders `policyTypes: [Ingress]` --
@@ -85,6 +93,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bff-service
       ports:
         - protocol: TCP
           port: 8000
@@ -111,8 +122,15 @@ dbProvision:
   dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
   irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["diary-service"]
 
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) --
+# the format _lib's _deployment.tpl's `env: {{- toYaml .Values.env }}`
+# actually requires (a flat map here renders an invalid Deployment spec
+# neither `helm lint` nor `helm template` catches on its own -- STATUS.md's
+# flagged bug, fixed here; see food-recognition-service/values.yaml's
+# identical note for the precedent this backports).
 env:
-  AWS_REGION: us-east-1
+  - name: AWS_REGION
+    value: us-east-1
   # DIARY_SERVICE_REDIS_URL: set by Terraform (diary-service.tf) from the
   # shared ElastiCache module's host:port -- no auth token composed in
   # yet, matching modules/elasticache/main.tf's own documented gap ("this
@@ -120,6 +138,14 @@ env:
   # the single shared cluster via a `diary:*` key namespace
   # (RedisDailySummaryCache), same resolution as catalog-service's
   # Addendum 1 -- no new ElastiCache cluster provisioned here.
+
+# Injects every key from templates/externalsecret.yaml's Kubernetes Secret
+# (DIARY_SERVICE_DATABASE_URL) as env vars -- previously missing entirely
+# (STATUS.md's flagged bug), so DATABASE_URL never reached this container
+# on a real deploy.
+envFrom:
+  - secretRef:
+      name: diary-service-secrets
 
 # Secrets Manager entry ARNs (synced via External Secrets Operator per
 # ADR-0007) -- never a literal secret value in this file. Set by Terraform

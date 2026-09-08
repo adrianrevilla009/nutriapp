@@ -53,30 +53,50 @@ A duplicate `cross_service_reveal_credentials` declaration in
 reconciled their own copy and both survived the merge — fixed 2026-08-28
 in PR #10.
 
-**Known unresolved issue (flagged in PR #12, not yet fixed):** the shared
-`_lib` Helm chart's `_deployment.tpl` blindly `toYaml`s `values.yaml`'s
-flat-map `env:` into Kubernetes' `env:` list field (which expects
-`[{name, value}]`), producing an invalid Deployment spec that neither
-`helm lint` nor `helm template` catches. Separately, only
-`profile-service`'s chart wires `envFrom` to its own `ExternalSecret`
-Secret — identity/catalog/diary/nutrition-calculation-service's charts
-don't, so `DATABASE_URL` would never reach those containers on a real
-deploy. `food-recognition-service`'s own new chart uses the correct
-format; the other five services' charts are **not yet backported**. A
-dedicated follow-up is recommended before any real `helm install`.
+**RESOLVED 2026-09-08:** the shared `_lib` Helm chart's `env:`/`envFrom`
+gap flagged in PR #12 is fixed. `identity-service`, `catalog-service`,
+`diary-service`, `nutrition-calculation-service`, and `profile-service`'s
+`values.yaml` now declare `env:` as a proper `[{name, value}]` list
+(previously a flat map `_deployment.tpl` mis-rendered) and wire `envFrom`
+to their own `ExternalSecret`-backed Secret (`profile-service` already had
+`envFrom` correct; only its `env:` shape was broken). Verified via
+`helm template` + a parsed inspection of the rendered `env`/`envFrom`
+fields on all five charts, not just `helm lint`.
 
-**Known unresolved issue (flagged during `bff-service`'s implementation
-review, not yet fixed):** `bff-service`'s chart defines an egress
-`NetworkPolicy` allowing calls to `diary-service` and
-`nutrition-calculation-service`, but those two services' own charts
-(unmodified by this change) only allow ingress from Kong's pod selector
-today, not from `bff-service`. On a real cluster, `bff-service`'s calls
-to both would be blocked until their charts' ingress `NetworkPolicy`s are
-updated to also allow `bff-service`'s pod selector — a follow-up for
-`diary-agent`/`nutrition-calculation-agent`. Documented in the header
-comment of `infra/k8s/charts/bff-service/templates/networkpolicy-egress-downstream.yaml`.
-Not a blocker today since nothing is `apply`'d to a real cluster
-(CLAUDE.md §7).
+**RESOLVED 2026-09-08:** the `bff-service` → `diary-service`/
+`nutrition-calculation-service` `NetworkPolicy` ingress gap flagged during
+`bff-service`'s implementation review is fixed — both target services'
+ingress `NetworkPolicy`s now also allow `bff-service`'s pod selector
+alongside Kong's. Verified via `helm template` on all three charts,
+confirming the rendered rules exist on both sides with matching labels.
+
+**NEW, found and fixed 2026-09-08 (discovered during frontend E2E work):**
+`diary-service`, `nutrition-calculation-service`, `bff-service`,
+`analytics-service`, and `food-recognition-service`'s Dockerfiles all had
+a broken venv shebang between the build and runtime stages (`uv sync`
+bakes an absolute shebang pointing at the builder stage's path into every
+`.venv/bin/<script>`, which doesn't exist in the runtime stage) — every
+container crashed on start with `exec: no such file or directory`. Fixed
+by invoking `python -m uvicorn` instead of relying on the venv's own
+shebang'd entry-point script, across all five services. Verified with a
+real `docker build` + `docker run`/`docker compose up` for each,
+confirming `Application startup complete` and a real `200` from
+`/health/live`, not just a successful build.
+
+Also fixed, same investigation: `identity-service`'s Alembic migration
+needs a Postgres role (`identity_service_audit_writer`) `docker-compose.yml`
+never provisioned — added a `db-init/*.sql` script mounted into
+`/docker-entrypoint-initdb.d/`, verified against a freshly recreated
+volume. `diary-service` was missing its `RABBITMQ_URL`/`IDENTITY_JWKS_URL`
+env vars in `docker-compose.yml` and its whole section in `.env.example`
+— added, verified by running its migration and confirming a clean outbox
+relay with no connection errors on a live RabbitMQ.
+
+A local `docker compose up` of `identity-db`/`catalog-db`/`diary-db`/
+`nutrition-db`/`rabbitmq`/`identity-service`/`diary-service` from a fully
+fresh set of volumes now works end-to-end — this is the first time the
+full local stack has actually been verified running together rather than
+each service only being checked in isolation.
 
 ### MCP servers
 

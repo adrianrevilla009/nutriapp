@@ -33,4 +33,4 @@ COPY services/analytics-service/alembic.ini ./
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "infrastructure.main:app", "--host", "0.0.0.0", "--port", "8000"]

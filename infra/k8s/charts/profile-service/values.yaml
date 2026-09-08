@@ -135,10 +135,21 @@ dbProvision:
   dbCredentialSecretArn: "" # set by Terraform: this service's db-credentials secret ARN
   irsaRoleArn: "" # set by Terraform: module.secrets.db_provision_irsa_role_arns["profile-service"]
 
+# Expressed as a proper Kubernetes EnvVar list ({name, value} pairs) --
+# the format _lib's _deployment.tpl's `env: {{- toYaml .Values.env }}`
+# actually requires (a flat map here renders an invalid Deployment spec
+# neither `helm lint` nor `helm template` catches on its own -- STATUS.md's
+# flagged bug, fixed here; see food-recognition-service/values.yaml's
+# identical note for the precedent this backports). `envFrom` below was
+# already correct -- this chart was never part of the envFrom gap, only
+# this `env:` shape.
 env:
-  AWS_REGION: us-east-1
-  PROFILE_SERVICE_PUBLIC_PORT: "8000"
-  PROFILE_SERVICE_INTERNAL_PORT: "8001"
+  - name: AWS_REGION
+    value: us-east-1
+  - name: PROFILE_SERVICE_PUBLIC_PORT
+    value: "8000"
+  - name: PROFILE_SERVICE_INTERNAL_PORT
+    value: "8001"
   # PROFILE_SERVICE_REDIS_URL: set by Terraform (profile-service.tf) --
   # the shared ElastiCache Redis cluster's endpoint, `profile:*` key
   # namespace (reveal-metrics rate limiting only, implementation plan
