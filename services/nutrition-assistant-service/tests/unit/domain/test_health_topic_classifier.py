@@ -79,9 +79,7 @@ class TestIndirectCausalPhrasingCoverage:
     def test_is_my_diet_the_problem_for_hair_loss_is_flagged(self) -> None:
         # Named verbatim in the security review.
         assert (
-            is_health_adjacent(
-                "my hair has been falling out lately, is my diet the problem"
-            )
+            is_health_adjacent("my hair has been falling out lately, is my diet the problem")
             is True
         )
 
@@ -106,9 +104,7 @@ class TestPregnancyBreastfeedingInfantCoverage:
         assert is_health_adjacent("is this safe for my baby") is True
 
     def test_breastfeeding_question_is_flagged(self) -> None:
-        assert (
-            is_health_adjacent("can I eat sushi while breastfeeding") is True
-        )
+        assert is_health_adjacent("can I eat sushi while breastfeeding") is True
 
     def test_nursing_question_is_flagged(self) -> None:
         assert is_health_adjacent("how many calories do I need while nursing") is True
@@ -117,9 +113,7 @@ class TestPregnancyBreastfeedingInfantCoverage:
         assert is_health_adjacent("what nutrients does an infant need") is True
 
     def test_toddler_feeding_safety_question_is_flagged(self) -> None:
-        assert (
-            is_health_adjacent("is it safe to feed a toddler this much sugar") is True
-        )
+        assert is_health_adjacent("is it safe to feed a toddler this much sugar") is True
 
     def test_toddler_recipe_request_is_not_flagged(self) -> None:
         # Deliberately NOT flagged -- "recipe for toddlers" is an
@@ -139,10 +133,7 @@ class TestRestrictiveEatingWithoutDisorderWordCoverage:
     def test_skipping_meals_and_barely_eating_is_flagged(self) -> None:
         # Named verbatim in the security review.
         assert (
-            is_health_adjacent(
-                "I've been skipping meals and barely eating, is that okay"
-            )
-            is True
+            is_health_adjacent("I've been skipping meals and barely eating, is that okay") is True
         )
 
     def test_not_eating_enough_is_flagged(self) -> None:
