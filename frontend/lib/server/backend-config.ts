@@ -17,6 +17,8 @@ export const CATALOG_SERVICE_BASE_URL =
 export const DIARY_SERVICE_BASE_URL =
   process.env.DIARY_SERVICE_BASE_URL ?? "http://diary-service:8000"; // NOSONAR
 export const BFF_SERVICE_BASE_URL = process.env.BFF_SERVICE_BASE_URL ?? "http://bff-service:8000"; // NOSONAR
+export const FOOD_RECOGNITION_SERVICE_BASE_URL =
+  process.env.FOOD_RECOGNITION_SERVICE_BASE_URL ?? "http://food-recognition-service:8000"; // NOSONAR
 
 /** Name of the httpOnly cookie holding the opaque, server-revocable
  * refresh token (ADR-0022). Never read by client-side JS. */

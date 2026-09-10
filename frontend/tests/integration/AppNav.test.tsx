@@ -31,4 +31,13 @@ describe("AppNav", () => {
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
+
+  it("renders a journey 2 'Log from photo' link to /log/photo when signed in", () => {
+    setAccessToken("fixture-token");
+    renderWithProviders(<AppNav />);
+    expect(screen.getByRole("link", { name: /log from photo/i })).toHaveAttribute(
+      "href",
+      "/log/photo",
+    );
+  });
 });

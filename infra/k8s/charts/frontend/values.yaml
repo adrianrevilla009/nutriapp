@@ -1,9 +1,10 @@
 # Base values -- environment overlays in values-{dev,staging,prod}.yaml
 # override only what differs. Mirrors bff-service's chart shape (no
 # database, no message broker -- implementation plan section 3) with one
-# difference: this service has FOUR outbound calls (identity-service,
-# catalog-service, diary-service, bff-service -- resolution 1's Route
-# Handler proxies), not two, and listens on port 3000 (Next.js), not 8000.
+# difference: this service has FIVE outbound calls (identity-service,
+# catalog-service, diary-service, bff-service, and -- journey 2 --
+# food-recognition-service, all via resolution 1's Route Handler proxies),
+# and listens on port 3000 (Next.js), not 8000.
 
 nameOverride: frontend
 fullnameOverride: frontend
@@ -79,14 +80,15 @@ networkPolicy:
         - protocol: TCP
           port: 3000
 
-# downstreamEgress: this service's FOUR outbound calls (implementation
-# plan section 3/4 resolution 1) -- this service's pods may reach OTHER
-# PODS ONLY via these four services' pod selectors, on their normal
-# (single, public) service port -- never lateral movement to any other
-# in-cluster service. See templates/networkpolicy-egress-downstream.yaml's
-# header comment for the same documented gap bff-service's own chart
-# carries (those four services' OWN ingress NetworkPolicies currently only
-# allow Kong, not this service, as a follow-up for each owning agent).
+# downstreamEgress: this service's FIVE outbound calls (implementation
+# plan section 3/4 resolution 1, journey 2 implementation plan section 3/5)
+# -- this service's pods may reach OTHER PODS ONLY via these five services'
+# pod selectors, on their normal (single, public) service port -- never
+# lateral movement to any other in-cluster service. See
+# templates/networkpolicy-egress-downstream.yaml's header comment for the
+# same documented gap bff-service's own chart carries (these services' OWN
+# ingress NetworkPolicies currently only allow Kong, not this service, as a
+# follow-up for each owning agent -- food-recognition-agent for the fifth).
 downstreamEgress:
   enabled: true
   identityServicePodSelector:
@@ -105,6 +107,10 @@ downstreamEgress:
     matchLabels:
       app.kubernetes.io/name: bff-service
   bffServicePort: 8000
+  foodRecognitionServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: food-recognition-service
+  foodRecognitionServicePort: 8000
 
 # NO dbProvision block -- this service has no database (implementation
 # plan section 2/3), same as bff-service's chart.
@@ -120,6 +126,8 @@ env:
     value: "http://diary-service:8000"
   - name: BFF_SERVICE_BASE_URL
     value: "http://bff-service:8000"
+  - name: FOOD_RECOGNITION_SERVICE_BASE_URL
+    value: "http://food-recognition-service:8000"
   - name: NODE_ENV
     value: "production"
 

@@ -5,16 +5,25 @@ import { logFoodEntry } from "@/lib/api/diary";
 import { useSession } from "@/lib/hooks/useSession";
 import type { LogFoodEntryRequest } from "@/schemas/diary";
 
+export interface LogFoodEntryVariables {
+  request: LogFoodEntryRequest;
+  /** Journey 2: set to the food-recognition analysis_id for an
+   * ai_detected-sourced entry, forwarded as X-Correlation-Id
+   * (architecture-agent finding) -- omitted for a plain catalog_product
+   * entry, same as journey 1's original behavior. */
+  correlationId?: string;
+}
+
 export function useLogFoodEntry() {
   const { accessToken } = useSession();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: LogFoodEntryRequest) => {
+    mutationFn: ({ request, correlationId }: LogFoodEntryVariables) => {
       if (!accessToken) {
         throw new Error("Not authenticated.");
       }
-      return logFoodEntry(request, accessToken);
+      return logFoodEntry(request, accessToken, correlationId);
     },
     onSuccess: () => {
       // Marks the dashboard query stale so the manual "Refresh" affordance

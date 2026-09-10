@@ -13,6 +13,7 @@ export function AppNav() {
   return (
     <nav className="app-nav" aria-label="Main">
       <Link href="/search">{t("search")}</Link>
+      <Link href="/log/photo">{t("logPhoto")}</Link>
       <Link href="/dashboard">{t("dashboard")}</Link>
       <button type="button" className="btn btn-secondary" onClick={() => void logout()}>
         {t("logout")}

@@ -3,17 +3,31 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchProducts } from "@/lib/hooks/useSearchProducts";
+import type { AiSearchContext } from "@/lib/ai-search-context";
 import { TextField } from "@/components/ui/TextField";
 import { Button } from "@/components/ui/Button";
 import { LoadingSkeleton } from "@/components/ui/LoadingSkeleton";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
 import { ProductResultList } from "@/components/features/catalog/ProductResultList";
 
-export function ProductSearchBox() {
+export type { AiSearchContext };
+
+export function ProductSearchBox({
+  initialQuery,
+  aiContext,
+}: {
+  /** Journey 2: pre-fills AND auto-submits the search when arriving from
+   * an AI candidate pick (CandidateList's link) -- unset for a plain
+   * /search visit, which keeps journey 1's original empty-start
+   * behavior unchanged. */
+  initialQuery?: string;
+  aiContext?: AiSearchContext;
+} = {}) {
   const t = useTranslations("search");
+  const tPhotoLog = useTranslations("photoLog");
   const tCommon = useTranslations("common");
-  const [inputValue, setInputValue] = useState("");
-  const [submittedQuery, setSubmittedQuery] = useState("");
+  const [inputValue, setInputValue] = useState(initialQuery ?? "");
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery ?? "");
 
   const { data, isLoading, isError, refetch } = useSearchProducts(submittedQuery);
 
@@ -25,6 +39,11 @@ export function ProductSearchBox() {
   return (
     <div className="page">
       <h1>{t("title")}</h1>
+      {aiContext ? (
+        <p className="notice">
+          {tPhotoLog("searchAiContextBanner", { name: aiContext.candidateName })}
+        </p>
+      ) : null}
       <form onSubmit={handleSubmit} role="search">
         <TextField
           label={t("inputLabel")}
@@ -45,7 +64,9 @@ export function ProductSearchBox() {
           </Button>
         </div>
       ) : null}
-      {data ? <ProductResultList products={data.items} query={submittedQuery} /> : null}
+      {data ? (
+        <ProductResultList products={data.items} query={submittedQuery} aiContext={aiContext} />
+      ) : null}
     </div>
   );
 }
