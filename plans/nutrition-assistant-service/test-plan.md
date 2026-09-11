@@ -115,3 +115,58 @@ Three items carried over from the implementation plan's own unresolved-risk fram
 1. The `health_topic_classifier`'s rule-based precision/recall limits (§1) are a real product risk given CLAUDE.md §8's zero-tolerance framing — `security-agent`/`architecture-agent` review required before staging/prod, same posture as `analytics-service`'s deficiency-threshold sign-off.
 2. Answer-quality evaluation for the grounded-factual/out-of-scope/ambiguous categories is manual/on-demand, not CI-gated (§8) — this is a deliberate, precedent-consistent scope cut, not an oversight, but means this plan does not produce a validated accuracy number, same caveat `food-recognition-service`'s plan carried for its own vision pipeline.
 3. The knowledge-base seed content itself (implementation plan resolution 2, `STATUS: DRAFT` headers) is explicitly pending human/professional review before production use — the fixed evaluation set's grounded-factual/out-of-scope probes exercise the pipeline mechanically but do not constitute that review.
+
+---
+
+## Addendum — 2026-09-11, by adrianrg1996@gmail.com: `entitlement_cache` live writer test plan
+
+**Implements:** `/plans/nutrition-assistant-service/implementation-plan.md`'s "Addendum — 2026-09-08" (`entitlement_cache` live writer approved). Mirrors `analytics-service`'s equivalent test suite for the same feature, adapted to this service's own established naming convention for processed-event ledgers (`already_processed`/`mark_processed`, not `is_processed` — see `processed_diary_events_repository_port.py`/`processed_analytics_events_repository_port.py` for the existing precedent this addendum follows instead of diverging to match analytics-service's literal method name).
+
+### Unit tests — application (mocked ports, `tests/fixtures/fakes.py`)
+
+**`HandleEntitlementGrantedHandler`:**
+- Valid event → `FakeEntitlementCacheRepository`'s cache reflects `entitled=True` for that `user_id`, upserted with the event's own `granted_at` timestamp (not wall-clock time) — assert the fake's recorded `occurred_at` argument equals the command's `granted_at`.
+- Redelivered `event_id` → the cache's upsert method is called exactly once (idempotency).
+
+**`HandleEntitlementRevokedHandler`:**
+- Valid event → cache flips to `entitled=False`, upserted with the event's own `revoked_at`.
+- Redelivered `event_id` → upsert called exactly once.
+- Structural guard: the handler's constructor accepts only `processed_events`/`entitlement_cache` — asserted via `inspect.signature`, so it can never be given a reference to `diary_history`/`nutrition_history`/`analytics_signals` (mirrors `analytics-service`'s identical structural-guard test; revocation is never destructive to unrelated projections).
+
+### Integration tests (testcontainers: Postgres, RabbitMQ)
+
+**`test_postgres_entitlement_cache_repository.py`** (existing file, extended for the widened signature):
+- `get` on a genuine miss returns `None`.
+- `upsert(user_id, entitled, occurred_at)` then `get` round-trips both the flag and persists the given `occurred_at` value into `updated_at` (not a fresh wall-clock timestamp) — assert by reading the row directly.
+- Calling `upsert` twice for the same `user_id` with different `entitled`/`occurred_at` values updates the existing row in place, never inserts a second row (primary-key-on-`user_id` upsert semantics, same as the pre-existing `set()`-based test this replaces).
+
+**`test_postgres_processed_events_repositories.py`** (existing file, parametrized list extended):
+- `PostgresEntitlementEventsRepository` added to the existing `REPO_CLASSES` parametrization list alongside diary/nutrition-calculation/analytics — `already_processed` false before `mark_processed`, true after; calling `mark_processed` twice for the same `event_id` does not raise or duplicate.
+
+**`test_billing_events_consumer.py`** (new file, mirrors `test_diary_events_consumer.py`'s structure exactly, built on the same `ResilientTopicConsumer` base and the same `rabbitmq_container`/`amqp_url`/`session_factory` fixtures already in `tests/integration/infrastructure/conftest.py`):
+- Redelivering the same `EntitlementGranted` event twice (routing key `billing.entitlement.granted`) results in exactly one `entitlement_cache` upsert, polled from Postgres — `entitled=True`.
+- Redelivering the same `EntitlementRevoked` event twice (routing key `billing.entitlement.revoked`) results in exactly one upsert, `entitled=False`.
+- A message that can never be parsed (malformed body) is dead-lettered once `max_attempts` redeliveries are exhausted — same DLQ-polling assertion as the diary consumer's precedent.
+- An unhandled billing event type (any routing key other than `billing.entitlement.granted`/`billing.entitlement.revoked` bound to this queue) is acknowledged and produces no cache row and no error — dispatch-level pass-through, mirroring `dispatch_billing_event`'s early return.
+
+### Migration test conventions
+
+This service already has a dedicated migration-apply test for `0001`
+(`tests/integration/infrastructure/test_migration_0001.py`, a real
+Alembic `upgrade`/`downgrade` run against a testcontainers Postgres, not
+`tests/conftest.py`'s separate `db_engine` fixture which creates tables
+directly from `Base.metadata` for every other integration test's speed).
+Migration `0002` gets the same treatment, in a new
+`test_migration_0002.py`: `alembic upgrade 0002` creates
+`processed_entitlement_events` without touching `entitlement_cache`'s
+existing columns (additive-only, per `database-migrations` SKILL.md's
+expand/contract pattern); `alembic downgrade 0001` removes only the new
+table, `entitlement_cache` is asserted still present; a final `downgrade
+base` cleans up. `Base.metadata`-driven tests (all other integration
+suites) and this Alembic-driven test are two independently-must-agree
+sources of truth for the schema, same as migration `0001`'s existing
+practice.
+
+### Coverage expectation for this addendum
+
+Same floors as the base plan (§7): domain unaffected (no new domain code — `upsert`/`already_processed` are port protocol methods, not domain logic), application and infrastructure additions are fully covered by the unit/integration tests above given their small, branch-light surface (two near-identical command handlers, two near-identical repository methods, one consumer dispatch function with a two-case `if`/`else` and one early-return).

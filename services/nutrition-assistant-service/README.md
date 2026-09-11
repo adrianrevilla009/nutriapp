@@ -53,6 +53,17 @@ embedded or stored in Qdrant this pass.
   `analytics_events_consumer.py`. Projects `analytics_signal_history`; the
   event's `disclaimer` field is stored and surfaced VERBATIM in any chat
   response referencing it, never re-worded.
+- `EntitlementGranted`/`EntitlementRevoked` (`billing-service`) --
+  `billing_events_consumer.py`. FOURTH real consumer of these two events
+  (after `recipe-service`, `social-service`, `analytics-service`),
+  implementing this service's side of the
+  `ProUpgradeEntitlementPropagation` saga's fan-out. Own idempotency
+  ledger (`processed_entitlement_events`, independent of the other three
+  consumers' ledgers). Only flips `entitlement_cache`'s cached flag --
+  never touches `diary_history`/`nutrition_history`/`analytics_signals`
+  (non-destructive, structurally guarded, see
+  `application/commands/handle_entitlement_revoked.py`'s constructor
+  signature). See implementation plan addendum, 2026-09-08.
 
 **Deferred this pass**: `FastingWindowStarted/Ended`,
 `MealPlanned/Updated/Removed` (diary-service); ALL `profile-service`
@@ -61,17 +72,21 @@ AES-256-GCM ciphertext under ADR-0023's per-service key ownership; a real
 ADR-worthy decision, not made here); `RecipeCreated/Updated/Published/Unpublished`
 (recipe-service).
 
-**Known, flagged gap**: this service does NOT consume `billing-service`'s
-`EntitlementGranted`/`EntitlementRevoked` this pass (unlike
-`recipe-service`/`social-service`/`analytics-service`'s fourth consumer) --
-`entitlement_cache` is scaffolded (`get`/`set` on
-`EntitlementCacheRepositoryPort`) but has no live writer, so every chat
-request currently falls through to the synchronous
-`EntitlementCheckPort` call. This is safe (never a stale-positive; a
-genuine cache miss always re-checks) but forgoes the cache's
-latency/load-reduction purpose. Flagged as a fast-follow, not fixed here
--- it was not in the approved implementation plan's file list, and adding
-it would have been an unreviewed scope expansion.
+**Known, flagged gap #1 -- RESOLVED (2026-09-11)**: this service now
+consumes `billing-service`'s `EntitlementGranted`/`EntitlementRevoked` via
+`billing_events_consumer.py` (the FOURTH real consumer, after
+`recipe-service`/`social-service`/`analytics-service`), per the
+implementation plan's addendum, 2026-09-08 (`entitlement_cache` live
+writer approved, mirroring `analytics-service`'s precedent exactly).
+`EntitlementCacheRepositoryPort.set(user_id, entitled)` was widened to
+`upsert(user_id, entitled, occurred_at)` so the cache row preserves the
+event's own `granted_at`/`revoked_at` timestamp rather than only the
+cache-write time. Every chat request is still cache-first
+(`application/entitlement_check.is_user_entitled`) and still falls back
+to the synchronous `EntitlementCheckPort` call on a genuine cache miss
+(e.g. a lagging consumer, or a user who upgraded before this service ever
+saw the event) -- that fallback result is still never written back into
+`entitlement_cache` (see CLAUDE.md's "Never do this" section, unchanged).
 
 ## Published events
 
@@ -207,6 +222,28 @@ Actual (2026-09-07): domain 98.0%, application 100.0%, infrastructure
 87.9%, 149/149 tests passing (`ruff check`/`ruff format --check`/
 `mypy --strict` all clean).
 
+**`entitlement_cache` live writer addendum (2026-09-11)**: `tests/unit`
+re-run after adding `billing_events_consumer.py` +
+`HandleEntitlementGranted/RevokedHandler` + the widened
+`entitlement_cache_repository_port.py`: 103/103 unit tests passing,
+domain 97% / application 100% (`ruff check`/`ruff format --check`/
+`mypy --strict domain application infrastructure` all clean). The new
+`test_billing_events_consumer.py`, `test_migration_0002.py`, and the
+extended `test_postgres_entitlement_cache_repository.py`/
+`test_postgres_processed_events_repositories.py` integration tests were
+**not executed in the implementing sandbox** -- no Docker daemon was
+reachable there (neither a native Linux daemon nor the Windows-host
+Docker Desktop via WSL interop), a pre-existing environment constraint
+that blocks every testcontainers-based suite in this service, not
+something introduced by this change. They collect cleanly under
+`pytest --collect-only` (import/fixture wiring verified) and mirror
+already-CI-green precedent (`test_diary_events_consumer.py`,
+`test_migration_0001.py`) closely enough that a green result is expected,
+but this is flagged explicitly rather than claimed as a verified number
+-- run `uv run pytest tests/integration tests/contract -q` plus the
+coverage-gate command in a Docker-capable environment (this repo's CI)
+before merge.
+
 **Both RELEASE-BLOCKING test categories pass**: cross-user isolation
 (`TestCrossUserIsolationReleaseBlocking`, 4 cases) and the
 professional-advice boundary (`TestProfessionalAdviceBoundaryReleaseBlocking`,
@@ -224,24 +261,26 @@ This means this plan does not produce a validated answer-quality number,
 same caveat `food-recognition-service`'s plan carried for its own vision
 pipeline.
 
-**Deviation from the persisted test plan, flagged honestly**: of the
-three message consumers, only `diary_events_consumer.py` has a full,
-real-AMQP (testcontainers RabbitMQ) integration test
+**Deviation from the persisted test plan, flagged honestly**: of the four
+message consumers, `diary_events_consumer.py` and (as of the 2026-09-11
+addendum) `billing_events_consumer.py` have a full, real-AMQP
+(testcontainers RabbitMQ) integration test
 (`tests/integration/infrastructure/test_diary_events_consumer.py`,
-mirroring `analytics-service`'s identical precedent). The other two
+`test_billing_events_consumer.py`, mirroring `analytics-service`'s
+identical precedent for each). The other two
 (`nutrition_calculation_events_consumer.py`,
 `analytics_events_consumer.py`) are tested at the dispatch-function level
 against a real Postgres, bypassing a real RabbitMQ channel -- since they
 share the exact same `ResilientTopicConsumer` base class already proven
-end-to-end by the diary consumer's test, and their own dispatch logic is
-independently unit-tested at the application layer. This was a
+end-to-end by the diary/billing consumers' tests, and their own dispatch
+logic is independently unit-tested at the application layer. This was a
 deliberate, time-scoped choice made during implementation, not part of
 the original test plan's own description.
 
 ## Known gaps (flagged, not silently worked around)
 
-1. `entitlement_cache` has no live writer this pass (see "Consumed
-   events" above).
+1. ~~`entitlement_cache` has no live writer this pass~~ -- RESOLVED
+   2026-09-11, see "Consumed events" above.
 2. Qdrant client (`qdrant-client==1.19.0`) is one minor version ahead of
    the server image pinned in `infra/k8s/charts/qdrant/values.yaml`
    (`qdrant/qdrant:v1.11.3`) -- surfaced as a `UserWarning` during this

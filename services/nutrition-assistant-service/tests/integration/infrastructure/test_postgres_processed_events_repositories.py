@@ -10,6 +10,9 @@ from infrastructure.persistence.postgres_processed_analytics_events_repository i
 from infrastructure.persistence.postgres_processed_diary_events_repository import (
     PostgresDiaryEventsRepository,
 )
+from infrastructure.persistence.postgres_processed_entitlement_events_repository import (
+    PostgresEntitlementEventsRepository,
+)
 from infrastructure.persistence.postgres_processed_nutrition_calculation_events_repository import (
     PostgresNutritionCalculationEventsRepository,
 )
@@ -18,6 +21,7 @@ REPO_CLASSES = [
     PostgresDiaryEventsRepository,
     PostgresNutritionCalculationEventsRepository,
     PostgresAnalyticsEventsRepository,
+    PostgresEntitlementEventsRepository,
 ]
 
 

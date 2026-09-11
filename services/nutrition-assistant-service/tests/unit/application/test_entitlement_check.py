@@ -32,7 +32,7 @@ async def test_cache_miss_falls_back_and_never_writes_back() -> None:
     result = await is_user_entitled(user_id, cache, check)
     assert result is True
     assert check.call_count == 1
-    assert cache.set_calls == []  # NEVER written back
+    assert cache.upsert_calls == []  # NEVER written back
 
 
 async def test_fallback_unavailable_fails_safe_not_entitled() -> None:
@@ -41,4 +41,4 @@ async def test_fallback_unavailable_fails_safe_not_entitled() -> None:
     check = FakeEntitlementCheckPort(raise_unavailable=True)
     result = await is_user_entitled(user_id, cache, check)
     assert result is False
-    assert cache.set_calls == []
+    assert cache.upsert_calls == []

@@ -121,6 +121,17 @@ class ProcessedAnalyticsEventModel(Base):
     processed_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
+class ProcessedEntitlementEventModel(Base):
+    """Idempotency ledger for billing-service's EntitlementGranted/
+    EntitlementRevoked, dedicated to billing_events_consumer.py
+    (implementation plan addendum, 2026-09-08)."""
+
+    __tablename__ = "processed_entitlement_events"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    processed_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
 class ChatAuditLogModel(Base):
     """Write-only traceability log -- NOT a queryable conversation-resume
     feature (implementation plan section 9 resolution 6). No read/list
