@@ -111,6 +111,15 @@ downstreamEgress:
     matchLabels:
       app.kubernetes.io/name: food-recognition-service
   foodRecognitionServicePort: 8000
+  # Journey 3 (upgrade to Pro -> publish a recipe -> another user finds it).
+  billingServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: billing-service
+  billingServicePort: 8000
+  recipeServicePodSelector:
+    matchLabels:
+      app.kubernetes.io/name: recipe-service
+  recipeServicePort: 8000
 
 # NO dbProvision block -- this service has no database (implementation
 # plan section 2/3), same as bff-service's chart.
@@ -128,6 +137,17 @@ env:
     value: "http://bff-service:8000"
   - name: FOOD_RECOGNITION_SERVICE_BASE_URL
     value: "http://food-recognition-service:8000"
+  - name: BILLING_SERVICE_BASE_URL
+    value: "http://billing-service:8000"
+  - name: RECIPE_SERVICE_BASE_URL
+    value: "http://recipe-service:8000"
+  # journey-3 resolution 8: this app's OWN public base URL (not a downstream
+  # service) -- see lib/server/backend-config.ts's APP_BASE_URL doc.
+  # Overridden per-environment; this default matches dev's own Ingress host
+  # convention placeholder and MUST be set to the real public hostname in
+  # staging/prod (infra-agent/devops-agent follow-up, out of scope here).
+  - name: NEXT_PUBLIC_APP_BASE_URL
+    value: "http://localhost:3000"
   - name: NODE_ENV
     value: "production"
 

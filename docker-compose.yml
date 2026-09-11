@@ -795,6 +795,17 @@ services:
       # the same way as the other four services (resolution 1's Route
       # Handler pattern), never called directly from the browser.
       FOOD_RECOGNITION_SERVICE_BASE_URL: http://food-recognition-service:8000
+      # Journey 3 (upgrade to Pro -> publish a recipe -> another user finds
+      # it) -- proxied the same way (resolution 1's Route Handler pattern),
+      # never called directly from the browser.
+      BILLING_SERVICE_BASE_URL: http://billing-service:8000
+      RECIPE_SERVICE_BASE_URL: http://recipe-service:8000
+      # journey-3 resolution 8: this app's OWN public base URL, needed to
+      # build absolute success_url/cancel_url for Stripe's hosted Checkout
+      # to redirect the raw browser back to (see
+      # lib/server/backend-config.ts's APP_BASE_URL doc comment). Matches
+      # this same service's own published port above.
+      NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
       NODE_ENV: production
       # This is local dev over plain HTTP, not a real TLS-terminated edge
       # (ADR-0010's CloudFront/Kong) -- a real browser silently refuses to
@@ -812,6 +823,8 @@ services:
       - diary-service
       - bff-service
       - food-recognition-service
+      - billing-service
+      - recipe-service
 
 volumes:
   identity-db-data:

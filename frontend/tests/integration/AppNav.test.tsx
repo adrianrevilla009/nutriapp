@@ -40,4 +40,11 @@ describe("AppNav", () => {
       "/log/photo",
     );
   });
+
+  it("renders journey 3's 'Recipes' and 'Upgrade to Pro' links UNCONDITIONALLY when signed in -- no Pro-status branching exists (resolution 3)", () => {
+    setAccessToken("fixture-token");
+    renderWithProviders(<AppNav />);
+    expect(screen.getByRole("link", { name: /^recipes$/i })).toHaveAttribute("href", "/recipes");
+    expect(screen.getByRole("link", { name: /upgrade to pro/i })).toHaveAttribute("href", "/pro");
+  });
 });

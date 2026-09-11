@@ -18,12 +18,28 @@ import {
   POST as analyzePhotoRoute,
   MAX_UPLOAD_BYTES,
 } from "@/app/api/food-recognition/photos/analyze/route";
+import { POST as checkoutSessionsRoute } from "@/app/api/billing/checkout-sessions/route";
+import { POST as createRecipeRoute, GET as listOwnRecipesRoute } from "@/app/api/recipes/route";
+import {
+  GET as getRecipeRoute,
+  PATCH as updateRecipeRoute,
+  DELETE as deleteRecipeRoute,
+} from "@/app/api/recipes/[recipeId]/route";
+import { POST as publishRecipeRoute } from "@/app/api/recipes/[recipeId]/publish/route";
+import { POST as unpublishRecipeRoute } from "@/app/api/recipes/[recipeId]/unpublish/route";
+import { GET as searchRecipesRoute } from "@/app/api/recipes/search/route";
 import { loginResponseFixture } from "../fixtures/identity.fixtures";
 import { foodEntryResponseFixture } from "../fixtures/diary.fixtures";
 import {
   analyzePhotoDetectedFixture,
   analyzePhotoUnavailableFixture,
 } from "../fixtures/food-recognition.fixtures";
+import { checkoutSessionResponseFixture } from "../fixtures/billing.fixtures";
+import {
+  draftRecipeFixture,
+  publishedRecipeFixture,
+  notEntitledErrorFixture,
+} from "../fixtures/recipe.fixtures";
 import { REFRESH_TOKEN_COOKIE } from "@/lib/server/backend-config";
 
 /**
@@ -300,5 +316,262 @@ describe("app/api/food-recognition/photos/analyze route handler", () => {
     const response = await analyzePhotoRoute(request);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: "boom", code: "INTERNAL_ERROR" });
+  });
+});
+
+describe("app/api/billing/checkout-sessions route handler", () => {
+  it("returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.post("http://billing-service:8000/api/v1/billing/checkout-sessions", () => {
+        called = true;
+        return HttpResponse.json(checkoutSessionResponseFixture, { status: 201 });
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/billing/checkout-sessions", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const response = await checkoutSessionsRoute(request);
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("builds absolute success_url/cancel_url from this app's own base URL, ignoring whatever the client body sent", async () => {
+    let capturedBody: { success_url?: string; cancel_url?: string } = {};
+    server.use(
+      http.post(
+        "http://billing-service:8000/api/v1/billing/checkout-sessions",
+        async ({ request }) => {
+          capturedBody = (await request.json()) as typeof capturedBody;
+          return HttpResponse.json(checkoutSessionResponseFixture, { status: 201 });
+        },
+      ),
+    );
+    const request = new NextRequest("http://localhost/api/billing/checkout-sessions", {
+      method: "POST",
+      headers: { Authorization: "Bearer fixture-token" },
+      body: JSON.stringify({
+        success_url: "http://attacker.example/anything",
+        cancel_url: "http://attacker.example/anything",
+      }),
+    });
+    await checkoutSessionsRoute(request);
+    expect(capturedBody.success_url).toMatch(/\/pro\/success$/);
+    expect(capturedBody.cancel_url).toMatch(/\/pro\/cancel$/);
+    expect(capturedBody.success_url).not.toContain("attacker.example");
+  });
+
+  it("relays a 409 SUBSCRIPTION_ALREADY_ACTIVE verbatim", async () => {
+    server.use(
+      http.post("http://billing-service:8000/api/v1/billing/checkout-sessions", () =>
+        HttpResponse.json(
+          {
+            error: "User already has an active subscription.",
+            code: "SUBSCRIPTION_ALREADY_ACTIVE",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    const request = new NextRequest("http://localhost/api/billing/checkout-sessions", {
+      method: "POST",
+      headers: { Authorization: "Bearer fixture-token" },
+      body: JSON.stringify({}),
+    });
+    const response = await checkoutSessionsRoute(request);
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("SUBSCRIPTION_ALREADY_ACTIVE");
+  });
+});
+
+describe("app/api/recipes route handlers", () => {
+  it("POST /api/recipes returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.post("http://recipe-service:8000/api/v1/recipes", () => {
+        called = true;
+        return HttpResponse.json(draftRecipeFixture, { status: 201 });
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/recipes", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const response = await createRecipeRoute(request);
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("POST /api/recipes forwards the body and Authorization verbatim", async () => {
+    let capturedAuth: string | null = null;
+    let capturedBody: unknown;
+    server.use(
+      http.post("http://recipe-service:8000/api/v1/recipes", async ({ request }) => {
+        capturedAuth = request.headers.get("Authorization");
+        capturedBody = await request.json();
+        return HttpResponse.json(draftRecipeFixture, { status: 201 });
+      }),
+    );
+    const body = { title: "x", instructions: "y", servings: 1, ingredients: [] };
+    const request = new NextRequest("http://localhost/api/recipes", {
+      method: "POST",
+      headers: { Authorization: "Bearer fixture-token" },
+      body: JSON.stringify(body),
+    });
+    await createRecipeRoute(request);
+    expect(capturedAuth).toBe("Bearer fixture-token");
+    expect(capturedBody).toEqual(body);
+  });
+
+  it("GET /api/recipes always forwards mine=true, ignoring any other query", async () => {
+    let capturedUrl = "";
+    server.use(
+      http.get("http://recipe-service:8000/api/v1/recipes", ({ request }) => {
+        capturedUrl = request.url;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/recipes?mine=false", {
+      headers: { Authorization: "Bearer fixture-token" },
+    });
+    await listOwnRecipesRoute(request);
+    expect(capturedUrl).toContain("mine=true");
+  });
+
+  it("GET /api/recipes/{id} returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.get(`http://recipe-service:8000/api/v1/recipes/${draftRecipeFixture.recipe_id}`, () => {
+        called = true;
+        return HttpResponse.json(draftRecipeFixture);
+      }),
+    );
+    const request = new NextRequest(`http://localhost/api/recipes/${draftRecipeFixture.recipe_id}`);
+    const response = await getRecipeRoute(request, {
+      params: Promise.resolve({ recipeId: draftRecipeFixture.recipe_id }),
+    });
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("PATCH /api/recipes/{id} forwards the body", async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.patch(
+        `http://recipe-service:8000/api/v1/recipes/${draftRecipeFixture.recipe_id}`,
+        async ({ request }) => {
+          capturedBody = await request.json();
+          return HttpResponse.json(draftRecipeFixture);
+        },
+      ),
+    );
+    const body = { title: "z", instructions: "y", servings: 2, ingredients: [] };
+    const request = new NextRequest(
+      `http://localhost/api/recipes/${draftRecipeFixture.recipe_id}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: "Bearer fixture-token" },
+        body: JSON.stringify(body),
+      },
+    );
+    await updateRecipeRoute(request, {
+      params: Promise.resolve({ recipeId: draftRecipeFixture.recipe_id }),
+    });
+    expect(capturedBody).toEqual(body);
+  });
+
+  it("DELETE /api/recipes/{id} returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.delete(
+        `http://recipe-service:8000/api/v1/recipes/${draftRecipeFixture.recipe_id}`,
+        () => {
+          called = true;
+          return new HttpResponse(null, { status: 204 });
+        },
+      ),
+    );
+    const request = new NextRequest(
+      `http://localhost/api/recipes/${draftRecipeFixture.recipe_id}`,
+      { method: "DELETE" },
+    );
+    const response = await deleteRecipeRoute(request, {
+      params: Promise.resolve({ recipeId: draftRecipeFixture.recipe_id }),
+    });
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("POST /api/recipes/{id}/publish relays a 402 NOT_ENTITLED verbatim", async () => {
+    server.use(
+      http.post(
+        `http://recipe-service:8000/api/v1/recipes/${draftRecipeFixture.recipe_id}/publish`,
+        () => HttpResponse.json(notEntitledErrorFixture, { status: 402 }),
+      ),
+    );
+    const request = new NextRequest(
+      `http://localhost/api/recipes/${draftRecipeFixture.recipe_id}/publish`,
+      { method: "POST", headers: { Authorization: "Bearer fixture-token" } },
+    );
+    const response = await publishRecipeRoute(request, {
+      params: Promise.resolve({ recipeId: draftRecipeFixture.recipe_id }),
+    });
+    expect(response.status).toBe(402);
+    expect((await response.json()).code).toBe("NOT_ENTITLED");
+  });
+
+  it("POST /api/recipes/{id}/unpublish returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.post(
+        `http://recipe-service:8000/api/v1/recipes/${publishedRecipeFixture.recipe_id}/unpublish`,
+        () => {
+          called = true;
+          return HttpResponse.json(draftRecipeFixture);
+        },
+      ),
+    );
+    const request = new NextRequest(
+      `http://localhost/api/recipes/${publishedRecipeFixture.recipe_id}/unpublish`,
+      { method: "POST" },
+    );
+    const response = await unpublishRecipeRoute(request, {
+      params: Promise.resolve({ recipeId: publishedRecipeFixture.recipe_id }),
+    });
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("GET /api/recipes/search blocks an empty q before any downstream call", async () => {
+    let called = false;
+    server.use(
+      http.get("http://recipe-service:8000/api/v1/recipes/search", () => {
+        called = true;
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/recipes/search?q=", {
+      headers: { Authorization: "Bearer fixture-token" },
+    });
+    const response = await searchRecipesRoute(request);
+    expect(response.status).toBe(422);
+    expect(called).toBe(false);
+  });
+
+  it("GET /api/recipes/search forwards a real query and relays results", async () => {
+    server.use(
+      http.get("http://recipe-service:8000/api/v1/recipes/search", ({ request }) => {
+        const url = new URL(request.url);
+        expect(url.searchParams.get("q")).toBe("yogurt");
+        return HttpResponse.json({ items: [publishedRecipeFixture] });
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/recipes/search?q=yogurt", {
+      headers: { Authorization: "Bearer fixture-token" },
+    });
+    const response = await searchRecipesRoute(request);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ items: [publishedRecipeFixture] });
   });
 });
