@@ -17,11 +17,20 @@ function logHref(productId: string, aiContext?: AiSearchContext): string {
 export function ProductResultCard({
   product,
   aiContext,
+  mode = "log",
+  onSelect,
 }: {
   product: ProductResponse;
   aiContext?: AiSearchContext;
+  /** journey 3: "select" mode (used by IngredientPicker to add a product
+   * to a recipe's ingredient list) renders an "Add" button that calls
+   * onSelect instead of navigating -- "log" (default) is journeys 1-2's
+   * original, unchanged navigation-to-/log/[productId] behavior. */
+  mode?: "log" | "select";
+  onSelect?: (product: ProductResponse) => void;
 }) {
   const t = useTranslations("search");
+  const tRecipes = useTranslations("recipes");
   const name = product.name ?? "Unnamed product";
   const panel = product.nutrition_per_100g;
 
@@ -41,13 +50,24 @@ export function ProductResultCard({
           </p>
         ) : null}
       </div>
-      <Link
-        href={logHref(product.product_id, aiContext)}
-        className="btn btn-primary"
-        aria-label={t("logAction", { name })}
-      >
-        {t("logAction", { name })}
-      </Link>
+      {mode === "select" ? (
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => onSelect?.(product)}
+          aria-label={tRecipes("addIngredientAction", { name })}
+        >
+          {tRecipes("addIngredientAction", { name })}
+        </button>
+      ) : (
+        <Link
+          href={logHref(product.product_id, aiContext)}
+          className="btn btn-primary"
+          aria-label={t("logAction", { name })}
+        >
+          {t("logAction", { name })}
+        </Link>
+      )}
     </li>
   );
 }

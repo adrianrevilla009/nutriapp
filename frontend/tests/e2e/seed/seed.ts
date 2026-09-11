@@ -38,7 +38,16 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import * as argon2 from "argon2";
 import {
+  SEEDED_FINDER_EMAIL,
+  SEEDED_FINDER_PASSWORD,
+  SEEDED_FINDER_USER_ID,
+  SEEDED_NON_PRO_EMAIL,
+  SEEDED_NON_PRO_PASSWORD,
+  SEEDED_NON_PRO_USER_ID,
   SEEDED_PRODUCT_NAME,
+  SEEDED_PUBLISHER_EMAIL,
+  SEEDED_PUBLISHER_PASSWORD,
+  SEEDED_PUBLISHER_USER_ID,
   SEEDED_USER_EMAIL,
   SEEDED_USER_PASSWORD,
   toPythonArgon2ParamOrder,
@@ -50,13 +59,32 @@ const IDENTITY_DB_URL =
 const CATALOG_DB_URL =
   process.env.E2E_CATALOG_DB_URL ??
   "postgresql://catalog_service:catalog_service@localhost:5435/catalog_service";
+// journey 3: billing-db, per docker-compose.yml's billing-db service
+// (port 5440, db/user/password all "billing_service" by default).
+const BILLING_DB_URL =
+  process.env.E2E_BILLING_DB_URL ??
+  "postgresql://billing_service:billing_service@localhost:5440/billing_service";
 
 async function seedVerifiedUser(): Promise<void> {
+  await seedVerifiedUserWithCredentials(randomUUID(), SEEDED_USER_EMAIL, SEEDED_USER_PASSWORD);
+}
+
+/**
+ * journey 3: a parametrized version of the above, so the publisher/finder/
+ * non-Pro identities (fixed, deterministic ids -- same "re-running re-seeds
+ * the SAME row" reasoning as SEEDED_PRODUCT_ID below) can be seeded without
+ * duplicating the insert logic.
+ */
+async function seedVerifiedUserWithCredentials(
+  userId: string,
+  email: string,
+  password: string,
+): Promise<void> {
   const client = new Client({ connectionString: IDENTITY_DB_URL });
   await client.connect();
   try {
     const passwordHash = toPythonArgon2ParamOrder(
-      await argon2.hash(SEEDED_USER_PASSWORD, { type: argon2.argon2id }),
+      await argon2.hash(password, { type: argon2.argon2id }),
     );
     await client.query(
       `INSERT INTO users (id, email, password_hash, status, roles, failed_login_attempts,
@@ -66,7 +94,41 @@ async function seedVerifiedUser(): Promise<void> {
          password_hash = EXCLUDED.password_hash,
          status = 'ACTIVE',
          failed_login_attempts = 0`,
-      [randomUUID(), SEEDED_USER_EMAIL, passwordHash],
+      [userId, email, passwordHash],
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * journey 3 resolution 1: bypasses Stripe/the webhook path entirely by
+ * inserting directly into billing-db's `subscriptions` table (schema per
+ * infrastructure/persistence/models.py's SubscriptionModel) with
+ * status='active' and a far-future current_period_end.
+ * `GetEntitlementForUserHandler`/`Subscription.is_entitled()` are the real
+ * code paths that read this row back (both the synchronous internal
+ * fallback endpoint AND -- since recipe-service's own entitlement_cache is
+ * deliberately left unseeded here -- every check for these users takes
+ * that fallback path on its first request, proving the real cache-miss
+ * behavior, not just the cache-hit path).
+ */
+async function seedActiveSubscription(userId: string): Promise<void> {
+  const client = new Client({ connectionString: BILLING_DB_URL });
+  await client.connect();
+  try {
+    const farFuture = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    await client.query(
+      `INSERT INTO subscriptions (subscription_id, user_id, stripe_customer_id,
+                                  stripe_subscription_id, status, current_period_end,
+                                  cancel_at_period_end, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'active', $5, false, now(), now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         status = 'active',
+         current_period_end = EXCLUDED.current_period_end,
+         cancel_at_period_end = false,
+         updated_at = now()`,
+      [randomUUID(), userId, `cus_e2e_${userId}`, `sub_e2e_${userId}`, farFuture],
     );
   } finally {
     await client.end();
@@ -129,6 +191,29 @@ async function seedProduct(): Promise<string> {
 async function main() {
   await seedVerifiedUser();
   const productId = await seedProduct();
+
+  // journey 3: publisher + finder are both seeded Pro (directly, bypassing
+  // Stripe -- resolution 1); nonPro deliberately is NOT, so its own
+  // /recipes/search request exercises a REAL, live 402/NOT_ENTITLED
+  // response rather than a mocked one.
+  await seedVerifiedUserWithCredentials(
+    SEEDED_PUBLISHER_USER_ID,
+    SEEDED_PUBLISHER_EMAIL,
+    SEEDED_PUBLISHER_PASSWORD,
+  );
+  await seedVerifiedUserWithCredentials(
+    SEEDED_FINDER_USER_ID,
+    SEEDED_FINDER_EMAIL,
+    SEEDED_FINDER_PASSWORD,
+  );
+  await seedVerifiedUserWithCredentials(
+    SEEDED_NON_PRO_USER_ID,
+    SEEDED_NON_PRO_EMAIL,
+    SEEDED_NON_PRO_PASSWORD,
+  );
+  await seedActiveSubscription(SEEDED_PUBLISHER_USER_ID);
+  await seedActiveSubscription(SEEDED_FINDER_USER_ID);
+
   console.log(
     JSON.stringify({ email: SEEDED_USER_EMAIL, password: SEEDED_USER_PASSWORD, productId }),
   );

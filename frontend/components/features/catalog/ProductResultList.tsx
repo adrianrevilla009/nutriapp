@@ -7,10 +7,14 @@ export function ProductResultList({
   products,
   query,
   aiContext,
+  mode = "log",
+  onSelect,
 }: {
   products: ProductResponse[];
   query: string;
   aiContext?: AiSearchContext;
+  mode?: "log" | "select";
+  onSelect?: (product: ProductResponse) => void;
 }) {
   const t = useTranslations("search");
 
@@ -21,7 +25,13 @@ export function ProductResultList({
   return (
     <ul className="result-list" aria-label={t("title")}>
       {products.map((product) => (
-        <ProductResultCard key={product.product_id} product={product} aiContext={aiContext} />
+        <ProductResultCard
+          key={product.product_id}
+          product={product}
+          aiContext={aiContext}
+          mode={mode}
+          onSelect={onSelect}
+        />
       ))}
     </ul>
   );

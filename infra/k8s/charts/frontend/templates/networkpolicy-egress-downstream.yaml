@@ -1,17 +1,18 @@
 {{/*
-Narrow egress restriction for this service's FIVE outbound calls
+Narrow egress restriction for this service's SEVEN outbound calls
 (implementation plan section 4/5, resolution 1's Route Handler proxies;
-journey 2 implementation plan section 3/5): identity-service,
-catalog-service, diary-service, bff-service, and food-recognition-service.
-This service's pods may reach OTHER PODS in the namespace ONLY via these
-five services' pod selectors, on their normal (public, Kong-routable)
-service port -- never arbitrary lateral movement to any other service's
-pods. Declared as its own plain NetworkPolicy resource (not via the shared
-`_lib` `_networkpolicy.tpl`, which only renders `policyTypes: [Ingress]`
-today), mirroring bff-service's networkpolicy-egress-downstream.yaml /
-notification-service's networkpolicy-egress-identity-reveal.yaml /
-food-recognition-service's networkpolicy-egress-catalog-lookup.yaml
-precedent.
+journey 2 implementation plan section 3/5; journey 3 implementation plan
+section 3/5): identity-service, catalog-service, diary-service,
+bff-service, food-recognition-service, billing-service, and
+recipe-service. This service's pods may reach OTHER PODS in the namespace
+ONLY via these seven services' pod selectors, on their normal (public,
+Kong-routable) service port -- never arbitrary lateral movement to any
+other service's pods. Declared as its own plain NetworkPolicy resource
+(not via the shared `_lib` `_networkpolicy.tpl`, which only renders
+`policyTypes: [Ingress]` today), mirroring bff-service's
+networkpolicy-egress-downstream.yaml / notification-service's
+networkpolicy-egress-identity-reveal.yaml / food-recognition-service's
+networkpolicy-egress-catalog-lookup.yaml precedent.
 
 Once ANY NetworkPolicy with `policyTypes: [Egress]` selects a pod,
 Kubernetes default-denies ALL egress from it except what some policy
@@ -23,13 +24,14 @@ own, implementation plan section 2/3).
 KNOWN, DOCUMENTED GAP (not silently worked around, same as bff-service's
 own chart): this resource only covers THIS service's own egress side.
 identity-service's/catalog-service's/diary-service's/bff-service's/
-food-recognition-service's own ingress NetworkPolicies currently allow
-ingress ONLY from Kong's pod selector -- calling them directly (as this
-service's Route Handlers do, resolution 1) would be blocked by those
-policies in a real cluster today. Adding an allow-rule for frontend's pod
-selector to each of those five charts is a follow-up change scoped to
-each owning agent (identity-agent, catalog-agent, diary-agent, bff-agent,
-and -- journey 2's addition -- food-recognition-agent), out of scope for
+food-recognition-service's/billing-service's/recipe-service's own ingress
+NetworkPolicies currently allow ingress ONLY from Kong's pod selector --
+calling them directly (as this service's Route Handlers do, resolution 1)
+would be blocked by those policies in a real cluster today. Adding an
+allow-rule for frontend's pod selector to each of those seven charts is a
+follow-up change scoped to each owning agent (identity-agent,
+catalog-agent, diary-agent, bff-agent, food-recognition-agent, and --
+journey 3's addition -- billing-agent and recipe-agent), out of scope for
 this plan -- flagged here rather than silently deployed broken, same
 posture bff-service's own chart took for its two downstream calls.
 */}}
@@ -87,4 +89,16 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.downstreamEgress.foodRecognitionServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.billingServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.billingServicePort }}
+    - to:
+        - podSelector:
+            {{- toYaml .Values.downstreamEgress.recipeServicePodSelector | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.downstreamEgress.recipeServicePort }}
 {{- end }}

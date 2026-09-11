@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -159,5 +159,66 @@ describe("ProductSearchBox / ProductResultList", () => {
       name: new RegExp(`log ${productWithNutritionFixture.name}`, "i"),
     });
     expect(link).toHaveAttribute("href", `/log/${productWithNutritionFixture.product_id}`);
+  });
+
+  // Journey 3: the "log"/"select" mode prop.
+  it("with no mode prop specified, defaults to 'log' -- REGRESSION for journeys 1-2 (no behavior change from adding the prop)", async () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(productSearchResponseFixture)),
+    );
+    await search("yogurt");
+    expect(
+      await screen.findByRole("link", {
+        name: new RegExp(`log ${productWithNutritionFixture.name}`, "i"),
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: new RegExp(`add ${productWithNutritionFixture.name}`, "i"),
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("with mode='select', renders an 'Add' BUTTON instead of a 'Log' link, and calls onSelect rather than navigating", async () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(productSearchResponseFixture)),
+    );
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<ProductSearchBox mode="select" onSelect={onSelect} />);
+    await user.type(screen.getByLabelText(/search products/i), "yogurt");
+    await user.click(screen.getByRole("button", { name: /^find a food to log$/i }));
+
+    const addButton = await screen.findByRole("button", {
+      name: new RegExp(`add ${productWithNutritionFixture.name}`, "i"),
+    });
+    expect(
+      screen.queryByRole("link", {
+        name: new RegExp(`log ${productWithNutritionFixture.name}`, "i"),
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(addButton);
+    expect(onSelect).toHaveBeenCalledWith(productWithNutritionFixture);
+  });
+
+  it("with nested=true, renders NO <form> element (avoids an invalid nested-<form> bug when embedded in RecipeForm's own <form>) -- search still works via the button's onClick", async () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(productSearchResponseFixture)),
+    );
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<ProductSearchBox mode="select" nested />);
+
+    expect(container.querySelector("form")).toBeNull();
+    expect(screen.getByRole("search")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/search products/i), "yogurt");
+    await user.click(screen.getByRole("button", { name: /^find a food to log$/i }));
+    expect(await screen.findByText(productWithNutritionFixture.name!)).toBeInTheDocument();
+  });
+
+  it("with nested=false (default), still renders a real <form> -- REGRESSION for every other call site", () => {
+    const { container } = renderWithProviders(<ProductSearchBox />);
+    expect(container.querySelector("form")).not.toBeNull();
   });
 });

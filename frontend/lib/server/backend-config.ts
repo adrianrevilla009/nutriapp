@@ -19,6 +19,25 @@ export const DIARY_SERVICE_BASE_URL =
 export const BFF_SERVICE_BASE_URL = process.env.BFF_SERVICE_BASE_URL ?? "http://bff-service:8000"; // NOSONAR
 export const FOOD_RECOGNITION_SERVICE_BASE_URL =
   process.env.FOOD_RECOGNITION_SERVICE_BASE_URL ?? "http://food-recognition-service:8000"; // NOSONAR
+export const BILLING_SERVICE_BASE_URL =
+  process.env.BILLING_SERVICE_BASE_URL ?? "http://billing-service:8000"; // NOSONAR
+export const RECIPE_SERVICE_BASE_URL =
+  process.env.RECIPE_SERVICE_BASE_URL ?? "http://recipe-service:8000"; // NOSONAR
+
+/**
+ * This app's OWN public base URL -- journey 3's implementation plan
+ * resolution 8: the FIRST env var here pointing AT the frontend itself
+ * rather than outward at a backend. Needed because Stripe's hosted
+ * Checkout redirects the raw BROWSER back to success_url/cancel_url once
+ * the user finishes (or cancels) checkout -- those must be absolute URLs
+ * this app actually serves (Stripe navigates the browser directly, not
+ * through any Route Handler), not a relative path. `NEXT_PUBLIC_` prefix
+ * is Next.js's own convention for a value inlined into the client bundle
+ * at build time (CheckoutRedirectButton reads it too, to build the same
+ * URLs client-side before the mutation fires). Defaults to
+ * docker-compose.yml's own published port for local dev.
+ */
+export const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_BASE_URL ?? "http://localhost:3000";
 
 /** Name of the httpOnly cookie holding the opaque, server-revocable
  * refresh token (ADR-0022). Never read by client-side JS. */
