@@ -1,17 +1,18 @@
 """Composition root -- the only place concrete adapters are wired to the
 ports they satisfy (hexagonal-architecture SKILL.md). The HTTP route and
-all three consumers depend on this module, never the reverse.
+all four consumers depend on this module, never the reverse.
 
-NOTE (implementation plan section 9, flagged deviation -- see README.md
-"Known gaps"): this service consumes billing-service's EntitlementGranted/
-Revoked... actually it does NOT in this pass -- entitlement_cache has no
-live writer (no billing_events_consumer.py exists, unlike recipe-service/
-social-service/analytics-service's fourth consumer). Every chat request
-therefore falls through to the synchronous EntitlementCheckPort call via
-application.entitlement_check.is_user_entitled -- safe (never
-stale-positive) but forgoes the cache's latency/load-reduction purpose.
-Flagged for a fast-follow, not fixed here (out of the approved plan's
-file list)."""
+NOTE (implementation plan addendum, 2026-09-08: `entitlement_cache` live
+writer approved): this service now consumes billing-service's
+EntitlementGranted/EntitlementRevoked via `BillingEventsConsumer`,
+nutrition-assistant-service's FOURTH real consumer of these two events
+(after recipe-service, social-service, analytics-service). Every chat
+request still falls through to the synchronous EntitlementCheckPort call
+via application.entitlement_check.is_user_entitled on a genuine cache
+miss (a lagging/absent consumer, or a user who upgraded before this
+service ever saw the event) -- safe (never stale-positive), and now
+usually short-circuited by a warm cache instead of a network round trip
+on every chat request."""
 
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from sqlalchemy.ext.asyncio import (
 from infrastructure.external.billing_entitlement_client import BillingEntitlementClient
 from infrastructure.external.claude_conversation_adapter import ClaudeConversationAdapter
 from infrastructure.messaging.analytics_events_consumer import AnalyticsEventsConsumer
+from infrastructure.messaging.billing_events_consumer import BillingEventsConsumer
 from infrastructure.messaging.diary_events_consumer import DiaryEventsConsumer
 from infrastructure.messaging.nutrition_calculation_events_consumer import (
     NutritionCalculationEventsConsumer,
@@ -109,7 +111,7 @@ class Settings:
 
 class Container:
     """Holds long-lived infrastructure clients and request-scoped factories.
-    Starts all three topic consumers as background tasks (analytics-service's
+    Starts all four topic consumers as background tasks (analytics-service's
     precedent). The outbox relay worker is NOT started this pass -- no live
     publisher exists yet (implementation plan section 5)."""
 
@@ -149,6 +151,7 @@ class Container:
         await self._start_consumer(DiaryEventsConsumer(self.session_factory))
         await self._start_consumer(NutritionCalculationEventsConsumer(self.session_factory))
         await self._start_consumer(AnalyticsEventsConsumer(self.session_factory))
+        await self._start_consumer(BillingEventsConsumer(self.session_factory))
 
     async def shutdown(self) -> None:
         if self._rabbitmq_connection is not None:

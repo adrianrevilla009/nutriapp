@@ -102,16 +102,17 @@ class FakeAnalyticsSignalsRepository:
 class FakeEntitlementCacheRepository:
     def __init__(self, cached: dict[uuid.UUID, bool] | None = None) -> None:
         self._cache = dict(cached or {})
-        self.set_calls: list[tuple[uuid.UUID, bool]] = []
+        self.upsert_calls: list[tuple[uuid.UUID, bool, object]] = []
 
     async def get(self, user_id: uuid.UUID) -> bool | None:
         return self._cache.get(user_id)
 
-    async def set(self, user_id: uuid.UUID, entitled: bool) -> None:
-        # Present for architectural symmetry -- application/entitlement_check.py
-        # must NEVER call this on a fallback path (the single most
-        # important structural invariant, per the persisted test plan).
-        self.set_calls.append((user_id, entitled))
+    async def upsert(self, user_id: uuid.UUID, entitled: bool, occurred_at) -> None:
+        # application/entitlement_check.py's synchronous-fallback path must
+        # NEVER call this (the single most important structural invariant,
+        # per the persisted test plan) -- only the billing_events_consumer
+        # command handlers call it.
+        self.upsert_calls.append((user_id, entitled, occurred_at))
         self._cache[user_id] = entitled
 
 

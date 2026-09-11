@@ -43,7 +43,11 @@ or `application/queries/answer_chat_query.py`.
 - Never write a fallback `EntitlementCheckPort` result back into
   `entitlement_cache` -- `application/entitlement_check.py`'s
   `is_user_entitled` has no reference to the cache repository's write
-  method at all; keep it that way.
+  method at all; keep it that way. This rule is about the synchronous
+  fallback path specifically -- it does NOT apply to
+  `billing_events_consumer.py`'s `HandleEntitlementGranted/RevokedHandler`,
+  which is the one sanctioned writer of `entitlement_cache` (approved
+  2026-09-08, built 2026-09-11 -- see the next bullet's history).
 - Never treat the knowledge-base seed content
   (`knowledge_base/seed/*.md`) as production-ready -- every file is
   headed `STATUS: DRAFT — pending human/professional review before
@@ -58,17 +62,25 @@ or `application/queries/answer_chat_query.py`.
   and updating `README.md`'s documented choice + reasoning
   (`llm-cost-and-model-selection` SKILL.md, `prompt-engineering-standards`
   SKILL.md).
-- Never add a `billing_events_consumer.py` without first re-reading
-  README.md's "Known, flagged gap" #1 and getting this genuinely
-  reviewed/approved -- it was deliberately left out of the approved
-  implementation plan's file list, not simply forgotten.
+- `billing_events_consumer.py` was deliberately left out of the original
+  approved implementation plan's file list, not simply forgotten -- it
+  required its own genuine human review, given 2026-09-08 in
+  `/plans/nutrition-assistant-service/implementation-plan.md`'s addendum,
+  and was built 2026-09-11 per that addendum's 9-item scope (mirroring
+  `analytics-service`'s precedent exactly, including widening
+  `EntitlementCacheRepositoryPort.set()` to `upsert(user_id, entitled,
+  occurred_at)`). It is now live -- do not re-remove it or re-narrow the
+  port signature without an equally explicit, separately-reviewed
+  decision; this bullet's history stands as the record that adding it was
+  reviewed, not skipped.
 
 ## Where things live
 
 - Ports: `domain/ports/*.py` (Python `Protocol`s):
   `DiaryHistoryRepositoryPort`, `NutritionHistoryRepositoryPort`,
   `AnalyticsSignalsRepositoryPort`, `EntitlementCacheRepositoryPort`,
-  `EntitlementCheckPort`, three `Processed*EventsRepositoryPort`s,
+  `EntitlementCheckPort`, four `Processed*EventsRepositoryPort`s (diary,
+  nutrition_calculation, analytics, entitlement),
   `ChatAuditRepositoryPort`, `VectorStorePort`, `ConversationPort`,
   `EmbeddingPort`, `EventPublisherPort`/`OutboxRepositoryPort` (unused
   this pass).
@@ -76,8 +88,10 @@ or `application/queries/answer_chat_query.py`.
   `infrastructure/external/billing_entitlement_client.py`,
   `infrastructure/vectorstore/qdrant_vector_store_adapter.py`,
   `infrastructure/vectorstore/local_embedding_adapter.py`,
-  `infrastructure/persistence/` (nine Postgres repositories),
-  `infrastructure/messaging/` (three topic consumers sharing
+  `infrastructure/persistence/` (ten Postgres repositories),
+  `infrastructure/messaging/` (four topic consumers -- diary,
+  nutrition_calculation, analytics, billing (`billing_events_consumer.py`,
+  added 2026-09-11 per the implementation plan addendum) -- sharing
   `resilient_topic_consumer.py`'s retry/DLQ plumbing).
 - Composition root: `infrastructure/composition_root.py`.
 - Shared cross-handler helper (not a port, not a command):
@@ -92,3 +106,14 @@ Domain >= 90%, application >= 85%, infrastructure >= 70% (CLAUDE.md
 section 3). Actual as of 2026-09-08: 98.0% / 100.0% / 87.9%, 164/164
 tests passing (excludes `tests/evaluation`, which is a fixed-set RAG
 retrieval-quality eval, not a pass/fail coverage-contributing suite).
+
+**2026-09-11 addendum (`entitlement_cache` live writer)**: `tests/unit`
+re-run domain 97% / application 100%, 103/103 unit tests passing. The new
+integration tests (`test_billing_events_consumer.py`,
+`test_migration_0002.py`, extended
+`test_postgres_entitlement_cache_repository.py`/
+`test_postgres_processed_events_repositories.py`) require Docker
+(testcontainers Postgres/RabbitMQ), unavailable in the implementing
+sandbox -- not run there, flagged rather than assumed passing; see
+README.md's "Testing" section for the full caveat. Run the full suite
+including these before merge.

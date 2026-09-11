@@ -683,7 +683,12 @@ yet implemented — the owning service doesn't exist yet).
   before follow/unfollow/feed), **analytics-service** (implemented -- own
   `billing_events_consumer.py`, the THIRD real consumer; caches the
   entitlement flag locally, checked before report/export only -- trend
-  viewing is not gated). A lagging/absent consumer falls back to
+  viewing is not gated), **nutrition-assistant-service** (implemented --
+  own `billing_events_consumer.py`, the FOURTH real consumer; caches the
+  entitlement flag locally in `entitlement_cache`, checked before
+  `POST /api/v1/chat` -- see
+  `/plans/nutrition-assistant-service/implementation-plan.md`'s addendum,
+  2026-09-08). A lagging/absent consumer falls back to
   `GET /internal/v1/billing/entitlements/{user_id}`, per the
   `ProUpgradeEntitlementPropagation` saga.
 - Emitted when: `checkout.session.completed` succeeds, immediately after
@@ -702,7 +707,12 @@ yet implemented — the owning service doesn't exist yet).
   guarded), **analytics-service** (implemented -- own
   `billing_events_consumer.py`; only flips the cached flag, never touches
   `daily_log_summary`/`micronutrient_window`/`weight_trend`/
-  `anomaly_alerts` -- non-destructive, structurally guarded).
+  `anomaly_alerts` -- non-destructive, structurally guarded),
+  **nutrition-assistant-service** (implemented -- own
+  `billing_events_consumer.py`; only flips the cached flag, never touches
+  `diary_history`/`nutrition_history`/`analytics_signals` -- non-destructive,
+  structurally guarded, see
+  `services/nutrition-assistant-service/application/commands/handle_entitlement_revoked.py`).
 - Emitted when: a scheduled revocation row's `revoke_at` (the
   subscription's `current_period_end` at the time it was canceled) is
   actually due — never synchronously from the cancellation webhook itself.
