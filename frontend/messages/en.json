@@ -45,6 +45,29 @@
     "logAction": "Log {name}",
     "perHundredGrams": "per 100 g: {calories} kcal, {protein} g protein, {carbs} g carbs, {fat} g fat"
   },
+  "photoLog": {
+    "uploadTitle": "Log from a photo",
+    "uploadIntro": "Upload a photo of your food. We'll suggest up to 3 possible matches for you to confirm — nothing is logged automatically.",
+    "fileInputLabel": "Photo of your food",
+    "noFileSelected": "Choose a photo to analyze.",
+    "unsupportedFileType": "Please choose a JPEG, PNG, or WebP photo.",
+    "fileTooLarge": "This photo is too large. Please choose a photo under 8 MB.",
+    "analyzeSubmit": "Analyze photo",
+    "analyzing": "Analyzing…",
+    "candidatesDetectedHeading": "We found a possible match",
+    "candidatesUncertainHeading": "We're not sure — here's our best guess",
+    "unavailableHeading": "We couldn't analyze this photo",
+    "unavailableBody": "Photo analysis isn't available right now. You can still log this food by searching for it below.",
+    "candidatesListLabel": "Detected candidates",
+    "confidence": "Confidence: {percent}%",
+    "portionRange": "approx. {min}–{max} g",
+    "candidateAccessibleName": "Use {name}, confidence {percent}%, approx. {min} to {max} grams",
+    "useThisCandidate": "Use this",
+    "searchManually": "None of these — search manually",
+    "searchAiContextBanner": "Matching your photo detection: \"{name}\"",
+    "aiSourceDisclosure": "Identified from your photo as \"{name}\" — confirm this is the right product and amount before logging.",
+    "aiPortionHint": "Estimated from your photo: approx. {min}–{max} g. Adjust to match this product's actual amount."
+  },
   "log": {
     "title": "Log {name}",
     "quantityLabel": "Quantity (grams)",
@@ -81,6 +104,7 @@
   },
   "nav": {
     "search": "Search",
+    "logPhoto": "Log from photo",
     "dashboard": "Dashboard",
     "logout": "Sign out"
   }

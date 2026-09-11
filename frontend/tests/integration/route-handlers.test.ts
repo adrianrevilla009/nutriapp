@@ -1,10 +1,29 @@
+// @vitest-environment node
+//
+// Route Handlers are plain server functions (no rendering) -- and the
+// journey 2 multipart cases below hang under jsdom (its File/Blob/
+// FormData implementation doesn't round-trip cleanly through undici's
+// multipart encoder when read back via request.formData() -- discovered
+// empirically, every case touching a File timed out at exactly 5000ms).
+// Node's native, undici-backed File/Blob/FormData/fetch is both the fix
+// and the more correct environment for testing a server-only function.
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { http, HttpResponse } from "msw";
 import { server } from "../msw-server";
 import { POST as loginRoute } from "@/app/api/auth/login/route";
 import { POST as refreshRoute } from "@/app/api/auth/refresh/route";
+import { POST as foodEntriesRoute } from "@/app/api/diary/food-entries/route";
+import {
+  POST as analyzePhotoRoute,
+  MAX_UPLOAD_BYTES,
+} from "@/app/api/food-recognition/photos/analyze/route";
 import { loginResponseFixture } from "../fixtures/identity.fixtures";
+import { foodEntryResponseFixture } from "../fixtures/diary.fixtures";
+import {
+  analyzePhotoDetectedFixture,
+  analyzePhotoUnavailableFixture,
+} from "../fixtures/food-recognition.fixtures";
 import { REFRESH_TOKEN_COOKIE } from "@/lib/server/backend-config";
 
 /**
@@ -111,5 +130,175 @@ describe("app/api/auth/refresh route handler", () => {
       access_token: "new-access-token",
       token_type: "bearer",
     });
+  });
+});
+
+describe("app/api/diary/food-entries route handler -- journey 2 correlation-id forwarding", () => {
+  const validBody = {
+    source: {
+      source_type: "ai_detected",
+      source_reference_id: "55555555-5555-4555-8555-555555555555",
+      snapshot: {
+        name: "Plain Yogurt",
+        brand: "Acme Dairy",
+        quantity: 150,
+        unit: "g",
+        macros_per_unit: { calories_kcal: 61, protein_g: 3.5, carbs_g: 4.7, fat_g: 3.3 },
+      },
+    },
+    meal_slot: "breakfast",
+    occurred_at: "2026-09-10T08:00:00+00:00",
+  };
+
+  it("forwards X-Correlation-Id to diary-service when the incoming request carries one", async () => {
+    let capturedHeader: string | null = null;
+    server.use(
+      http.post("http://diary-service:8000/api/v1/diary/food-entries", ({ request }) => {
+        capturedHeader = request.headers.get("X-Correlation-Id");
+        return HttpResponse.json(foodEntryResponseFixture);
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/diary/food-entries", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer fixture-token",
+        "X-Correlation-Id": "55555555-5555-4555-8555-555555555555",
+      },
+      body: JSON.stringify(validBody),
+    });
+    await foodEntriesRoute(request);
+    expect(capturedHeader).toBe("55555555-5555-4555-8555-555555555555");
+  });
+
+  it("omits X-Correlation-Id downstream when the incoming request doesn't carry one", async () => {
+    let capturedHeader: string | null | undefined = "not-set";
+    server.use(
+      http.post("http://diary-service:8000/api/v1/diary/food-entries", ({ request }) => {
+        capturedHeader = request.headers.get("X-Correlation-Id");
+        return HttpResponse.json(foodEntryResponseFixture);
+      }),
+    );
+    const request = new NextRequest("http://localhost/api/diary/food-entries", {
+      method: "POST",
+      headers: { Authorization: "Bearer fixture-token" },
+      body: JSON.stringify(validBody),
+    });
+    await foodEntriesRoute(request);
+    expect(capturedHeader).toBeNull();
+  });
+});
+
+describe("app/api/food-recognition/photos/analyze route handler", () => {
+  function multipartRequest(opts: {
+    file?: Blob | null;
+    auth?: string | null;
+    fieldName?: string;
+  }) {
+    const formData = new FormData();
+    if (opts.file !== null) {
+      formData.append(
+        opts.fieldName ?? "file",
+        opts.file ?? new File(["abc"], "x.jpg", { type: "image/jpeg" }),
+      );
+    }
+    return new NextRequest("http://localhost/api/food-recognition/photos/analyze", {
+      method: "POST",
+      headers:
+        opts.auth === undefined
+          ? { Authorization: "Bearer fixture-token" }
+          : opts.auth
+            ? { Authorization: opts.auth }
+            : {},
+      body: formData,
+    });
+  }
+
+  it("returns 401 with no downstream call when Authorization is missing", async () => {
+    let called = false;
+    server.use(
+      http.post("http://food-recognition-service:8000/api/v1/recognition/photos/analyze", () => {
+        called = true;
+        return HttpResponse.json(analyzePhotoDetectedFixture);
+      }),
+    );
+    const request = multipartRequest({ auth: null });
+    const response = await analyzePhotoRoute(request);
+    expect(response.status).toBe(401);
+    expect(called).toBe(false);
+  });
+
+  it("returns 422 with no downstream call when no file field is present", async () => {
+    let called = false;
+    server.use(
+      http.post("http://food-recognition-service:8000/api/v1/recognition/photos/analyze", () => {
+        called = true;
+        return HttpResponse.json(analyzePhotoDetectedFixture);
+      }),
+    );
+    const request = multipartRequest({ file: null });
+    const response = await analyzePhotoRoute(request);
+    expect(response.status).toBe(422);
+    expect(called).toBe(false);
+  });
+
+  it("returns 413 with no downstream call when the file exceeds the size cap", async () => {
+    let called = false;
+    server.use(
+      http.post("http://food-recognition-service:8000/api/v1/recognition/photos/analyze", () => {
+        called = true;
+        return HttpResponse.json(analyzePhotoDetectedFixture);
+      }),
+    );
+    const oversized = new File([new Uint8Array(MAX_UPLOAD_BYTES + 1)], "big.jpg", {
+      type: "image/jpeg",
+    });
+    const request = multipartRequest({ file: oversized });
+    const response = await analyzePhotoRoute(request);
+    const body = await response.json();
+    expect(response.status).toBe(413);
+    expect(body.code).toBe("PHOTO_TOO_LARGE");
+    expect(called).toBe(false);
+  });
+
+  it("forwards a valid upload and relays a 'detected' response verbatim", async () => {
+    let capturedAuth: string | null = null;
+    server.use(
+      http.post(
+        "http://food-recognition-service:8000/api/v1/recognition/photos/analyze",
+        ({ request }) => {
+          capturedAuth = request.headers.get("Authorization");
+          return HttpResponse.json(analyzePhotoDetectedFixture);
+        },
+      ),
+    );
+    const request = multipartRequest({});
+    const response = await analyzePhotoRoute(request);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(analyzePhotoDetectedFixture);
+    expect(capturedAuth).toBe("Bearer fixture-token");
+  });
+
+  it("relays a 200 'unavailable' response as a normal success, not an error", async () => {
+    server.use(
+      http.post("http://food-recognition-service:8000/api/v1/recognition/photos/analyze", () =>
+        HttpResponse.json(analyzePhotoUnavailableFixture),
+      ),
+    );
+    const request = multipartRequest({});
+    const response = await analyzePhotoRoute(request);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(analyzePhotoUnavailableFixture);
+  });
+
+  it("relays a genuine backend 5xx as a 502-class typed error", async () => {
+    server.use(
+      http.post("http://food-recognition-service:8000/api/v1/recognition/photos/analyze", () =>
+        HttpResponse.json({ error: "boom", code: "INTERNAL_ERROR" }, { status: 500 }),
+      ),
+    );
+    const request = multipartRequest({});
+    const response = await analyzePhotoRoute(request);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "boom", code: "INTERNAL_ERROR" });
   });
 });

@@ -88,4 +88,76 @@ describe("ProductSearchBox / ProductResultList", () => {
 
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  // Journey 2: initialQuery/aiContext.
+  const aiContext = {
+    analysisId: "55555555-5555-4555-8555-555555555555",
+    candidateName: "Plain Yogurt",
+    portionRangeMinG: 120,
+    portionRangeMaxG: 160,
+  };
+
+  it("with no initialQuery (a plain /search visit), starts empty -- REGRESSION for journey 1's original behavior", () => {
+    renderWithProviders(<ProductSearchBox />);
+    expect(screen.getByLabelText(/search products/i)).toHaveValue("");
+    expect(screen.getByText(/search by product name/i)).toBeInTheDocument();
+  });
+
+  it("with initialQuery, pre-fills AND auto-submits the search on first render", async () => {
+    let capturedQuery: string | null = null;
+    server.use(
+      http.get("/api/catalog/search", ({ request }) => {
+        capturedQuery = new URL(request.url).searchParams.get("q");
+        return HttpResponse.json(productSearchResponseFixture);
+      }),
+    );
+    renderWithProviders(<ProductSearchBox initialQuery="yogurt" />);
+
+    expect(screen.getByLabelText(/search products/i)).toHaveValue("yogurt");
+    await screen.findByText(productWithNutritionFixture.name!);
+    expect(capturedQuery).toBe("yogurt");
+  });
+
+  it("with aiContext, renders a banner naming the matched candidate", () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(emptyProductSearchResponseFixture)),
+    );
+    renderWithProviders(<ProductSearchBox initialQuery="yogurt" aiContext={aiContext} />);
+    expect(screen.getByText(/matching your photo detection/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(aiContext.candidateName))).toBeInTheDocument();
+  });
+
+  it("without aiContext, renders no banner -- REGRESSION for journey 1's plain search", () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(emptyProductSearchResponseFixture)),
+    );
+    renderWithProviders(<ProductSearchBox initialQuery="yogurt" />);
+    expect(screen.queryByText(/matching your photo detection/i)).not.toBeInTheDocument();
+  });
+
+  it("with aiContext, each result's Log link carries the AI query params", async () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(productSearchResponseFixture)),
+    );
+    renderWithProviders(<ProductSearchBox initialQuery="yogurt" aiContext={aiContext} />);
+    const link = await screen.findByRole("link", {
+      name: new RegExp(`log ${productWithNutritionFixture.name}`, "i"),
+    });
+    const href = link.getAttribute("href")!;
+    expect(href).toContain(`/log/${productWithNutritionFixture.product_id}`);
+    expect(href).toContain(`aiAnalysisId=${aiContext.analysisId}`);
+    expect(href).toContain(`aiPortionMinG=${aiContext.portionRangeMinG}`);
+    expect(href).toContain(`aiPortionMaxG=${aiContext.portionRangeMaxG}`);
+  });
+
+  it("without aiContext, each result's Log link is the bare /log/{id} href -- REGRESSION for journey 1", async () => {
+    server.use(
+      http.get("/api/catalog/search", () => HttpResponse.json(productSearchResponseFixture)),
+    );
+    await search("yogurt");
+    const link = await screen.findByRole("link", {
+      name: new RegExp(`log ${productWithNutritionFixture.name}`, "i"),
+    });
+    expect(link).toHaveAttribute("href", `/log/${productWithNutritionFixture.product_id}`);
+  });
 });

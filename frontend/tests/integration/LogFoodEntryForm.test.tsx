@@ -121,4 +121,101 @@ describe("LogFoodEntryForm", () => {
     );
     expect(await axe(container)).toHaveNoViolations();
   });
+
+  // Journey 2: AI-context (ai_detected) mode.
+  const aiContext = {
+    analysisId: "55555555-5555-4555-8555-555555555555",
+    candidateName: "Plain Yogurt Photo Match",
+    portionRangeMinG: 120,
+    portionRangeMaxG: 160,
+  };
+
+  it("with aiContext: catalog-only regression -- no aiContext still behaves exactly as journey 1 (default quantity 100, no banner)", () => {
+    renderWithProviders(<LogFoodEntryForm product={productWithNutritionFixture} />);
+    expect(screen.getByLabelText(/quantity/i)).toHaveValue(100);
+    expect(screen.queryByText(/identified from your photo/i)).not.toBeInTheDocument();
+  });
+
+  it("with aiContext: pre-fills quantity from the portion-range midpoint, not the default 100", () => {
+    renderWithProviders(
+      <LogFoodEntryForm product={productWithNutritionFixture} aiContext={aiContext} />,
+    );
+    expect(screen.getByLabelText(/quantity/i)).toHaveValue(140); // midpoint of 120-160
+  });
+
+  it("with aiContext: shows the AI-sourced disclosure banner naming the candidate", () => {
+    renderWithProviders(
+      <LogFoodEntryForm product={productWithNutritionFixture} aiContext={aiContext} />,
+    );
+    expect(screen.getByText(/identified from your photo/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(aiContext.candidateName))).toBeInTheDocument();
+  });
+
+  it("with aiContext: also blocks on a product with no nutrition data -- the SAME guard as the catalog path", () => {
+    renderWithProviders(
+      <LogFoodEntryForm product={productWithoutNutritionFixture} aiContext={aiContext} />,
+    );
+    expect(screen.getByText(/no nutrition data on file/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/quantity/i)).not.toBeInTheDocument();
+  });
+
+  it("with aiContext: submits source.source_type=ai_detected, source_reference_id=analysisId, and macros from the MATCHED PRODUCT (never fabricated)", async () => {
+    let capturedBody: unknown;
+    let capturedCorrelationId: string | null = null;
+    server.use(
+      http.post("/api/diary/food-entries", async ({ request }) => {
+        capturedBody = await request.json();
+        capturedCorrelationId = request.headers.get("X-Correlation-Id");
+        return HttpResponse.json(foodEntryResponseFixture);
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(
+      <LogFoodEntryForm product={productWithNutritionFixture} aiContext={aiContext} />,
+    );
+    await user.click(screen.getByRole("button", { name: /log entry/i }));
+
+    expect(await screen.findByText(/may take a moment to update/i)).toBeInTheDocument();
+    expect(capturedBody).toMatchObject({
+      source: {
+        source_type: "ai_detected",
+        source_reference_id: aiContext.analysisId,
+        snapshot: {
+          name: productWithNutritionFixture.name,
+          quantity: 140,
+          unit: "g",
+          macros_per_unit: {
+            calories_kcal: productWithNutritionFixture.nutrition_per_100g!.energy_kcal,
+            protein_g: productWithNutritionFixture.nutrition_per_100g!.protein_g,
+            carbs_g: productWithNutritionFixture.nutrition_per_100g!.carbohydrates_g,
+            fat_g: productWithNutritionFixture.nutrition_per_100g!.fat_g,
+          },
+        },
+      },
+    });
+    expect(capturedCorrelationId).toBe(aiContext.analysisId);
+  });
+
+  it("without aiContext, no X-Correlation-Id header is sent -- REGRESSION for journey 1", async () => {
+    let capturedCorrelationId: string | null | undefined = "not-set";
+    server.use(
+      http.post("/api/diary/food-entries", ({ request }) => {
+        capturedCorrelationId = request.headers.get("X-Correlation-Id");
+        return HttpResponse.json(foodEntryResponseFixture);
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<LogFoodEntryForm product={productWithNutritionFixture} />);
+    await user.click(screen.getByRole("button", { name: /log entry/i }));
+
+    await screen.findByText(/may take a moment to update/i);
+    expect(capturedCorrelationId).toBeNull();
+  });
+
+  it("has no critical/serious axe violations in the AI-context form state", async () => {
+    const { container } = renderWithProviders(
+      <LogFoodEntryForm product={productWithNutritionFixture} aiContext={aiContext} />,
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
 });

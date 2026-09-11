@@ -791,6 +791,10 @@ services:
       CATALOG_SERVICE_BASE_URL: http://catalog-service:8000
       DIARY_SERVICE_BASE_URL: http://diary-service:8000
       BFF_SERVICE_BASE_URL: http://bff-service:8000
+      # Journey 2 (photo upload -> AI detection -> logged entry) -- proxied
+      # the same way as the other four services (resolution 1's Route
+      # Handler pattern), never called directly from the browser.
+      FOOD_RECOGNITION_SERVICE_BASE_URL: http://food-recognition-service:8000
       NODE_ENV: production
       # This is local dev over plain HTTP, not a real TLS-terminated edge
       # (ADR-0010's CloudFront/Kong) -- a real browser silently refuses to
@@ -807,6 +811,7 @@ services:
       - catalog-service
       - diary-service
       - bff-service
+      - food-recognition-service
 
 volumes:
   identity-db-data:

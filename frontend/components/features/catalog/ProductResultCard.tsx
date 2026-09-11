@@ -1,8 +1,26 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ProductResponse } from "@/schemas/catalog";
+import type { AiSearchContext } from "@/lib/ai-search-context";
 
-export function ProductResultCard({ product }: { product: ProductResponse }) {
+function logHref(productId: string, aiContext?: AiSearchContext): string {
+  if (!aiContext) return `/log/${productId}`;
+  const params = new URLSearchParams({
+    aiAnalysisId: aiContext.analysisId,
+    aiCandidateName: aiContext.candidateName,
+    aiPortionMinG: String(aiContext.portionRangeMinG),
+    aiPortionMaxG: String(aiContext.portionRangeMaxG),
+  });
+  return `/log/${productId}?${params.toString()}`;
+}
+
+export function ProductResultCard({
+  product,
+  aiContext,
+}: {
+  product: ProductResponse;
+  aiContext?: AiSearchContext;
+}) {
   const t = useTranslations("search");
   const name = product.name ?? "Unnamed product";
   const panel = product.nutrition_per_100g;
@@ -24,7 +42,7 @@ export function ProductResultCard({ product }: { product: ProductResponse }) {
         ) : null}
       </div>
       <Link
-        href={`/log/${product.product_id}`}
+        href={logHref(product.product_id, aiContext)}
         className="btn btn-primary"
         aria-label={t("logAction", { name })}
       >

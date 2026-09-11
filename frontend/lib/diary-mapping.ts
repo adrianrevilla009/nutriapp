@@ -17,11 +17,28 @@ export type MapProductToLogRequestResult =
   | { ok: true; request: LogFoodEntryRequest }
   | { ok: false; reason: "no_nutrition_data" };
 
+/**
+ * Journey 2 addition: when a food entry originates from an AI photo
+ * detection (rather than a plain catalog search), source_type/
+ * source_reference_id are overridden to "ai_detected"/the food-recognition
+ * analysis_id -- everything else (the "never fabricate macros" guard
+ * below, snapshot.name/brand/macros_per_unit from the matched product)
+ * is UNCHANGED and shared by both call shapes. This is the one code path
+ * both journey 1's catalog flow and journey 2's AI-confirm flow go
+ * through -- there is no parallel mapping function that could silently
+ * drift out of sync with this one's fabrication guard.
+ */
+export interface FoodSourceOverride {
+  source_type: "ai_detected";
+  source_reference_id: string;
+}
+
 export function productToLogFoodEntryRequest(
   product: ProductResponse,
   quantityGrams: number,
   mealSlot: MealSlot,
   occurredAt: Date,
+  sourceOverride?: FoodSourceOverride,
 ): MapProductToLogRequestResult {
   // A real, allowed backend shape (product_schemas.py's
   // `nutrition_per_100g: NutrientPanelResponse | None`) -- never fabricate
@@ -46,8 +63,8 @@ export function productToLogFoodEntryRequest(
 
   const request: LogFoodEntryRequest = {
     source: {
-      source_type: "catalog_product",
-      source_reference_id: product.product_id,
+      source_type: sourceOverride?.source_type ?? "catalog_product",
+      source_reference_id: sourceOverride?.source_reference_id ?? product.product_id,
       snapshot: {
         name: product.name ?? "Unnamed product",
         brand: product.brand ?? null,
