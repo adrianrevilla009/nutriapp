@@ -84,6 +84,14 @@ networkPolicy:
   # flagged gap), without which bff-service's calls here would be blocked
   # in a real cluster despite its own egress policy allowing them out.
   #
+  # frontend's pod selector is added below alongside Kong/bff-service, for
+  # the exact same reason: frontend's server-side Route Handlers call this
+  # service directly (implementation plan section 3/4 resolution 1) --
+  # this closes the matching gap flagged for diary-service in STATUS.md's
+  # `frontend` row. frontend's own egress NetworkPolicy
+  # (infra/k8s/charts/frontend/templates/networkpolicy-egress-downstream.yaml)
+  # already allows this hop out; this was the missing other half.
+  #
   # NOTE (same known _lib-level gap identity-service's/profile-service's
   # charts document): _lib only renders `policyTypes: [Ingress]` --
   # egress (to the shared RDS instance, RabbitMQ, ElastiCache) is
@@ -96,6 +104,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: bff-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000
