@@ -408,16 +408,27 @@ jobs:
       # billing-service and recipe-service have no Makefile `migrate-*`
       # target at all (added after the Makefile was last touched) --
       # `docker compose exec` sidesteps that gap too, for all 7 uniformly.
+      # `python -m alembic`, never the bare `alembic` console script: `uv
+      # sync` bakes an absolute shebang pointing at the builder stage's
+      # path into every `.venv/bin/<script>`, broken in the runtime stage
+      # for every service with a packages/shared-contracts build
+      # dependency (identity-service/catalog-service are the only two
+      # exceptions, per STATUS.md's 2026-09-08 shebang-bug writeup) --
+      # same root cause and same fix already applied to each service's
+      # own Dockerfile CMD (`python -m uvicorn`, never the shebang'd
+      # entry-point script); this step hit the identical bug live on its
+      # first real CI run (`exec /app/.venv/bin/alembic: no such file or
+      # directory` on diary-service) before this fix.
       - name: Run database migrations
         run: |
           set -euo pipefail
-          docker compose exec -T identity-service alembic upgrade head
-          docker compose exec -T catalog-service alembic upgrade head
-          docker compose exec -T diary-service alembic upgrade head
-          docker compose exec -T nutrition-calculation-service alembic upgrade head
-          docker compose exec -T food-recognition-service alembic upgrade head
-          docker compose exec -T billing-service alembic upgrade head
-          docker compose exec -T recipe-service alembic upgrade head
+          docker compose exec -T identity-service python -m alembic upgrade head
+          docker compose exec -T catalog-service python -m alembic upgrade head
+          docker compose exec -T diary-service python -m alembic upgrade head
+          docker compose exec -T nutrition-calculation-service python -m alembic upgrade head
+          docker compose exec -T food-recognition-service python -m alembic upgrade head
+          docker compose exec -T billing-service python -m alembic upgrade head
+          docker compose exec -T recipe-service python -m alembic upgrade head
       # tests/e2e/seed/seed.ts's own default DB URLs already match this
       # compose file's host-mapped ports exactly (identity-db 5432,
       # catalog-db 5435, billing-db 5440) -- no E2E_*_DB_URL override
