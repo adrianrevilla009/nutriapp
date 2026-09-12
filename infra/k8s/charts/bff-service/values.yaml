@@ -75,6 +75,16 @@ networkPolicy:
   # Bare podSelector (no namespaceSelector) scopes to the shared
   # namespace, same convention as every other service's chart.
   #
+  # frontend's pod selector is added below alongside Kong: frontend's
+  # server-side Route Handlers call this service's dashboard-aggregation
+  # surface directly (implementation plan section 3/4 resolution 1) --
+  # same shape as the bff-service -> diary-service /
+  # nutrition-calculation-service ingress fix (STATUS.md's "RESOLVED
+  # 2026-09-08" note), closing the matching gap flagged for bff-service
+  # in STATUS.md's `frontend` row. frontend's own egress NetworkPolicy
+  # (infra/k8s/charts/frontend/templates/networkpolicy-egress-downstream.yaml)
+  # already allows this hop out; this was the missing other half.
+  #
   # NOTE (same known _lib-level gap every other chart documents): _lib
   # only renders `policyTypes: [Ingress]` here -- egress (to
   # diary-service, nutrition-calculation-service) is unrestricted by THIS
@@ -85,6 +95,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000

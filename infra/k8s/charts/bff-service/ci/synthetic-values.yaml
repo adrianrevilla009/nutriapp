@@ -18,11 +18,18 @@ serviceAccount:
 
 networkPolicy:
   enabled: true
+  # Kept in sync with values.yaml's ingressRules (this fixture fully
+  # overrides the array, it doesn't merge with it) -- frontend added here
+  # alongside kong, mirroring values.yaml's own frontend-ingress addition
+  # (STATUS.md's `frontend` row follow-up).
   ingressRules:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000
