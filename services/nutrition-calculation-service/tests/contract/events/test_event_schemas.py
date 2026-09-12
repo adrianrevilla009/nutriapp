@@ -85,6 +85,81 @@ def test_nutrition_target_updated_payload_matches_schema():
         correlation_id="c2",
     )
     jsonschema.validate(instance=event.to_wire(), schema=schema)
+    assert event.payload["nutrient_targets_min"] == {"protein_g": 112.0, "fat_g": 46.5}
+
+
+def test_nutrition_target_updated_payload_matches_shared_contracts_typed_model():
+    """Guards the shared_contracts typed model (`extra="forbid"`) staying
+    in lockstep with this producer's actual payload shape -- if a future
+    field is added to the event builder without updating
+    `NutritionTargetUpdatedPayloadV1`, any real consumer validating against
+    that typed model would reject every future event outright."""
+    from shared_contracts.events.nutrition_calculation import NutritionTargetUpdatedPayloadV1
+
+    event = build_nutrition_target_updated_event(
+        user_id=uuid.uuid4(),
+        bmr_kcal=1673.75,
+        tdee_kcal=2593.0,
+        calorie_target_kcal=2093.0,
+        macro_targets=MacroTargetRange(
+            protein_g_min=112.0,
+            protein_g_max=154.0,
+            fat_g_min=46.5,
+            carbs_g=200.0,
+            carbs_floored=False,
+        ),
+        goal_type=GoalType.LOSE,
+        activity_level=ActivityLevel.MODERATE,
+        clamped=True,
+        clamp_reason="Deficit capped at 1000 kcal/day below TDEE.",
+        formula_version=CURRENT_FORMULA_VERSION,
+        reason="weight_recorded",
+        effective_from=datetime.now(timezone.utc),
+        correlation_id="c3",
+    )
+    validated = NutritionTargetUpdatedPayloadV1.model_validate(event.payload)
+    assert validated.nutrient_targets_min == {"protein_g": 112.0, "fat_g": 46.5}
+
+
+def test_nutrition_target_updated_old_shaped_payload_without_nutrient_targets_min_still_validates():
+    """Backward-compatibility, proved rather than assumed (addendum
+    section 8): an event published *before* `nutrient_targets_min`
+    existed at all (neither Phase 1's protein_g/fat_g re-export nor
+    Phase 2's micronutrient minimums) must still validate against the
+    current JSON Schema and the current shared-contracts typed model --
+    this is exactly what "additive, not a breaking change, stays v1"
+    (docs/events-catalog.md's versioning-decision note) has to mean in
+    practice, not just in prose."""
+    from shared_contracts.events.nutrition_calculation import NutritionTargetUpdatedPayloadV1
+
+    schema = _load_schema("nutrition_target_updated.v1.json")
+    event = build_nutrition_target_updated_event(
+        user_id=uuid.uuid4(),
+        bmr_kcal=1673.75,
+        tdee_kcal=2593.0,
+        calorie_target_kcal=2093.0,
+        macro_targets=MacroTargetRange(
+            protein_g_min=112.0,
+            protein_g_max=154.0,
+            fat_g_min=46.5,
+            carbs_g=200.0,
+            carbs_floored=False,
+        ),
+        goal_type=GoalType.LOSE,
+        activity_level=ActivityLevel.MODERATE,
+        clamped=False,
+        clamp_reason=None,
+        formula_version=CURRENT_FORMULA_VERSION,
+        reason="weight_recorded",
+        effective_from=datetime.now(timezone.utc),
+        correlation_id="c-old-shape",
+    )
+    old_shaped_wire = event.to_wire()
+    del old_shaped_wire["payload"]["nutrient_targets_min"]
+
+    jsonschema.validate(instance=old_shaped_wire, schema=schema)
+    validated = NutritionTargetUpdatedPayloadV1.model_validate(old_shaped_wire["payload"])
+    assert validated.nutrient_targets_min == {}
 
 
 def test_understanding_of_food_entry_logged_matches_shared_contracts():

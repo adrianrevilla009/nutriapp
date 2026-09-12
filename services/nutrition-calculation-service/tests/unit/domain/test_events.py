@@ -66,3 +66,87 @@ def test_build_nutrition_target_updated_event_shape():
     assert event.payload["activity_adjustment_kcal"] is None
     assert event.payload["clamped"] is True
     assert event.payload["macro_targets"]["carbs_g"] == 200.0
+    assert event.payload["nutrient_targets_min"] == {"protein_g": 112.0, "fat_g": 48.0}
+
+
+def test_build_nutrition_target_updated_event_never_fabricates_a_micronutrient_minimum():
+    """Guards the honest-scope documented in nutrient_target_min_builder.py:
+    no true micronutrient (vitamin/mineral) key ever appears in
+    `nutrient_targets_min` -- see that module's docstring for why."""
+    macro_targets = MacroTargetRange(
+        protein_g_min=112.0, protein_g_max=154.0, fat_g_min=48.0, carbs_g=200.0, carbs_floored=False
+    )
+    event = build_nutrition_target_updated_event(
+        user_id=uuid.uuid4(),
+        bmr_kcal=1673.75,
+        tdee_kcal=2593.0,
+        calorie_target_kcal=2093.0,
+        macro_targets=macro_targets,
+        goal_type=GoalType.LOSE,
+        activity_level=ActivityLevel.MODERATE,
+        clamped=False,
+        clamp_reason=None,
+        formula_version="2026.1",
+        reason="weight_recorded",
+        effective_from=datetime.now(timezone.utc),
+        correlation_id="corr-3",
+    )
+    for not_yet_covered in ("calcium_mg", "iron_mg", "vitamin_c_mg", "fiber_g"):
+        assert not_yet_covered not in event.payload["nutrient_targets_min"]
+
+
+def test_build_nutrition_target_updated_event_merges_micronutrient_targets_min_when_provided():
+    """Phase 2 (dri-rda-addendum.md): passing `micronutrient_targets_min`
+    merges it alongside the always-present protein_g/fat_g entries,
+    without disturbing them."""
+    macro_targets = MacroTargetRange(
+        protein_g_min=112.0, protein_g_max=154.0, fat_g_min=48.0, carbs_g=200.0, carbs_floored=False
+    )
+    event = build_nutrition_target_updated_event(
+        user_id=uuid.uuid4(),
+        bmr_kcal=1673.75,
+        tdee_kcal=2593.0,
+        calorie_target_kcal=2093.0,
+        macro_targets=macro_targets,
+        goal_type=GoalType.LOSE,
+        activity_level=ActivityLevel.MODERATE,
+        clamped=False,
+        clamp_reason=None,
+        formula_version="2026.2",
+        reason="weight_recorded",
+        effective_from=datetime.now(timezone.utc),
+        correlation_id="corr-4",
+        micronutrient_targets_min={"calcium_mg": 1000.0, "iron_mg": 8.0, "vitamin_c_mg": 90.0},
+    )
+    assert event.payload["nutrient_targets_min"] == {
+        "protein_g": 112.0,
+        "fat_g": 48.0,
+        "calcium_mg": 1000.0,
+        "iron_mg": 8.0,
+        "vitamin_c_mg": 90.0,
+    }
+
+
+def test_build_nutrition_target_updated_event_micronutrient_targets_min_defaults_to_empty():
+    """An empty dict (e.g. an under-19 user) merges in nothing -- still
+    no fabrication, and no crash on the `None`-defaulted parameter."""
+    macro_targets = MacroTargetRange(
+        protein_g_min=50.0, protein_g_max=70.0, fat_g_min=30.0, carbs_g=150.0, carbs_floored=False
+    )
+    event = build_nutrition_target_updated_event(
+        user_id=uuid.uuid4(),
+        bmr_kcal=1500.0,
+        tdee_kcal=2000.0,
+        calorie_target_kcal=2000.0,
+        macro_targets=macro_targets,
+        goal_type=GoalType.MAINTAIN,
+        activity_level=ActivityLevel.LIGHT,
+        clamped=False,
+        clamp_reason=None,
+        formula_version="2026.2",
+        reason="body_metric_recorded",
+        effective_from=datetime.now(timezone.utc),
+        correlation_id="corr-5",
+        micronutrient_targets_min={},
+    )
+    assert event.payload["nutrient_targets_min"] == {"protein_g": 50.0, "fat_g": 30.0}

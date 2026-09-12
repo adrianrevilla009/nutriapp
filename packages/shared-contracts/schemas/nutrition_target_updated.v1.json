@@ -14,8 +14,8 @@
       "type": "object",
       "required": [
         "user_id", "bmr_kcal", "tdee_kcal", "calorie_target_kcal", "macro_targets",
-        "goal_type", "activity_level", "activity_adjustment_kcal", "clamped",
-        "clamp_reason", "formula_version", "reason", "effective_from"
+        "goal_type", "activity_level", "activity_adjustment_kcal",
+        "clamped", "clamp_reason", "formula_version", "reason", "effective_from"
       ],
       "properties": {
         "user_id": { "type": "string", "format": "uuid" },
@@ -32,6 +32,11 @@
             "carbs_g": { "type": "number" }
           },
           "additionalProperties": false
+        },
+        "nutrient_targets_min": {
+          "type": "object",
+          "description": "Nutrient-keyed minimum-target map (added v1, additive) -- canonical nutrient names matching NutritionValueRecomputed's macros/micronutrients dict keys. Always carries protein_g/fat_g; for adult users (age >= 19) with a resolvable sex also carries calcium_mg/iron_mg/vitamin_c_mg, real NIH ODS DRI-sourced minimums -- never fabricated, never defaulted for an unresolvable sex or an under-19 age (simply absent). See nutrition-calculation-service's domain/services/nutrient_target_min_builder.py and domain/reference_data/dri_reference_table.py.",
+          "additionalProperties": { "type": "number" }
         },
         "goal_type": { "enum": ["LOSE", "MAINTAIN", "GAIN"] },
         "activity_level": { "enum": ["SEDENTARY", "LIGHT", "MODERATE", "ACTIVE", "VERY_ACTIVE"] },

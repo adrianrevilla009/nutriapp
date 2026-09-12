@@ -87,6 +87,60 @@ Article 9 special-category data outside `profile-service`'s erasure design
   (`domain/services/calorie_target_calculator.py`).
 - **Macro repartition** — protein 1.6–2.2 g/kg, fat ≥ 20% of calories,
   carbs = remainder (floored at 0g, flagged via `carbs_floored`)
+- **Micronutrient RDA/DRI minimums** (Phase 2,
+  `plans/nutrition-calculation-service/dri-rda-addendum.md`, ADR-0024
+  Proposed) — `calcium_mg`/`iron_mg`/`vitamin_c_mg` for adult users (age
+  >= 19) with a resolved sex constant, from a static, versioned reference
+  table (`domain/reference_data/dri_reference_table.py`, table version
+  `nih-ods-2024_2021-adult-3nutrient-v1`, **last verified: 2026-09-12**)
+  sourced from US NIH Office of Dietary Supplements (ODS) Health
+  Professional Fact Sheets (NASEM Dietary Reference Intakes). Per
+  ADR-0024, re-check the live fact sheets for a revision no later than
+  2027-09 and record the outcome here (confirmed unchanged, or a
+  superseding ADR/plan) — a revision found during that check is itself a
+  formula change requiring a new implementation-plan pass, never a silent
+  table edit:
+  - Calcium — fact sheet byline "Updated: July 24, 2024":
+    19–50y 1000 mg (both sexes); 51–70y 1000 mg male / 1200 mg female;
+    71y+ 1200 mg (both sexes).
+  - Iron — fact sheet byline "Updated: October 9, 2024":
+    19–50y 8 mg male / 18 mg female; 51y+ 8 mg (both sexes).
+  - Vitamin C — fact sheet byline "Updated: March 26, 2021":
+    19y+ 90 mg male / 75 mg female (single adult band).
+  Retrieved via the Wayback Machine's archived mirror of each live
+  `ods.od.nih.gov` fact sheet page (the live site 403s automated
+  fetches from this environment) — see
+  `domain/reference_data/dri_reference_table.py`'s module docstring for
+  the exact canonical URL, snapshot URL, and retrieval honesty note per
+  nutrient. `Sex.OTHER` uses the same `calculation_sex_constant` mechanism
+  as `bmr_calculator.py` — explicit selection required, never defaulted
+  (`domain/services/micronutrient_dri_resolver.py`).
+
+## Known gaps — micronutrient RDA/DRI coverage (Phase 2)
+
+- **Pregnancy/lactation-adjusted values are not computed.**
+  `profile-service` tracks no pregnancy/lactation field today, so this is
+  a genuine cross-service blocker, not a scope choice — flagged for
+  `security-agent`/product given pregnancy status is likely itself GDPR
+  Article 9 special-category data requiring its own consent surface if it
+  is ever added.
+- **Users under 19 get zero micronutrient minimum entries** (absent, not
+  defaulted) — DRI child/adolescent tables use fundamentally different
+  age bands than this service's adult-only formulas currently assume.
+  This is *stricter* than `bmr_calculator.py`'s own existing behavior
+  (which applies the adult Mifflin-St Jeor formula to any `age > 0`) — a
+  real, deliberate inconsistency, not resolved in this pass; flagged as a
+  follow-up question for `architecture-agent`/product on whether BMR
+  should be tightened to match, or this loosened.
+- **Only 3 of the many DRI-covered vitamins/minerals are implemented**
+  (calcium, iron, vitamin C) — the only three with both a real DRI
+  *minimum*-shaped value and existing end-to-end plumbing through
+  `catalog-service`'s `NutrientPanel`. Any other nutrient requires new
+  reference data *and* its own ADR/implementation-plan pass, not a silent
+  table addition — see this service's `CLAUDE.md` "Never do this" list.
+- **`analytics-service` does not yet consume these three new keys** for
+  deficiency detection — a distinct, not-yet-planned follow-up in that
+  service's own bounded context.
 
 ## Known limitations
 
@@ -172,7 +226,12 @@ implementation plan Addendum 1's explicit requirement.
 ## Owned events (see docs/events-catalog.md)
 
 - `NutritionValueRecomputed` (v1, new).
-- `NutritionTargetUpdated` (v1, new).
+- `NutritionTargetUpdated` (v1, new). Payload's `nutrient_targets_min`
+  field (added additively, still v1) always carries `protein_g`/`fat_g`,
+  and, for adult users, also `calcium_mg`/`iron_mg`/`vitamin_c_mg` (Phase
+  2, cited NIH ODS/NASEM DRI figures) -- see
+  `domain/services/nutrient_target_min_builder.py` and
+  `domain/services/micronutrient_dri_resolver.py`, and "Known gaps" above.
 
 ## Consumed events
 
