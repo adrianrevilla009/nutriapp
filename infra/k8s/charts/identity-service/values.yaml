@@ -72,6 +72,17 @@ networkPolicy:
   # (implementation plan §6) — never routed through Kong for that path;
   # Kong is still allowed in for the public /api/v1/auth/* surface.
   #
+  # frontend's pod selector is added below alongside the existing peers:
+  # frontend's server-side Route Handlers call this service's public
+  # /api/v1/auth/* surface directly (not proxied through Kong for that
+  # in-cluster hop) — same shape as the bff-service -> diary-service /
+  # nutrition-calculation-service ingress fix (STATUS.md's "RESOLVED
+  # 2026-09-08" note), closing the matching gap flagged for
+  # identity-service in STATUS.md's `frontend` row. frontend's own
+  # egress NetworkPolicy
+  # (infra/k8s/charts/frontend/templates/networkpolicy-egress-downstream.yaml)
+  # already allows this hop out; this was the missing other half.
+  #
   # NOTE: _lib only renders `policyTypes: [Ingress]` — there is currently
   # no egress-restriction mechanism in the shared library chart, so
   # egress (to the shared RDS instance, Redis, RabbitMQ) is unrestricted
@@ -86,6 +97,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000

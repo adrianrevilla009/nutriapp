@@ -66,6 +66,16 @@ networkPolicy:
   # Kong. Bare podSelector (no namespaceSelector) scopes to the shared
   # namespace, same convention as every other service's chart.
   #
+  # frontend's pod selector is added below alongside Kong: frontend's
+  # server-side Route Handlers call this service directly for journey 2
+  # (photo upload -> AI detection -> logged entry) -- same shape as the
+  # bff-service -> diary-service / nutrition-calculation-service ingress
+  # fix (STATUS.md's "RESOLVED 2026-09-08" note), closing the matching
+  # gap flagged for food-recognition-service in STATUS.md's `frontend`
+  # row. frontend's own egress NetworkPolicy
+  # (infra/k8s/charts/frontend/templates/networkpolicy-egress-downstream.yaml)
+  # already allows this hop out; this was the missing other half.
+  #
   # NOTE (same known _lib-level gap those charts document): _lib only
   # renders `policyTypes: [Ingress]` here -- egress (to the shared RDS
   # instance, RabbitMQ, catalog-service, the Anthropic API) is
@@ -77,6 +87,9 @@ networkPolicy:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000

@@ -75,11 +75,24 @@ networkPolicy:
   # callers today (implementation plan section 6) -- no additional
   # NetworkPolicy ingress rule is added for it yet; a future consuming
   # service's own implementation plan adds that peer when it exists.
+  #
+  # frontend's pod selector is added below alongside Kong: frontend's
+  # server-side Route Handlers call this service's checkout-session
+  # surface directly for journey 3 (upgrade to Pro) -- same shape as the
+  # bff-service -> diary-service / nutrition-calculation-service ingress
+  # fix (STATUS.md's "RESOLVED 2026-09-08" note), closing the matching
+  # gap flagged for billing-service in STATUS.md's `frontend` row.
+  # frontend's own egress NetworkPolicy
+  # (infra/k8s/charts/frontend/templates/networkpolicy-egress-downstream.yaml)
+  # already allows this hop out; this was the missing other half.
   ingressRules:
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: kong
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
       ports:
         - protocol: TCP
           port: 8000
