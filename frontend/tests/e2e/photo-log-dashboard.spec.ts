@@ -93,7 +93,10 @@ test.describe("upload a food photo -> AI detection -> logged entry (journey 2)",
     // grams" -- see CandidateList.tsx's aria-label), not the visible
     // "Use this" text, so a /use this/i name filter never matches. Each
     // matching listitem has exactly one link.
-    const useThisLink = page.getByRole("listitem").filter({ hasText: SEEDED_PRODUCT_NAME }).getByRole("link");
+    const useThisLink = page
+      .getByRole("listitem")
+      .filter({ hasText: SEEDED_PRODUCT_NAME })
+      .getByRole("link");
     await expect(useThisLink).toBeVisible();
     await useThisLink.click();
 
