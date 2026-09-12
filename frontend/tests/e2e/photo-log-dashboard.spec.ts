@@ -87,10 +87,13 @@ test.describe("upload a food photo -> AI detection -> logged entry (journey 2)",
     await page.getByRole("button", { name: /analyze photo/i }).click();
 
     await expect(page.getByRole("heading", { level: 2 })).toContainText(/possible match/i);
-    const useThisLink = page
-      .getByRole("listitem")
-      .filter({ hasText: SEEDED_PRODUCT_NAME })
-      .getByRole("link", { name: /use this/i });
+    // Scoped by listitem + role only (no accessible-name filter): the
+    // link's a11y name is deliberately the full candidate description
+    // ("Use {name}, confidence {percent}%, approx. {min} to {max}
+    // grams" -- see CandidateList.tsx's aria-label), not the visible
+    // "Use this" text, so a /use this/i name filter never matches. Each
+    // matching listitem has exactly one link.
+    const useThisLink = page.getByRole("listitem").filter({ hasText: SEEDED_PRODUCT_NAME }).getByRole("link");
     await expect(useThisLink).toBeVisible();
     await useThisLink.click();
 
@@ -163,7 +166,13 @@ test.describe("upload a food photo -> AI detection -> logged entry (journey 2)",
     await expect(page.getByRole("heading", { level: 2 })).toContainText(/couldn't analyze/i, {
       timeout: 15_000,
     });
-    await expect(page.getByRole("alert")).not.toBeVisible();
+    // Not `getByRole("alert")` -- Next.js's own always-present route
+    // announcer (`#__next-route-announcer__`) also carries role="alert"
+    // and matches as "visible" even though it renders no content, which
+    // made this assertion fail against a real app that was behaving
+    // correctly. `.error-banner` targets this app's actual ErrorBanner
+    // component specifically (see components/ui/ErrorBanner.tsx).
+    await expect(page.locator(".error-banner")).not.toBeVisible();
 
     const manualLink = page.getByRole("link", { name: /search manually/i });
     await expect(manualLink).toBeVisible();
