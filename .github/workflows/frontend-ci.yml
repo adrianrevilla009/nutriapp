@@ -293,6 +293,7 @@ jobs:
       # runner.
       - name: Rebuild argon2 native binding (blocked by pnpm's default build-script policy)
         run: pnpm rebuild argon2
+        working-directory: frontend
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
