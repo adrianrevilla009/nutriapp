@@ -96,16 +96,16 @@ defaults:
 # class of bug STATUS.md's shebang/env-var incidents were) is worth the
 # extra several minutes of CI time.
 #
-# IMPORTANT -- UNVERIFIED: this job was authored without Docker available
-# in the authoring sandbox (see this change's own PR description). It has
-# never actually been run end-to-end. It is written from close reading of
-# docker-compose.yml, .env.example, each backend service's own
-# build-and-scan-image smoke-test step, and each service's migrations/env.py
-# -- not from a real execution. Treat it as unverified until a real run on
-# a Docker-enabled GitHub-hosted runner confirms it (see this PR's own
-# report for the itemized list of what specifically needs that
-# confirmation) -- same "flag what a sandbox without Docker cannot verify"
-# standard as nutrition-assistant-service's entitlement_cache work.
+# VERIFIED 2026-09-12: this job was originally authored without Docker
+# available in the authoring sandbox and shipped flagged unverified. Its
+# first 4 real CI runs on a Docker-enabled GitHub-hosted runner found and
+# fixed 3 real bugs (missing `working-directory: frontend` on the argon2
+# rebuild step; `alembic` invoked via its shebang'd console script instead
+# of `python -m alembic`, hitting the same builder/runtime-stage shebang
+# bug already fixed for every service's uvicorn startup command; and 4
+# Playwright strict-mode/false-positive assertions in the journey-2/3
+# specs themselves, unrelated to this job's own wiring) before passing
+# clean end-to-end. All 3 journeys now run for real, every run.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -256,8 +256,9 @@ jobs:
 
   e2e-journeys:
     # Playwright E2E stage against a full docker-compose stack -- see this
-    # workflow's own header comment (above `jobs:`) for the full rationale,
-    # scope, and the explicit UNVERIFIED flag. Runs after
+    # workflow's own header comment (above `jobs:`) for the full rationale
+    # and scope, and its "VERIFIED 2026-09-12" note for this job's own
+    # fix history. Runs after
     # build-and-scan-image (build -> ... -> smoke ordering, per
     # ci-cd-conventions SKILL.md), even though it builds its own separate
     # set of images via `docker compose build` rather than reusing the
@@ -287,10 +288,12 @@ jobs:
       # without this, `argon2`'s native binding never gets built and
       # tests/e2e/seed/seed.ts's `import * as argon2` fails at runtime.
       # `pnpm rebuild <pkg>` is the documented non-interactive alternative
-      # to `pnpm approve-builds` (see seed.ts's own header comment) --
-      # UNVERIFIED: never actually run in this sandbox (no Docker/no
-      # argon2 native toolchain available here either); confirm on a real
-      # runner.
+      # to `pnpm approve-builds` (see seed.ts's own header comment). Needs
+      # `working-directory: frontend` explicitly (the job default is repo
+      # root, which has no package.json in this monorepo -- `pnpm rebuild`
+      # requires running from within the package that has one, unlike
+      # `pnpm install` which works workspace-wide from root); missing this
+      # the first time round failed CI with ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND.
       - name: Rebuild argon2 native binding (blocked by pnpm's default build-script policy)
         run: pnpm rebuild argon2
         working-directory: frontend
@@ -326,11 +329,11 @@ jobs:
       # target-comparison UI these specs happen to render will show the
       # honest "unavailable" degrade state (CLAUDE.md section 2.6), not an
       # error -- a deliberate scoping choice, not an oversight.
-      # UNVERIFIED: this whole stack (8 backend services + frontend built
-      # and wired together via this exact compose invocation) has never
-      # actually been run -- STATUS.md's own "Cross-Cutting" section
-      # confirms only identity-service+diary-service (of the 9 here) were
-      # ever jointly verified running together in compose before now.
+      # VERIFIED 2026-09-12: this full 9-service stack (8 backend services
+      # + frontend) now comes up and runs together successfully in CI --
+      # the first time this many services were jointly verified running
+      # together via compose (STATUS.md's "Cross-Cutting" section
+      # previously only had identity-service+diary-service confirmed).
       - name: Start backend + frontend stack
         run: |
           set -euo pipefail
