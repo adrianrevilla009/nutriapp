@@ -3,15 +3,30 @@ implementation plan section 5. Emitted whenever a user's calculated
 calorie/macro target changes. `activity_adjustment_kcal` is always `None`
 this pass (reserved seam for activity-service, implementation plan
 section 1, item 2).
+
+`nutrient_targets_min` (added additively, still v1 -- see
+docs/events-catalog.md's versioning-decision note on this field, and
+`domain/services/nutrient_target_min_builder.py` for the full "what is/
+isn't covered" reasoning): a nutrient-keyed minimum-target map, generic
+enough for a downstream consumer to key by nutrient name rather than
+parsing `macro_targets`. Always contains `protein_g`/`fat_g`; as of Phase
+2 (`dri-rda-addendum.md`), also contains `calcium_mg`/`iron_mg`/
+`vitamin_c_mg` when the caller passes `micronutrient_targets_min` (the
+`RecomputeNutritionTargetHandler`-resolved output of
+`domain/services/micronutrient_dri_resolver.py`) -- omitted, never
+fabricated, for under-19 users or when the caller has none to pass (e.g.
+existing tests that only exercise the macro-only path).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal
 
 from domain.events.base import DomainEvent, EventMetadata
+from domain.services.nutrient_target_min_builder import build_nutrient_targets_min
 from domain.value_objects.activity_level import ActivityLevel
 from domain.value_objects.goal_type import GoalType
 from domain.value_objects.macro_target_range import MacroTargetRange
@@ -39,7 +54,12 @@ def build_nutrition_target_updated_event(
     reason: TargetUpdateReason,
     effective_from: datetime,
     correlation_id: str,
+    micronutrient_targets_min: Mapping[str, float] | None = None,
 ) -> DomainEvent:
+    nutrient_targets_min = {
+        **build_nutrient_targets_min(macro_targets),
+        **(micronutrient_targets_min or {}),
+    }
     payload = {
         "user_id": str(user_id),
         "bmr_kcal": bmr_kcal,
@@ -51,6 +71,7 @@ def build_nutrition_target_updated_event(
             "fat_g_min": macro_targets.fat_g_min,
             "carbs_g": macro_targets.carbs_g,
         },
+        "nutrient_targets_min": nutrient_targets_min,
         "goal_type": goal_type.value,
         "activity_level": activity_level.value,
         "activity_adjustment_kcal": None,
