@@ -85,7 +85,12 @@ test.describe("upgrade to Pro -> publish a recipe -> another user finds it (jour
       // requirement): the publisher's OWN context/session must be entirely
       // unaffected by everything the finder just did in its own context. ---
       await publisherPage.goto("/recipes");
-      await expect(publisherPage.getByText(recipeTitle)).toBeVisible();
+      // `.first()`: the recipe title text appears twice on this page --
+      // once as the card's own <strong>title</strong>, once inside the
+      // "View {title}" link's accessible text (a substring match) -- both
+      // confirm the recipe is genuinely listed, so either match proves
+      // the assertion.
+      await expect(publisherPage.getByText(recipeTitle).first()).toBeVisible();
       await expect(publisherPage).not.toHaveURL(/\/login/);
       // ...and, symmetrically, the finder's session is unaffected by the
       // publisher's own actions/context.
@@ -110,9 +115,12 @@ test.describe("upgrade to Pro -> publish a recipe -> another user finds it (jour
     await page.getByRole("button", { name: /find a recipe/i }).click();
 
     await expect(page.getByText(/recipe search is a pro feature/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: /upgrade to pro/i })).toHaveAttribute(
-      "href",
-      "/pro",
-    );
+    // Scoped to `main`: the persistent nav bar also has an "Upgrade to
+    // Pro" link (both point to /pro), so an unscoped role locator hits a
+    // strict-mode violation. This checks the CTA inside the pro-feature
+    // prompt itself, not the nav's copy.
+    await expect(
+      page.getByRole("main").getByRole("link", { name: /upgrade to pro/i }),
+    ).toHaveAttribute("href", "/pro");
   });
 });

@@ -9,6 +9,29 @@ on:
       - "infra/k8s/charts/frontend/**"
       - "infra/k8s/charts/_lib/**"
       - ".github/workflows/frontend-ci.yml"
+      # Below: the e2e-journeys job's own real dependency surface (devops-
+      # agent follow-up wiring the Playwright E2E stage into CI). GitHub
+      # Actions has no per-job `paths:` filter, only a workflow-level one --
+      # widening this list means every job in this file (lint, type-check,
+      # etc.) also re-runs on a backend-only change, which is wasted CI time
+      # but not incorrect (those jobs still pass, since frontend/ itself
+      # didn't change). Splitting e2e-journeys into its own workflow file
+      # with a narrower trigger, or adopting a `dorny/paths-filter`-style
+      # per-job gate (no existing precedent for either in this repo's other
+      # *-ci.yml files), is a reasonable follow-up if this proves too
+      # costly in practice.
+      - "docker-compose.yml"
+      - ".env.example"
+      - "Makefile"
+      - "packages/shared-contracts/**"
+      - "services/identity-service/**"
+      - "services/catalog-service/**"
+      - "services/diary-service/**"
+      - "services/nutrition-calculation-service/**"
+      - "services/food-recognition-service/**"
+      - "services/billing-service/**"
+      - "services/recipe-service/**"
+      - "services/bff-service/**"
   push:
     branches: [main]
     paths:
@@ -18,6 +41,18 @@ on:
       - "infra/k8s/charts/frontend/**"
       - "infra/k8s/charts/_lib/**"
       - ".github/workflows/frontend-ci.yml"
+      - "docker-compose.yml"
+      - ".env.example"
+      - "Makefile"
+      - "packages/shared-contracts/**"
+      - "services/identity-service/**"
+      - "services/catalog-service/**"
+      - "services/diary-service/**"
+      - "services/nutrition-calculation-service/**"
+      - "services/food-recognition-service/**"
+      - "services/billing-service/**"
+      - "services/recipe-service/**"
+      - "services/bff-service/**"
 
 defaults:
   run:
@@ -35,13 +70,42 @@ defaults:
 # MSW fixtures built from the real backend shapes (schemas/*.ts,
 # tests/fixtures/*.ts), not a Pact-style contract test this pass.
 #
-# push / deploy-dev / smoke-e2e / promote-staging / manual-approval /
-# promote-prod: follow-up once infra/terraform's platform-infra plan is
-# applied and an ECR repo + EKS cluster exist, same as every backend
-# service's own workflow. The Playwright E2E spec (tests/e2e/) is NOT run
-# in this CI pass -- it requires a full docker-compose stack including a
-# seeded pre-verified user (implementation plan resolution 2); wiring that
-# into CI is a devops-agent follow-up, tracked, not silently skipped.
+# push / deploy-dev / promote-staging / manual-approval / promote-prod:
+# follow-up once infra/terraform's platform-infra plan is applied and an
+# ECR repo + EKS cluster exist, same as every backend service's own
+# workflow.
+#
+# e2e-journeys (below, after build-and-scan-image): the devops-agent
+# follow-up that wires the Playwright E2E spec (tests/e2e/) into CI. It
+# starts the real backend services + DBs + RabbitMQ this frontend's 3
+# CLAUDE.md section 3 journeys actually call (per each Route Handler's own
+# BASE_URL env var and docker-compose.yml's `frontend` service's
+# `depends_on`, plus `nutrition-calculation-service` -- not in that
+# `depends_on` list itself, but reached transitively through
+# `bff-service`'s dashboard-aggregation call, and required for journey 1's
+# "totals are non-zero" assertion to ever pass) via the root
+# `docker-compose.yml`, seeds the pre-verified test identities per
+# `tests/e2e/seed/seed.ts` (implementation plan resolution 2 / journey-3
+# implementation plan resolution 1), then runs all 3 specs against the
+# live stack. This deliberately runs on every relevant PR rather than only
+# post-deploy against `dev` (docs/ci-cd-strategy.md section 2's general
+# "E2E smoke tests run against dev, not on every PR" guidance) -- a
+# considered exception for this initiative, not a silent deviation: these
+# 3 journeys are CLAUDE.md section 3's own named critical-path E2E specs,
+# and catching a cross-service wiring regression at PR time (exactly the
+# class of bug STATUS.md's shebang/env-var incidents were) is worth the
+# extra several minutes of CI time.
+#
+# VERIFIED 2026-09-12: this job was originally authored without Docker
+# available in the authoring sandbox and shipped flagged unverified. Its
+# first 4 real CI runs on a Docker-enabled GitHub-hosted runner found and
+# fixed 3 real bugs (missing `working-directory: frontend` on the argon2
+# rebuild step; `alembic` invoked via its shebang'd console script instead
+# of `python -m alembic`, hitting the same builder/runtime-stage shebang
+# bug already fixed for every service's uvicorn startup command; and 4
+# Playwright strict-mode/false-positive assertions in the journey-2/3
+# specs themselves, unrelated to this job's own wiring) before passing
+# clean end-to-end. All 3 journeys now run for real, every run.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -189,6 +253,214 @@ jobs:
           severity: "CRITICAL,HIGH"
           exit-code: "1"
           ignore-unfixed: "true"
+
+  e2e-journeys:
+    # Playwright E2E stage against a full docker-compose stack -- see this
+    # workflow's own header comment (above `jobs:`) for the full rationale
+    # and scope, and its "VERIFIED 2026-09-12" note for this job's own
+    # fix history. Runs after
+    # build-and-scan-image (build -> ... -> smoke ordering, per
+    # ci-cd-conventions SKILL.md), even though it builds its own separate
+    # set of images via `docker compose build` rather than reusing the
+    # `frontend:${{ github.sha }}` tag built above -- a known, minor
+    # duplication of build work, not a correctness issue.
+    runs-on: ubuntu-latest
+    needs: build-and-scan-image
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          version: "10.34.5"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # pnpm blocks a dependency's install/build scripts by default unless
+      # explicitly approved (no `onlyBuiltDependencies` entry exists in
+      # pnpm-workspace.yaml for this repo's single frontend package) --
+      # without this, `argon2`'s native binding never gets built and
+      # tests/e2e/seed/seed.ts's `import * as argon2` fails at runtime.
+      # `pnpm rebuild <pkg>` is the documented non-interactive alternative
+      # to `pnpm approve-builds` (see seed.ts's own header comment). Needs
+      # `working-directory: frontend` explicitly (the job default is repo
+      # root, which has no package.json in this monorepo -- `pnpm rebuild`
+      # requires running from within the package that has one, unlike
+      # `pnpm install` which works workspace-wide from root); missing this
+      # the first time round failed CI with ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND.
+      - name: Rebuild argon2 native binding (blocked by pnpm's default build-script policy)
+        run: pnpm rebuild argon2
+        working-directory: frontend
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      # identity-service requires a readable RS256 keypair with no default
+      # (ADR-0022) -- same throwaway-keypair-per-CI-run approach as every
+      # backend service's own smoke-test step (e.g.
+      # identity-service-ci.yml), reusing the Makefile target local dev
+      # already uses instead of duplicating the openssl invocation.
+      - name: Generate identity-service dev JWT keypair
+        run: |
+          set -euo pipefail
+          make dev-keys
+          # world-readable: throwaway keypair generated fresh per CI run,
+          # otherwise unreadable by the container's non-root uid 1000 once
+          # bind-mounted (same fix, same rationale, as
+          # identity-service-ci.yml's own smoke-test step).
+          chmod 644 .dev-keys/identity/identity_jwt_private_key.pem \
+                     .dev-keys/identity/identity_jwt_public_key.pem
+      - name: Prepare .env for docker compose
+        run: cp .env.example .env
+      # Only the 9 app services these 3 journeys actually call are named
+      # explicitly -- `docker compose up` resolves each one's own
+      # `depends_on` automatically (its db/redis/rabbitmq), so those don't
+      # need to be listed. `profile-service` is deliberately NOT started:
+      # nutrition-calculation-service only calls it from
+      # `recompute_nutrition_target.py` (the goal/target-comparison path),
+      # confirmed by reading that service's own application/ layer --
+      # never from the daily-macro-totals computation these 3 journeys'
+      # own assertions actually check. Its absence means any
+      # target-comparison UI these specs happen to render will show the
+      # honest "unavailable" degrade state (CLAUDE.md section 2.6), not an
+      # error -- a deliberate scoping choice, not an oversight.
+      # VERIFIED 2026-09-12: this full 9-service stack (8 backend services
+      # + frontend) now comes up and runs together successfully in CI --
+      # the first time this many services were jointly verified running
+      # together via compose (STATUS.md's "Cross-Cutting" section
+      # previously only had identity-service+diary-service confirmed).
+      - name: Start backend + frontend stack
+        run: |
+          set -euo pipefail
+          docker compose up -d --build \
+            identity-service \
+            catalog-service \
+            diary-service \
+            nutrition-calculation-service \
+            food-recognition-service \
+            billing-service \
+            recipe-service \
+            bff-service \
+            frontend
+      # bff-service and frontend declare no (or an incomplete --
+      # bff-service has none at all, frontend's own `depends_on` omits
+      # nutrition-calculation-service) `condition: service_healthy` chain
+      # of their own in docker-compose.yml, and none of the 9 app services
+      # above define a container-level `healthcheck:` at all (only their
+      # db/redis/rabbitmq dependencies do) -- so `docker compose up -d
+      # --wait` would not actually prove any of these 9 are ready. This
+      # loop is this job's own equivalent of every backend service's own
+      # build-and-scan-image `/health/live` smoke-test step, just against
+      # 9 services instead of 1.
+      - name: Wait for every backend service's /health/live
+        run: |
+          set -euo pipefail
+          for svc_port in identity-service:8001 catalog-service:8004 diary-service:8003 \
+                          nutrition-calculation-service:8005 food-recognition-service:8006 \
+                          billing-service:8010 recipe-service:8011 bff-service:8008; do
+            svc="${svc_port%%:*}"
+            port="${svc_port##*:}"
+            ready=""
+            for i in $(seq 1 60); do
+              if curl -sf "http://localhost:${port}/health/live" > /dev/null; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ -z "$ready" ]; then
+              echo "::error::${svc} did not pass /health/live"
+              docker compose logs --tail=300 "${svc}"
+              exit 1
+            fi
+            echo "${svc} /health/live OK"
+          done
+      - name: Wait for frontend's /health/live
+        run: |
+          set -euo pipefail
+          ready=""
+          for i in $(seq 1 60); do
+            if curl -sf "http://localhost:3000/health/live" > /dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$ready" ]; then
+            echo "::error::frontend did not pass /health/live"
+            docker compose logs --tail=300 frontend
+            exit 1
+          fi
+      # Migrations are never run automatically by any service's own
+      # container CMD (confirmed by reading every Dockerfile here -- each
+      # just invokes uvicorn directly); local dev runs them via the
+      # Makefile's `migrate-*` targets (`alembic upgrade head` from each
+      # service's own checked-out source against its exposed host port).
+      # `docker compose exec` instead of the Makefile targets here: it
+      # reuses the already-built image's own bundled `migrations/` +
+      # `alembic.ini` + venv (confirmed present in every one of these 7
+      # services' own Dockerfiles) and its already-correct
+      # `*_SERVICE_DATABASE_URL` env var (confirmed against each service's
+      # own migrations/env.py), without needing a second, separate Python/
+      # uv toolchain setup on the runner just for this one step.
+      # billing-service and recipe-service have no Makefile `migrate-*`
+      # target at all (added after the Makefile was last touched) --
+      # `docker compose exec` sidesteps that gap too, for all 7 uniformly.
+      # `python -m alembic`, never the bare `alembic` console script: `uv
+      # sync` bakes an absolute shebang pointing at the builder stage's
+      # path into every `.venv/bin/<script>`, broken in the runtime stage
+      # for every service with a packages/shared-contracts build
+      # dependency (identity-service/catalog-service are the only two
+      # exceptions, per STATUS.md's 2026-09-08 shebang-bug writeup) --
+      # same root cause and same fix already applied to each service's
+      # own Dockerfile CMD (`python -m uvicorn`, never the shebang'd
+      # entry-point script); this step hit the identical bug live on its
+      # first real CI run (`exec /app/.venv/bin/alembic: no such file or
+      # directory` on diary-service) before this fix.
+      - name: Run database migrations
+        run: |
+          set -euo pipefail
+          docker compose exec -T identity-service python -m alembic upgrade head
+          docker compose exec -T catalog-service python -m alembic upgrade head
+          docker compose exec -T diary-service python -m alembic upgrade head
+          docker compose exec -T nutrition-calculation-service python -m alembic upgrade head
+          docker compose exec -T food-recognition-service python -m alembic upgrade head
+          docker compose exec -T billing-service python -m alembic upgrade head
+          docker compose exec -T recipe-service python -m alembic upgrade head
+      # tests/e2e/seed/seed.ts's own default DB URLs already match this
+      # compose file's host-mapped ports exactly (identity-db 5432,
+      # catalog-db 5435, billing-db 5440) -- no E2E_*_DB_URL override
+      # needed. Implementation plan resolution 2 / journey-3 implementation
+      # plan resolution 1: seeds a pre-verified user + a real catalog
+      # product (journeys 1-2) and the publisher/finder/non-Pro identities
+      # + their billing-db subscription rows (journey 3), all bypassing
+      # both the real email-verification path and a real Stripe checkout.
+      - name: Seed E2E fixtures (pre-verified user, product, journey-3 identities)
+        run: pnpm test:e2e:seed
+        working-directory: frontend
+      - name: Run Playwright E2E specs (all 3 CLAUDE.md section 3 journeys)
+        run: pnpm test:e2e
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-traces
+          path: frontend/test-results
+          retention-days: 7
+      - name: Dump backend logs on failure
+        if: failure()
+        run: docker compose logs --tail=300
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
 
   helm-lint-and-template:
     # Not part of the lint->...->coverage-gate->build chain above (this
