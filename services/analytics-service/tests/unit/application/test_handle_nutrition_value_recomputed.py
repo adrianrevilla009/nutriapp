@@ -182,6 +182,47 @@ async def test_no_breach_no_alert_no_publish():
     assert outbox.enqueued == []
 
 
+async def test_breach_detected_for_a_newly_tracked_micronutrient_publishes_with_disclaimer():
+    """Addendum 2026-09-12, item 3/5: confirms `detect_and_record_deficiency`'s
+    mechanism is genuinely nutrient-agnostic (no logic change needed to
+    support calcium_mg/iron_mg/vitamin_c_mg) and that the mandatory
+    "not a medical diagnosis" disclaimer applies uniformly regardless of
+    which of the now-5 tracked nutrients triggered the signal -- not
+    special-cased to protein_g/fat_g.
+
+    NOTE: this constructs the command's `macros` dict directly with a
+    `calcium_mg` key to exercise the handler's generic dict-keyed lookup.
+    It does NOT assert that real `NutritionValueRecomputed` production
+    events carry calcium_mg here -- they don't yet (see
+    `domain/tracked_nutrients.py`'s documented, still-open value-side gap)."""
+    window = FakeMicronutrientWindowRepository()
+    alerts = FakeAnomalyAlertsRepository()
+    outbox = FakeOutboxRepository()
+    user_id = uuid.uuid4()
+    await _seed_breach_window(window, user_id, nutrient="calcium_mg")
+    handler = _handler(window=window, alerts=alerts, outbox=outbox)
+
+    await handler.handle(
+        HandleNutritionValueRecomputedCommand(
+            event_id=uuid.uuid4(),
+            user_id=user_id,
+            scope="day",
+            on_date=TODAY,
+            macros={"calcium_mg": 30.0},
+            occurred_at=OCCURRED_AT,
+            correlation_id="corr-calcium-1",
+        )
+    )
+
+    assert alerts.record_detection_calls == 1
+    assert len(outbox.enqueued) == 1
+    event = outbox.enqueued[0]
+    assert event.event_type == "NutrientDeficiencyDetected"
+    assert event.payload["signal"] == "calcium_mg"
+    assert "not a medical diagnosis" in event.payload["disclaimer"]
+    assert "consult" in event.payload["disclaimer"].lower()
+
+
 async def test_redelivered_event_id_does_not_double_upsert_or_double_publish():
     window = FakeMicronutrientWindowRepository()
     alerts = FakeAnomalyAlertsRepository()

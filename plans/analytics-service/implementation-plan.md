@@ -158,3 +158,18 @@ The plan was approved as proposed. The following open questions were flagged as 
 5. **Two-PR sequencing**: confirmed — `notification-service`'s addition merges first, `analytics-service` second, so `NutrientDeficiencyDetected` is never live with zero consumers.
 6. **`bff-service` dashboard surfacing**: confirmed out of scope for this plan.
 7. **Export audit log**: build the first-cut schema as specified in §3 (`export_id`, `user_id`, `report_type`, `requested_at`, `format`, date range). Flagged for a follow-up `security-agent` review given GDPR Article 9 data (weight/biometric-derived trends) flows into exportable reports — this is a should-review-before-prod item, not a build blocker for dev implementation.
+
+## Addendum — 2026-09-12, by adrianrg1996@gmail.com: consume real calcium/iron/vitamin-C targets, approved
+
+This service's own §2 resolution 2 scoped deficiency tracking to whatever `target_min` `nutrition-calculation-service` actually publishes on `NutritionTargetUpdated`, "no new nutrient list invented here" — deliberately deferring real vitamin/mineral coverage until that producer-side data existed. `nutrition-calculation-service` has since (this session, `plans/nutrition-calculation-service/dri-rda-addendum.md`) added real, cited NIH ODS DRI minimums for `calcium_mg`, `iron_mg`, and `vitamin_c_mg` to that event's `nutrient_targets_min` payload, additively, event still v1. This addendum approves the corresponding consumer-side work here, closing (for these 3 nutrients only) the "Known gap" `STATUS.md`'s `analytics-service` row has carried since first implementation.
+
+**Approved to proceed**: read the exact current field shape from `nutrition-calculation-service`'s implementation (worktree `/home/adrian/nutriapp/.claude/worktrees/agent-a6da2449aa2c6bf74` at the time of this addendum, or `main` if that PR has since merged — confirm which before writing consumer code, don't assume the shape from this addendum's prose) and:
+1. Extend `domain/tracked_nutrients.py`'s `TRACKED_NUTRIENTS` to include `calcium_mg`, `iron_mg`, `vitamin_c_mg` alongside the existing `protein_g`/`fat_g`.
+2. Extend the `NutritionTargetUpdated` consumer/projection so `micronutrient_current_targets` (or whatever the existing projection table is named) stores these 3 new target-min values per user, the same way `protein_g_min`/`fat_g_min` are already stored.
+3. Confirm `detect_and_record_deficiency`'s mechanism needs no logic change (it's documented as already nutrient-agnostic) — if it does need a change, document exactly why the "generic" claim didn't hold.
+4. Update `docs/tracked_nutrients.py`'s own docstring / this service's `README.md` "Known gap" note to reflect the new coverage and that vitamin D/B12/folate/potassium/zinc/magnesium etc. remain uncovered (no plumbing exists for them yet — not an oversight).
+5. Every `NutrientDeficiencyDetected` this newly-covered path can now genuinely fire for still carries the existing mandatory "not a medical diagnosis" disclaimer (§2 resolution 2) — no new disclaimer logic needed, just confirm the existing mechanism applies uniformly regardless of which nutrient triggered it.
+
+**Explicit non-goal**: this addendum does not add any nutrient `nutrition-calculation-service` doesn't already publish a real, cited minimum for. If a future pass wants broader coverage, that's a new addendum against that service's own DRI reference table, not this one.
+
+Once implemented: persist a test plan addendum, run the full TDD cycle, and report real test/coverage numbers. No git push/commit — the orchestrating session handles that after independent verification.

@@ -21,6 +21,7 @@ from application.commands.handle_nutrition_value_recomputed import (
     HandleNutritionValueRecomputedCommand,
     HandleNutritionValueRecomputedHandler,
 )
+from domain.tracked_nutrients import TRACKED_NUTRIENTS
 from infrastructure.messaging.resilient_topic_consumer import ResilientTopicConsumer
 from infrastructure.persistence.postgres_anomaly_alerts_repository import (
     PostgresAnomalyAlertsRepository,
@@ -77,12 +78,30 @@ async def dispatch_nutrition_calculation_event(
     else:  # NutritionTargetUpdated
         micronutrient_window = PostgresMicronutrientWindowRepository(session)
         macro_targets = payload.get("macro_targets") or {}
+        # `nutrient_targets_min` (added additively, still v1) is the
+        # canonical, nutrient-name-keyed minimum-target map -- always
+        # carries protein_g/fat_g, and (addendum 2026-09-12) also
+        # calcium_mg/iron_mg/vitamin_c_mg when nutrition-calculation-service
+        # resolved a real DRI/RDA minimum for this user. It may be entirely
+        # absent on an event published before this field existed at all --
+        # `macro_targets.protein_g_min`/`fat_g_min` remain the backward-
+        # compatible source for those two in that case. The 3 newer keys
+        # are NEVER sourced from anywhere else -- a missing entry means
+        # "no target published", stored as None, never fabricated.
+        nutrient_targets_min = payload.get("nutrient_targets_min") or {}
+        target_min_by_nutrient = {
+            nutrient: nutrient_targets_min.get(nutrient) for nutrient in TRACKED_NUTRIENTS
+        }
+        if target_min_by_nutrient.get("protein_g") is None:
+            target_min_by_nutrient["protein_g"] = macro_targets.get("protein_g_min")
+        if target_min_by_nutrient.get("fat_g") is None:
+            target_min_by_nutrient["fat_g"] = macro_targets.get("fat_g_min")
+
         await HandleNutritionTargetUpdatedHandler(processed_events, micronutrient_window).handle(
             HandleNutritionTargetUpdatedCommand(
                 event_id=event_id,
                 user_id=uuid.UUID(payload["user_id"]),
-                protein_g_min=macro_targets.get("protein_g_min"),
-                fat_g_min=macro_targets.get("fat_g_min"),
+                target_min_by_nutrient=target_min_by_nutrient,
             )
         )
 

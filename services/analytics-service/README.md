@@ -54,15 +54,32 @@ cooldown per (user, signal) pair (`anomaly_alerts` table, dedup guard).
 Real consumer: `notification-service` (separate, coordinated PR, not part
 of this change -- see "Known gap" below for sequencing).
 
-**Known, flagged gap** (`domain/tracked_nutrients.py`'s docstring has the
-full reasoning): only `protein_g`/`fat_g` are evaluated today.
-`NutritionTargetUpdated`'s actual documented payload has no micronutrient
-`target_min` field -- only `macro_targets.protein_g_min`/`fat_g_min` are
-genuinely `_min`-shaped targets in the schema as it exists. True
-micronutrient (vitamin/mineral) deficiency detection is NOT functionally
-live -- the mechanism is generic/nutrient-agnostic and fully tested, but
-has no real target data to evaluate against for anything beyond those two
-macros. Flagged for `architecture-agent`/`security-agent` review.
+**Known, flagged gap (updated 2026-09-12 -- `domain/tracked_nutrients.py`'s
+docstring has the full history/reasoning):** `TRACKED_NUTRIENTS` now
+covers 5 nutrients -- `protein_g`, `fat_g` (original), plus `calcium_mg`,
+`iron_mg`, `vitamin_c_mg` (added this pass, consuming
+`NutritionTargetUpdated`'s `nutrient_targets_min` map, populated by
+`nutrition-calculation-service` from real, cited NIH ODS DRI/RDA minimums
+for adult users age >= 19 with a resolved sex constant -- absent, never
+fabricated, otherwise).
+
+Deficiency detection is fully functionally live end-to-end only for
+`protein_g`/`fat_g` today. For `calcium_mg`/`iron_mg`/`vitamin_c_mg`, only
+the *target* side is real -- the *current value* side is still not wired:
+`NutritionValueRecomputed`'s real payload carries micronutrient values in
+a separate `micronutrients` dict (not `macros`), and this service's
+consumer dispatch only forwards `payload["macros"]`. So these 3 nutrients
+will never actually trigger a breach in production yet, despite a real
+target now being stored for them -- a distinct, out-of-scope follow-up
+(wiring the value side), not silently patched around here. The
+detection/disclaimer mechanism itself (`detect_and_record_deficiency`,
+`evaluate_breach`) is confirmed nutrient-agnostic and required no change.
+
+Every other micronutrient (`vitamin_d_mcg`, `vitamin_b12_mcg`,
+`folate_mcg`, `potassium_mg`, `zinc_mg`, `magnesium_mg`, etc.) remains
+fully uncovered -- no target-min AND no value plumbing exists for any of
+them; this is a documented absence of upstream data/wiring, not an
+oversight. Flagged for `architecture-agent`/`security-agent` review.
 
 ## Public API
 

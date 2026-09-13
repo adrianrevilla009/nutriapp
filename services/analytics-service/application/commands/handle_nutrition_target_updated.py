@@ -1,7 +1,18 @@
 """HandleNutritionTargetUpdatedHandler -- projects `NutritionTargetUpdated`
 (nutrition-calculation-service) into this service's "current target"
 reference per tracked nutrient (`domain.tracked_nutrients.TRACKED_NUTRIENTS`
--- see that module's docstring for the known micronutrient-coverage gap).
+-- see that module's docstring for the coverage history and the still-open
+value-side gap).
+
+`target_min_by_nutrient` is a generic, already-resolved nutrient-name-keyed
+mapping (built by the infrastructure dispatch layer from
+`NutritionTargetUpdated`'s `nutrient_targets_min` map, with a
+`macro_targets`-sourced fallback for `protein_g`/`fat_g` for backward
+compatibility with events published before `nutrient_targets_min` existed
+-- see `infrastructure/messaging/nutrition_calculation_events_consumer.py`).
+A missing/`None` entry for a given tracked nutrient means "no target
+published for this user/nutrient" -- stored as `None`, never defaulted or
+fabricated (addendum 2026-09-12).
 
 Only updates the CURRENT target used for future `micronutrient_window`
 upserts -- never rewrites already-persisted historical rows (test-plan
@@ -11,7 +22,8 @@ alter what an earlier day's row recorded as the target in effect then)."""
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from domain.ports.micronutrient_window_repository_port import MicronutrientWindowRepositoryPort
 from domain.ports.processed_nutrition_calculation_events_repository_port import (
@@ -24,8 +36,7 @@ from domain.tracked_nutrients import TRACKED_NUTRIENTS
 class HandleNutritionTargetUpdatedCommand:
     event_id: uuid.UUID
     user_id: uuid.UUID
-    protein_g_min: float | None
-    fat_g_min: float | None
+    target_min_by_nutrient: Mapping[str, float | None] = field(default_factory=dict)
 
 
 class HandleNutritionTargetUpdatedHandler:
@@ -41,9 +52,8 @@ class HandleNutritionTargetUpdatedHandler:
         if await self._processed_events.is_processed(command.event_id):
             return
 
-        targets = {"protein_g": command.protein_g_min, "fat_g": command.fat_g_min}
         for nutrient in TRACKED_NUTRIENTS:
             await self._micronutrient_window.set_current_target_min(
-                command.user_id, nutrient, targets.get(nutrient)
+                command.user_id, nutrient, command.target_min_by_nutrient.get(nutrient)
             )
         await self._processed_events.mark_processed(command.event_id)

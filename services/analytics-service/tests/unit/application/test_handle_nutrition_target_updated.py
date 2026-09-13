@@ -6,6 +6,7 @@ from application.commands.handle_nutrition_target_updated import (
     HandleNutritionTargetUpdatedCommand,
     HandleNutritionTargetUpdatedHandler,
 )
+from domain.tracked_nutrients import TRACKED_NUTRIENTS
 from tests.fixtures.factories import (
     FakeMicronutrientWindowRepository,
     FakeProcessedNutritionCalculationEventsRepository,
@@ -20,12 +21,65 @@ async def test_valid_event_updates_current_target_for_tracked_nutrients():
 
     await handler.handle(
         HandleNutritionTargetUpdatedCommand(
-            event_id=uuid.uuid4(), user_id=user_id, protein_g_min=50.0, fat_g_min=44.0
+            event_id=uuid.uuid4(), user_id=user_id, target_min_by_nutrient={"protein_g": 50.0, "fat_g": 44.0}
         )
     )
 
     assert await window.get_current_target_min(user_id, "protein_g") == 50.0
     assert await window.get_current_target_min(user_id, "fat_g") == 44.0
+
+
+async def test_valid_event_updates_current_target_for_all_five_tracked_nutrients():
+    """Addendum 2026-09-12: calcium_mg/iron_mg/vitamin_c_mg are now stored
+    the same way protein_g/fat_g already were."""
+    processed = FakeProcessedNutritionCalculationEventsRepository()
+    window = FakeMicronutrientWindowRepository()
+    user_id = uuid.uuid4()
+    handler = HandleNutritionTargetUpdatedHandler(processed, window)
+
+    await handler.handle(
+        HandleNutritionTargetUpdatedCommand(
+            event_id=uuid.uuid4(),
+            user_id=user_id,
+            target_min_by_nutrient={
+                "protein_g": 50.0,
+                "fat_g": 44.0,
+                "calcium_mg": 1000.0,
+                "iron_mg": 8.0,
+                "vitamin_c_mg": 90.0,
+            },
+        )
+    )
+
+    assert await window.get_current_target_min(user_id, "protein_g") == 50.0
+    assert await window.get_current_target_min(user_id, "fat_g") == 44.0
+    assert await window.get_current_target_min(user_id, "calcium_mg") == 1000.0
+    assert await window.get_current_target_min(user_id, "iron_mg") == 8.0
+    assert await window.get_current_target_min(user_id, "vitamin_c_mg") == 90.0
+
+
+async def test_under_19_user_stores_none_for_the_three_dri_gated_nutrients():
+    """A user for whom nutrition-calculation-service omits the 3 DRI-gated
+    minimums (e.g. under 19) must be stored as None -- excluded, never
+    defaulted/fabricated -- while protein_g/fat_g are unaffected."""
+    processed = FakeProcessedNutritionCalculationEventsRepository()
+    window = FakeMicronutrientWindowRepository()
+    user_id = uuid.uuid4()
+    handler = HandleNutritionTargetUpdatedHandler(processed, window)
+
+    await handler.handle(
+        HandleNutritionTargetUpdatedCommand(
+            event_id=uuid.uuid4(),
+            user_id=user_id,
+            target_min_by_nutrient={"protein_g": 50.0, "fat_g": 44.0},
+        )
+    )
+
+    assert await window.get_current_target_min(user_id, "protein_g") == 50.0
+    assert await window.get_current_target_min(user_id, "fat_g") == 44.0
+    assert await window.get_current_target_min(user_id, "calcium_mg") is None
+    assert await window.get_current_target_min(user_id, "iron_mg") is None
+    assert await window.get_current_target_min(user_id, "vitamin_c_mg") is None
 
 
 async def test_does_not_mutate_already_persisted_historical_window_rows():
@@ -38,7 +92,9 @@ async def test_does_not_mutate_already_persisted_historical_window_rows():
 
     await HandleNutritionTargetUpdatedHandler(processed, window).handle(
         HandleNutritionTargetUpdatedCommand(
-            event_id=uuid.uuid4(), user_id=user_id, protein_g_min=99.0, fat_g_min=None
+            event_id=uuid.uuid4(),
+            user_id=user_id,
+            target_min_by_nutrient={"protein_g": 99.0, "fat_g": None},
         )
     )
 
@@ -50,11 +106,13 @@ async def test_redelivered_event_id_is_a_no_op():
     processed = FakeProcessedNutritionCalculationEventsRepository()
     window = FakeMicronutrientWindowRepository()
     command = HandleNutritionTargetUpdatedCommand(
-        event_id=uuid.uuid4(), user_id=uuid.uuid4(), protein_g_min=50.0, fat_g_min=44.0
+        event_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        target_min_by_nutrient={"protein_g": 50.0, "fat_g": 44.0},
     )
     handler = HandleNutritionTargetUpdatedHandler(processed, window)
 
     await handler.handle(command)
     await handler.handle(command)
 
-    assert window.set_current_target_min_calls == len({"protein_g", "fat_g"})
+    assert window.set_current_target_min_calls == len(TRACKED_NUTRIENTS)

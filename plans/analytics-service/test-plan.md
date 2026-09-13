@@ -101,3 +101,39 @@ Not applicable — CQRS read side only (ADR-0002 addendum), no event-sourced wri
 ## Flagged for review (not a blocker)
 
 The CSV export carries a leading manifest comment/header row stating row count and date range, consistent with CLAUDE.md's "never present a statistic without sample size and window" rule applied to an export rather than just an API response — approved as the default 2026-09-07. Flagged alongside the already-flagged `export_audit_log` schema and the dev-default deficiency threshold (implementation plan §9 resolution 2) for `security-agent`/`architecture-agent` review before prod promotion.
+
+## Addendum — 2026-09-12, by adrianrg1996@gmail.com: real calcium/iron/vitamin-C target consumption
+
+**Implements:** `/plans/analytics-service/implementation-plan.md`'s 2026-09-12 addendum (consume `NutritionTargetUpdated`'s `nutrient_targets_min` map for `calcium_mg`/`iron_mg`/`vitamin_c_mg`).
+
+**Confirmed field shape before writing any test** (read directly from `nutrition-calculation-service`'s implementation, per the addendum's instruction — see the implementation report for exact provenance): `NutritionTargetUpdated`'s payload carries `nutrient_targets_min: dict[str, float]`, a flat, additive, canonical-nutrient-keyed minimum-target map. Always contains `protein_g`/`fat_g`; additionally contains `calcium_mg`/`iron_mg`/`vitamin_c_mg` only for adult users (age >= 19) with a resolved sex constant — absent (never defaulted/fabricated) otherwise. `macro_targets.protein_g_min`/`fat_g_min` remain present and unchanged for backward compatibility with events published before `nutrient_targets_min` existed at all.
+
+### 1. Unit test cases — domain
+
+- `domain/tracked_nutrients.py`'s `TRACKED_NUTRIENTS` contains exactly `{"protein_g", "fat_g", "calcium_mg", "iron_mg", "vitamin_c_mg"}` (a structural/regression guard — catches an accidental addition of a nutrient `nutrition-calculation-service` doesn't publish a real minimum for, per the addendum's explicit non-goal).
+
+### 2. Unit test cases — application
+
+**`HandleNutritionTargetUpdatedHandler`:**
+- Valid event carrying all 5 target-min values → all 5 are stored as the current target reference for that user (generalizes the existing protein_g/fat_g-only test).
+- Valid event where `calcium_mg`/`iron_mg`/`vitamin_c_mg` are absent (e.g. an under-19 user) → those three are stored as `None` (excluded, not defaulted to 0 or fabricated) while `protein_g`/`fat_g` are still stored correctly.
+- Does not mutate already-persisted historical `micronutrient_window` rows (existing assertion, re-run against the 5-nutrient shape).
+- Idempotent replay of the same `event_id` → no duplicate `set_current_target_min` calls (existing assertion, re-run against the 5-nutrient shape).
+
+**`detect_and_record_deficiency` / `HandleNutritionValueRecomputedHandler` (confirms addendum item 3 — no logic change needed):**
+- A breach scenario keyed by `calcium_mg` (not `protein_g`/`fat_g`) — 5-of-7 days below `target_min` — correctly detects the breach, records the alert, and enqueues `NutrientDeficiencyDetected` with `signal == "calcium_mg"` and the same non-empty "not a medical diagnosis" disclaimer already asserted for `protein_g` (addendum item 5 — same test proves the disclaimer mechanism is nutrient-agnostic, not special-cased per nutrient). This test constructs the command's `macros` dict directly with a `calcium_mg` key (the command/handler treat it as a generic nutrient-value map keyed by string) — it deliberately does NOT claim this reflects the real `NutritionValueRecomputed` production payload shape; see the "known limitation" callout below.
+
+### 3. Integration test cases (infrastructure/messaging)
+
+- `nutrition_calculation_events_consumer.py`'s `dispatch_nutrition_calculation_event` for `NutritionTargetUpdated`: given a payload with `nutrient_targets_min` containing all 5 keys, the resulting command carries all 5 target-min values sourced from `nutrient_targets_min` (not `macro_targets`).
+- Same dispatch, given a payload with `nutrient_targets_min` entirely absent (an "old-shaped" event, published before that field existed) → `protein_g`/`fat_g` still resolve correctly via the `macro_targets.protein_g_min`/`fat_g_min` fallback; `calcium_mg`/`iron_mg`/`vitamin_c_mg` resolve to `None` (never fabricated from any other field) — backward-compatibility regression guard.
+- Same dispatch, given a payload with `nutrient_targets_min` present but only containing `protein_g`/`fat_g` (an adult-DRI-ineligible user) → the 3 new keys resolve to `None`, not 0 or any other default.
+- Real-RabbitMQ redelivery test (parity with the existing `NutritionValueRecomputed` redelivery test in the same module): publishing the same `NutritionTargetUpdated` event twice with a full 5-key `nutrient_targets_min` results in exactly one set of `micronutrient_current_targets` rows (no double-write), verified against the real Postgres table.
+
+### Known limitation, discovered during this pass (documented, not silently patched — addendum item 3's explicit instruction)
+
+`detect_and_record_deficiency`/`evaluate_breach`/`HandleNutritionValueRecomputedHandler`'s *iteration and evaluation logic* is confirmed nutrient-agnostic and needs no change (§2's `calcium_mg` test proves this at the mechanism level). However, this pass does **not** wire the current-*value* side for these three nutrients: `NutritionValueRecomputed`'s real payload carries micronutrient values in a separate `micronutrients` dict, not `macros`, and `nutrition_calculation_events_consumer.py`'s dispatch for that event only ever forwards `payload["macros"]`. So in production, even though a real `target_min` now flows for `calcium_mg`/`iron_mg`/`vitamin_c_mg`, no real daily *value* for them is ever upserted into `micronutrient_window` today — deficiency detection for these three is therefore still not functionally live end-to-end. This is a distinct, out-of-scope gap from the one this addendum closes (which is target-min consumption only, per its own explicit non-goal) — flagged here rather than silently worked around, tracked as a follow-up addendum against `HandleNutritionValueRecomputedHandler`/its consumer dispatch.
+
+### Coverage expectation
+
+No change to the ≥90%/≥85%/≥70% floors already stated in §7 above — this is an additive, narrowly-scoped change to two files' logic (`domain/tracked_nutrients.py`, `application/commands/handle_nutrition_target_updated.py`) plus one infrastructure dispatch function, fully covered by the cases above.

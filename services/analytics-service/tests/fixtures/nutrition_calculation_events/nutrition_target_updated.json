@@ -15,6 +15,13 @@
       "fat_g_min": 44.0,
       "carbs_g": 250.0
     },
+    "nutrient_targets_min": {
+      "protein_g": 50.0,
+      "fat_g": 44.0,
+      "calcium_mg": 1000.0,
+      "iron_mg": 8.0,
+      "vitamin_c_mg": 90.0
+    },
     "goal_type": "MAINTAIN",
     "activity_level": "MODERATE",
     "activity_adjustment_kcal": null,
