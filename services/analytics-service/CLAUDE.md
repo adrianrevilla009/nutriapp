@@ -22,12 +22,16 @@ four message consumers or `application/entitlement_check.py`.
 - Trend/statistical logic (`domain/services/trend_calculator.py`,
   `domain/services/anomaly_detector.py`) is pure functions: no I/O, no
   repository access, takes already-fetched/windowed data in.
-- `domain/tracked_nutrients.py` documents a real, live gap: only
-  `protein_g`/`fat_g` have real target data flowing through the
-  deficiency-detection mechanism today (`NutritionTargetUpdated` has no
-  micronutrient `target_min` field in its actual schema). Do not silently
-  "fix" this by inventing target data -- extending it requires a
-  `nutrition-calculation-service` schema change, out of scope here.
+- `domain/tracked_nutrients.py`'s `TRACKED_NUTRIENTS` covers `protein_g`,
+  `fat_g`, `calcium_mg`, `iron_mg`, `vitamin_c_mg` -- real target data for
+  all five now flows through `NutritionTargetUpdated`'s `nutrient_targets_min`
+  map (`nutrition-calculation-service`'s DRI/RDA work, ADR-0024). Any
+  other vitamin/mineral (vitamin D, B12, folate, potassium, zinc,
+  magnesium, etc.) remains genuinely uncovered -- no plumbing exists for
+  them anywhere in the pipeline. Do not silently "fix" this by inventing
+  target data -- extending coverage requires a
+  `nutrition-calculation-service`-side change (a new cited DRI entry) landing
+  first, same as this one did.
 - `food_entry_contributions`/`water_intake_contributions`/
   `micronutrient_current_targets` are internal ledger tables, not in the
   original implementation plan's table list -- added because

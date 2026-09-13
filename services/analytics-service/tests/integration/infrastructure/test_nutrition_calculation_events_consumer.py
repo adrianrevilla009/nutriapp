@@ -20,7 +20,10 @@ from infrastructure.messaging.nutrition_calculation_events_consumer import (
     EXCHANGE_NAME,
     NutritionCalculationEventsConsumer,
 )
-from infrastructure.persistence.models import MicronutrientWindowModel
+from infrastructure.persistence.models import (
+    MicronutrientCurrentTargetModel,
+    MicronutrientWindowModel,
+)
 
 TODAY = date(2026, 6, 8)
 
@@ -54,6 +57,61 @@ def _value_recomputed_body(user_id: uuid.UUID, event_id: uuid.UUID) -> bytes:
         "metadata": {"correlation_id": "corr-1", "causation_id": None, "user_id": str(user_id)},
     }
     return json.dumps(envelope).encode("utf-8")
+
+
+def _target_updated_body(
+    user_id: uuid.UUID, event_id: uuid.UUID, *, nutrient_targets_min: dict | None
+) -> bytes:
+    """Addendum 2026-09-12: `nutrient_targets_min` is the real, confirmed
+    field name/shape from nutrition-calculation-service (flat
+    `dict[str, float]`, additive, still v1) -- passing `None` here
+    simulates an "old-shaped" event published before that field existed at
+    all, exercising the `macro_targets`-sourced backward-compat fallback."""
+    payload: dict = {
+        "user_id": str(user_id),
+        "bmr_kcal": 1600.0,
+        "tdee_kcal": 2200.0,
+        "calorie_target_kcal": 2000.0,
+        "macro_targets": {
+            "protein_g_min": 50.0,
+            "protein_g_max": 150.0,
+            "fat_g_min": 44.0,
+            "carbs_g": 250.0,
+        },
+        "goal_type": "MAINTAIN",
+        "activity_level": "MODERATE",
+        "activity_adjustment_kcal": None,
+        "clamped": False,
+        "clamp_reason": None,
+        "formula_version": "v1",
+        "reason": "weight_recorded",
+        "effective_from": datetime.now(timezone.utc).isoformat(),
+    }
+    if nutrient_targets_min is not None:
+        payload["nutrient_targets_min"] = nutrient_targets_min
+    envelope = {
+        "event_id": str(event_id),
+        "aggregate_id": str(user_id),
+        "event_type": "NutritionTargetUpdated",
+        "version": 1,
+        "occurred_at": datetime.now(timezone.utc).isoformat(),
+        "payload": payload,
+        "metadata": {"correlation_id": "corr-target-1", "causation_id": None, "user_id": str(user_id)},
+    }
+    return json.dumps(envelope).encode("utf-8")
+
+
+async def _poll_current_targets(session_factory, user_id, *, attempts=20, interval=0.25):
+    for _ in range(attempts):
+        async with session_factory() as session:
+            stmt = select(MicronutrientCurrentTargetModel).where(
+                MicronutrientCurrentTargetModel.user_id == user_id
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+        if rows:
+            return {row.nutrient: row.target_min for row in rows}
+        await asyncio.sleep(interval)
+    return {}
 
 
 async def _publish(connection, routing_key: str, body: bytes) -> None:
@@ -103,6 +161,146 @@ async def test_redelivering_the_same_value_recomputed_event_upserts_exactly_once
         await asyncio.sleep(0.5)
 
         assert count == 1  # exactly one (user, nutrient, date) row -- upsert, not insert-twice
+    finally:
+        await connection.close()
+
+
+async def test_nutrition_target_updated_stores_all_five_target_min_values(
+    amqp_url, session_factory
+):
+    """Addendum 2026-09-12: a NutritionTargetUpdated with a full 5-key
+    `nutrient_targets_min` map results in all 5 being stored in
+    `micronutrient_current_targets`, sourced from that map (not
+    `macro_targets`)."""
+    connection = await aio_pika.connect_robust(amqp_url)
+    try:
+        consumer = NutritionCalculationEventsConsumer(session_factory)
+        await consumer.setup(connection)
+        await consumer.consume()
+
+        user_id, event_id = uuid.uuid4(), uuid.uuid4()
+        body = _target_updated_body(
+            user_id,
+            event_id,
+            nutrient_targets_min={
+                "protein_g": 55.0,
+                "fat_g": 40.0,
+                "calcium_mg": 1000.0,
+                "iron_mg": 8.0,
+                "vitamin_c_mg": 90.0,
+            },
+        )
+
+        await _publish(connection, "nutrition-calculation.target.updated", body)
+
+        targets = await _poll_current_targets(session_factory, user_id)
+
+        assert targets == {
+            "protein_g": 55.0,
+            "fat_g": 40.0,
+            "calcium_mg": 1000.0,
+            "iron_mg": 8.0,
+            "vitamin_c_mg": 90.0,
+        }
+    finally:
+        await connection.close()
+
+
+async def test_nutrition_target_updated_without_nutrient_targets_min_falls_back_to_macro_targets(
+    amqp_url, session_factory
+):
+    """Backward compatibility: an "old-shaped" event published before
+    `nutrient_targets_min` existed at all must still resolve protein_g/fat_g
+    via `macro_targets`, while the 3 newer keys resolve to None -- never
+    fabricated from any other field."""
+    connection = await aio_pika.connect_robust(amqp_url)
+    try:
+        consumer = NutritionCalculationEventsConsumer(session_factory)
+        await consumer.setup(connection)
+        await consumer.consume()
+
+        user_id, event_id = uuid.uuid4(), uuid.uuid4()
+        body = _target_updated_body(user_id, event_id, nutrient_targets_min=None)
+
+        await _publish(connection, "nutrition-calculation.target.updated", body)
+
+        targets = await _poll_current_targets(session_factory, user_id)
+
+        assert targets["protein_g"] == 50.0  # via macro_targets.protein_g_min fallback
+        assert targets["fat_g"] == 44.0  # via macro_targets.fat_g_min fallback
+        assert targets["calcium_mg"] is None
+        assert targets["iron_mg"] is None
+        assert targets["vitamin_c_mg"] is None
+    finally:
+        await connection.close()
+
+
+async def test_nutrition_target_updated_under_19_user_has_none_for_dri_gated_keys(
+    amqp_url, session_factory
+):
+    """A `nutrient_targets_min` present but only carrying protein_g/fat_g
+    (e.g. an under-19 user, no resolved DRI minimum) leaves the 3 newer
+    keys as None, not defaulted."""
+    connection = await aio_pika.connect_robust(amqp_url)
+    try:
+        consumer = NutritionCalculationEventsConsumer(session_factory)
+        await consumer.setup(connection)
+        await consumer.consume()
+
+        user_id, event_id = uuid.uuid4(), uuid.uuid4()
+        body = _target_updated_body(
+            user_id, event_id, nutrient_targets_min={"protein_g": 50.0, "fat_g": 44.0}
+        )
+
+        await _publish(connection, "nutrition-calculation.target.updated", body)
+
+        targets = await _poll_current_targets(session_factory, user_id)
+
+        assert targets["protein_g"] == 50.0
+        assert targets["fat_g"] == 44.0
+        assert targets["calcium_mg"] is None
+        assert targets["iron_mg"] is None
+        assert targets["vitamin_c_mg"] is None
+    finally:
+        await connection.close()
+
+
+async def test_redelivering_the_same_target_updated_event_does_not_double_write(
+    amqp_url, session_factory
+):
+    connection = await aio_pika.connect_robust(amqp_url)
+    try:
+        consumer = NutritionCalculationEventsConsumer(session_factory)
+        await consumer.setup(connection)
+        await consumer.consume()
+
+        user_id, event_id = uuid.uuid4(), uuid.uuid4()
+        body = _target_updated_body(
+            user_id,
+            event_id,
+            nutrient_targets_min={
+                "protein_g": 55.0,
+                "fat_g": 40.0,
+                "calcium_mg": 1000.0,
+                "iron_mg": 8.0,
+                "vitamin_c_mg": 90.0,
+            },
+        )
+
+        await _publish(connection, "nutrition-calculation.target.updated", body)
+        await _publish(connection, "nutrition-calculation.target.updated", body)
+
+        targets = await _poll_current_targets(session_factory, user_id)
+        await asyncio.sleep(0.5)
+
+        async with session_factory() as session:
+            stmt = select(MicronutrientCurrentTargetModel).where(
+                MicronutrientCurrentTargetModel.user_id == user_id
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+
+        assert len(rows) == 5  # one row per tracked nutrient, never duplicated
+        assert targets["calcium_mg"] == 1000.0
     finally:
         await connection.close()
 
