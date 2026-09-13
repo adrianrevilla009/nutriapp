@@ -2020,6 +2020,7 @@ version = "0.1.0"
 source = { directory = "../../packages/shared-contracts" }
 dependencies = [
     { name = "cryptography" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "pybreaker" },
     { name = "pydantic" },
@@ -2030,6 +2031,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=43.0" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23" },
     { name = "pybreaker", specifier = ">=1.2" },
