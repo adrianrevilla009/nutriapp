@@ -232,6 +232,7 @@ class TestProfessionalAdviceBoundaryReleaseBlocking:
         assert DEFAULT_DISCLAIMER_TEXT in result.response_text
         assert result.disclaimer_included is True
         assert deps["chat_audit"].records[0]["disclaimer_included"] is True
+        assert deps["chat_audit"].records[0]["health_adjacent_flagged"] is True
 
     async def test_benign_question_does_not_force_a_disclaimer(self) -> None:
         conversation = FakeConversationPort(response="You logged 1800 kcal yesterday.")
@@ -249,6 +250,30 @@ class TestProfessionalAdviceBoundaryReleaseBlocking:
             AnswerChatQueryCommand(user_id=USER_A, query="do I have a vitamin D deficiency")
         )
         assert result.response_text.count(DEFAULT_DISCLAIMER_TEXT) == 1
+
+
+class TestHealthAdjacentFlagLoggingForDriftReview:
+    """2026-09-12 security-review operational mitigation (implementation
+    plan addendum, same date): log flagged-vs-unflagged health-adjacent-
+    looking queries via the existing chat_audit_log, for future manual
+    drift review of the rule-based classifier's precision/recall. A
+    logging addition only -- no new retrieval or LLM-trust logic; the
+    disclaimer-enforcement behavior itself is unchanged and covered by
+    `TestProfessionalAdviceBoundaryReleaseBlocking` above."""
+
+    async def test_health_adjacent_query_is_logged_as_flagged(self) -> None:
+        handler, deps = _build_handler()
+        await handler.handle(
+            AnswerChatQueryCommand(user_id=USER_A, query="do I have a vitamin D deficiency")
+        )
+        assert deps["chat_audit"].records[0]["health_adjacent_flagged"] is True
+
+    async def test_benign_query_is_logged_as_not_flagged(self) -> None:
+        handler, deps = _build_handler()
+        await handler.handle(
+            AnswerChatQueryCommand(user_id=USER_A, query="how many calories did I log yesterday")
+        )
+        assert deps["chat_audit"].records[0]["health_adjacent_flagged"] is False
 
 
 async def test_insufficient_context_states_explicitly_no_generalization() -> None:

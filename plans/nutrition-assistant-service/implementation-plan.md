@@ -152,3 +152,20 @@ Circuit breaker `claude_conversation` (own instance, mirrors `claude_vision`'s `
 **Port-signature decision, resolved**: widen `EntitlementCacheRepositoryPort.set(user_id, entitled)` to `upsert(user_id, entitled, occurred_at)`, matching `analytics-service`'s `upsert` signature exactly, rather than keeping the narrower `set()` and dropping the event's own timestamp. Reasoning: the event's `granted_at`/`revoked_at` is real information worth preserving for audit/debugging (when did billing-service actually grant/revoke, vs. when did this service's cache happen to catch up) — dropping it to keep a narrower interface saves nothing and costs real traceability. This is a small, additive-compatible interface widening (nothing else calls `set()`/`upsert()` yet).
 
 Once implemented: persist a test plan, run the full TDD cycle, and report real test/coverage numbers, same as every other fix in this session. No git push/commit — the orchestrating session handles that after independent verification.
+
+## Addendum — 2026-09-12, by adrianrg1996@gmail.com: health-topic classifier recall fast-follow + KB source citations, approved
+
+`security-agent` reviewed `health_topic_classifier.py` and the 9 knowledge-base seed files (per this file's own "Known gaps" note in `README.md`) and found concrete, fixable gaps in both, distinct from the two items that genuinely need a human professional (content accuracy sign-off; whether the 9-file corpus is complete enough for production). This addendum approves closing the fixable half.
+
+**Approved to proceed, `health_topic_classifier.py`** (mirror the 2026-09-08 fix's style exactly: scoped regex additions, each with its own named test class):
+1. Named medical conditions used by name (diabetes, thyroid, PCOS, IBS, celiac, hypertension/blood pressure, cholesterol) — currently only the generic words `disease`/`disorder`/`anemi[ac]` are hardcoded; any other condition name bypasses the filter.
+2. General safety questions outside the pregnancy/infant/toddler carve-out — pattern 8's adjective list (`dangerous|serious|normal|healthy|unhealthy`) deliberately omits `safe`/`unsafe` for the general case; extend it for parity (e.g. "is keto safe for someone with diabetes" currently isn't flagged).
+3. Plain symptom phrasing without the literal word "symptom" or existing causal framings (dizzy, headache, fatigue/tired, palpitations + "why"/"should I"/"worried" framing).
+4. Supplement questions phrased by vitamin/mineral name rather than the literal word "supplement" (e.g. "should I start taking iron pills").
+5. Mood/mental-health-adjacent nutrition questions as their own carve-out (same shape as the existing pregnancy carve-out), not just phrasing variants of already-covered patterns.
+
+Each addition must stay scoped and non-overtriggering, matching the existing pattern set's discipline — `security-agent`'s review is explicit that this is a bounded, enumerable fix, not a rewrite, and that full recall is not achievable by a keyword approach (documented, not solved, per the module's own docstring). Add the operational mitigation `security-agent` recommended too: log flagged-vs-unflagged health-adjacent-looking queries via the existing chat audit log for future drift review (a logging addition only, no new retrieval/decision logic).
+
+**Approved to proceed, knowledge-base seed content**: add a `Source:`/`Reference:` field to each of the 9 files' header block, citing a general, publicly available guidance document (e.g. USDA Dietary Guidelines for Americans, NIH ODS fact sheets) for the file's topic. This does not change or approve the content itself for production (still `STATUS: DRAFT`, still pending human/professional review) — it only gives that eventual reviewer something concrete to check claims against, per `security-agent`'s finding that zero citations exist today across all 9 files.
+
+Once implemented: persist a test plan addendum, run the full TDD cycle, and report real test/coverage numbers. No git push/commit — the orchestrating session handles that after independent verification.

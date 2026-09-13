@@ -170,3 +170,44 @@ practice.
 ### Coverage expectation for this addendum
 
 Same floors as the base plan (§7): domain unaffected (no new domain code — `upsert`/`already_processed` are port protocol methods, not domain logic), application and infrastructure additions are fully covered by the unit/integration tests above given their small, branch-light surface (two near-identical command handlers, two near-identical repository methods, one consumer dispatch function with a two-case `if`/`else` and one early-return).
+
+---
+
+## Addendum — 2026-09-12, by adrianrg1996@gmail.com: `health_topic_classifier` recall fast-follow + audit-log drift-review logging
+
+**Implements:** `/plans/nutrition-assistant-service/implementation-plan.md`'s "Addendum — 2026-09-12" (`security-agent`-identified fixable gaps, distinct from the two genuinely-needs-a-human-professional items). Mirrors the 2026-09-08 fix's own test-plan shape exactly: one named test class per closed gap, each proving the specific probe(s) named in the security review, plus at least one calibration-control case per class showing the addition does not over-trigger.
+
+### Unit tests — domain (`tests/unit/domain/test_health_topic_classifier.py`)
+
+**`TestNamedMedicalConditionsCoverage`** (gap 1 — named medical conditions): diabetes/diabetic, thyroid, PCOS, IBS, celiac, hypertension, blood pressure, cholesterol each flagged `True` in a short realistic probe (e.g. "what should a diabetic eat for breakfast", "does sodium affect blood pressure"). No calibration control needed beyond the existing `BENIGN_PROBES` set (none of which contain a condition name) — consistent with the module's own "false positive is the lesser harm" framing, same as the pregnancy carve-out's bare keywords.
+
+**`TestGeneralSafetyAdjectiveParityCoverage`** (gap 2 — safe/unsafe parity for the general case): "is keto safe for someone with diabetes" (named verbatim in the security review) and "is this diet safe"/"is intermittent fasting safe to try"/"is it unsafe if I do this every day" all flagged `True`. Calibration control: "is this a good recipe for dinner" stays `False` (an adjective outside the safety list must not be swept up).
+
+**`TestPlainSymptomPhrasingCoverage`** (gap 3 — dizzy/headache/fatigue-tired/palpitations + why/should-I/worried framing): "why do I keep getting headaches", "I've been so dizzy lately, should I be worried", "why am I so tired all the time", a fatigue+worried probe, and a palpitations+should-I-be-worried probe all flagged `True`. Calibration control: "I have a headache today" (a bare symptom mention with no framing word) stays `False` — this deliberately does NOT attempt to close `TestKnownPrecisionRecallGap`'s two already-documented residual gaps ("I've been really tired lately" with no framing at all, "how am I doing"), which remain open per that class's own docstring.
+
+**`TestSupplementByVitaminOrMineralNameCoverage`** (gap 4 — supplement questions by vitamin/mineral name): "should I start taking iron pills" (named verbatim in the security review), "should I take magnesium before bed", "should I take vitamin D in the winter", "do I need more calcium", "do I need extra zinc" all flagged `True`. Calibration control: "what are some iron-rich foods for dinner" (an ordinary catalog-style mineral mention with no should-I-take/do-I-need framing) stays `False`.
+
+**`TestMoodMentalHealthAdjacentCoverage`** (gap 5 — new mood/mental-health carve-out): bare-keyword cases for anxiety, depression, and "mental health" flagged `True`; the ambiguous term "mood" flagged `True` only in combination with food/diet/eating/nutrition wording ("does my diet affect my mood"); a stressed-eating combination probe flagged `True`. Calibration control: "give me a mood-boosting recipe" (bare "mood" with no food/diet/eating/nutrition co-occurrence) stays `False` — mirrors the pregnancy carve-out's "toddler recipe" control exactly.
+
+All five classes are additive to the existing pattern set — the full existing suite (`test_flags_health_adjacent_probes`, `test_does_not_flag_benign_probes`, `TestKnownPrecisionRecallGap`, `TestIndirectCausalPhrasingCoverage`, `TestPregnancyBreastfeedingInfantCoverage`, `TestRestrictiveEatingWithoutDisorderWordCoverage`) must continue to pass unchanged, proving no regression to the 2026-09-08 fix or the original pattern set.
+
+### Unit tests — application (`tests/unit/application/test_answer_chat_query.py`)
+
+**Drift-review logging addition (operational mitigation, logging only — no new retrieval or LLM-trust logic):**
+- Extend `TestProfessionalAdviceBoundaryReleaseBlocking::test_disclaimer_always_present_even_when_llm_omits_it` with an assertion that `chat_audit.records[0]["health_adjacent_flagged"] is True` for every health-adjacent probe in that class's existing parametrized set — proves the flag is recorded independently of, and consistently with, the existing disclaimer-enforcement assertion in the same test.
+- New `TestHealthAdjacentFlagLoggingForDriftReview`: a health-adjacent query ("do I have a vitamin D deficiency") is audited with `health_adjacent_flagged=True`; a benign query ("how many calories did I log yesterday") is audited with `health_adjacent_flagged=False`. This is the direct test of "log flagged-vs-unflagged health-adjacent-looking queries... for future manual drift review."
+- No existing release-blocking assertion changes shape — `disclaimer_included`/`had_sufficient_context` behavior is untouched; this addendum only adds a new recorded field alongside them.
+
+### Integration tests (testcontainers Postgres)
+
+**`test_postgres_chat_audit_repository.py`** (existing file, extended): the existing `test_record_writes_a_row` passes `health_adjacent_flagged=False` and asserts the persisted row reflects it; a new `test_record_writes_health_adjacent_flagged_true` asserts the `True` case round-trips independently of `had_sufficient_context`/`disclaimer_included`.
+
+**`test_migration_0003.py`** (new file, same Alembic-driven convention as `test_migration_0001.py`/`test_migration_0002.py`): `alembic upgrade 0003` adds `health_adjacent_flagged` to `chat_audit_log` without touching any existing column on that table or any other table (additive-only, per `database-migrations` SKILL.md's expand/contract pattern — a new boolean column with a `server_default` so it is backward-compatible for any row written before this release); `alembic downgrade 0002` removes only the new column, `disclaimer_included` and `processed_entitlement_events` are asserted still present; a final `downgrade base` cleans up.
+
+### Knowledge-base seed citations — no new automated test
+
+The `Source:`/`Reference:` header field added to each of the 9 `knowledge_base/seed/*.md` files is a documentation-only change (a citation for the eventual human/professional reviewer to check claims against) — it does not change chunking, embedding, or retrieval behavior, so no new test case is introduced for it. `tests/integration/infrastructure/test_seed_knowledge_base.py`'s existing fixtures are self-contained (its own `tmp_path`-based files, not the real `knowledge_base/seed/` directory), so this change cannot affect that suite's behavior — verified by re-running it unchanged (§ below).
+
+### Coverage expectation for this addendum
+
+Domain: the five new test classes exercise only additional `re.Pattern` alternatives inside the same pure `is_health_adjacent` function already at ~97-98% coverage — expect no change to that near-total figure. Application: the `chat_audit.record(...)` call site already sat on the handler's single success-path branch; adding one keyword argument sourced from an already-computed local (`is_health_topic`) adds no new branch, so 100% application coverage is expected to hold. Infrastructure: `postgres_chat_audit_repository.py`'s `record` method and the new `test_migration_0003.py` require Docker (testcontainers Postgres) to execute — same pre-existing sandbox constraint flagged in the 2026-09-11 addendum's coverage note; report the real sandbox-limited number and flag Docker-gated tests explicitly rather than assuming them passing, exactly as that addendum did.
