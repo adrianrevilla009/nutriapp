@@ -178,6 +178,11 @@ class AnswerChatQueryHandler:
             response_text = f"{response_text}\n\n{retrieval_gap.describe()}"
 
         retrieved_record_ids = [r.record_id for r in all_records]
+        # 2026-09-12 addendum -- log flagged-vs-unflagged health-adjacent-
+        # looking queries for future manual drift review of
+        # health_topic_classifier's precision/recall. Logging only: this
+        # does not change retrieval or disclaimer-enforcement behavior
+        # above, which already independently decided `is_health_topic`.
         await self._chat_audit.record(
             user_id=command.user_id,
             query=command.query,
@@ -185,6 +190,7 @@ class AnswerChatQueryHandler:
             prompt_template_version=assembled.template_version,
             had_sufficient_context=has_sufficient_context,
             disclaimer_included=disclaimer_included,
+            health_adjacent_flagged=is_health_topic,
         )
 
         return AnswerChatQueryResult(

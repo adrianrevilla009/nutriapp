@@ -147,3 +147,153 @@ class TestRestrictiveEatingWithoutDisorderWordCoverage:
         # a single missed meal must NOT be swept up by the
         # restrictive-eating patterns above.
         assert is_health_adjacent("I skipped breakfast today") is False
+
+
+class TestNamedMedicalConditionsCoverage:
+    """Closes the 2026-09-12 security-review gap item 1: named medical
+    conditions used by name (diabetes, thyroid, PCOS, IBS, celiac,
+    hypertension/blood pressure, cholesterol) had zero coverage --
+    previously only the generic words disease/disorder/anemi[ac] were
+    hardcoded, so any other condition name bypassed the filter entirely."""
+
+    def test_diabetes_question_is_flagged(self) -> None:
+        assert is_health_adjacent("what should a diabetic eat for breakfast") is True
+
+    def test_thyroid_question_is_flagged(self) -> None:
+        assert is_health_adjacent("does this affect my thyroid") is True
+
+    def test_pcos_question_is_flagged(self) -> None:
+        assert is_health_adjacent("what foods help with PCOS") is True
+
+    def test_ibs_question_is_flagged(self) -> None:
+        assert is_health_adjacent("is this okay for someone with IBS") is True
+
+    def test_celiac_question_is_flagged(self) -> None:
+        assert is_health_adjacent("is oatmeal safe if I have celiac") is True
+
+    def test_hypertension_question_is_flagged(self) -> None:
+        assert is_health_adjacent("what should I eat if I have hypertension") is True
+
+    def test_blood_pressure_question_is_flagged(self) -> None:
+        assert is_health_adjacent("does sodium affect blood pressure") is True
+
+    def test_cholesterol_question_is_flagged(self) -> None:
+        assert is_health_adjacent("will this raise my cholesterol") is True
+
+
+class TestGeneralSafetyAdjectiveParityCoverage:
+    """Closes the 2026-09-12 security-review gap item 2: pattern 8's
+    general-case adjective list (dangerous|serious|normal|healthy|unhealthy)
+    deliberately omitted safe/unsafe, so a general safety question like
+    "is keto safe for someone with diabetes" wasn't flagged by that
+    pattern -- only the pregnancy/infant/toddler carve-out covered
+    safe(ty) at all, and only for that narrow population case."""
+
+    def test_is_keto_safe_for_someone_with_diabetes_is_flagged(self) -> None:
+        # Named verbatim in the security review.
+        assert is_health_adjacent("is keto safe for someone with diabetes") is True
+
+    def test_is_this_diet_safe_form_is_flagged(self) -> None:
+        assert is_health_adjacent("is this diet safe") is True
+
+    def test_is_intermittent_fasting_safe_to_try_is_flagged(self) -> None:
+        assert is_health_adjacent("is intermittent fasting safe to try") is True
+
+    def test_is_it_unsafe_form_is_flagged(self) -> None:
+        assert is_health_adjacent("is it unsafe if I do this every day") is True
+
+    def test_ordinary_is_this_a_good_recipe_is_not_flagged(self) -> None:
+        # Calibration control -- "good"/"tasty" are not in the safety
+        # adjective list and must not be swept up.
+        assert is_health_adjacent("is this a good recipe for dinner") is False
+
+
+class TestPlainSymptomPhrasingCoverage:
+    """Closes the 2026-09-12 security-review gap item 3: plain symptom
+    phrasing (dizzy, headache, fatigue/tired, palpitations) combined with
+    "why"/"should I"/"worried" framing, without the literal word
+    "symptom" or any of the existing causal-framing patterns."""
+
+    def test_why_do_i_keep_getting_headaches_is_flagged(self) -> None:
+        assert is_health_adjacent("why do I keep getting headaches") is True
+
+    def test_dizzy_should_i_be_worried_is_flagged(self) -> None:
+        assert is_health_adjacent("I've been so dizzy lately, should I be worried") is True
+
+    def test_why_am_i_so_tired_is_flagged(self) -> None:
+        assert is_health_adjacent("why am I so tired all the time") is True
+
+    def test_fatigue_worried_is_flagged(self) -> None:
+        assert is_health_adjacent("I have constant fatigue and I'm worried about it") is True
+
+    def test_should_i_be_worried_about_palpitations_is_flagged(self) -> None:
+        assert is_health_adjacent("should I be worried about these heart palpitations") is True
+
+    def test_plain_headache_statement_without_framing_is_not_flagged(self) -> None:
+        # Calibration control: a bare symptom mention with no
+        # why/should-I/worried framing stays outside this narrow fix,
+        # consistent with TestKnownPrecisionRecallGap's documented
+        # limits -- this pass closes the framed cases, not every mention.
+        assert is_health_adjacent("I have a headache today") is False
+
+
+class TestSupplementByVitaminOrMineralNameCoverage:
+    """Closes the 2026-09-12 security-review gap item 4: supplement
+    questions phrased by vitamin/mineral name rather than the literal
+    word "supplement" (e.g. "should I start taking iron pills") slipped
+    through the existing `\\bshould\\s+i\\s+take\\b.*\\bsupplement`
+    pattern entirely."""
+
+    def test_should_i_start_taking_iron_pills_is_flagged(self) -> None:
+        # Named verbatim in the security review.
+        assert is_health_adjacent("should I start taking iron pills") is True
+
+    def test_should_i_take_magnesium_is_flagged(self) -> None:
+        assert is_health_adjacent("should I take magnesium before bed") is True
+
+    def test_should_i_take_vitamin_d_is_flagged(self) -> None:
+        assert is_health_adjacent("should I take vitamin D in the winter") is True
+
+    def test_do_i_need_more_calcium_is_flagged(self) -> None:
+        assert is_health_adjacent("do I need more calcium") is True
+
+    def test_do_i_need_extra_zinc_is_flagged(self) -> None:
+        assert is_health_adjacent("do I need extra zinc") is True
+
+    def test_iron_rich_foods_question_is_not_flagged(self) -> None:
+        # Calibration control -- an ordinary catalog/logging-style
+        # question naming a mineral without "should I take"/"do I need"
+        # framing must not be swept up.
+        assert is_health_adjacent("what are some iron-rich foods for dinner") is False
+
+
+class TestMoodMentalHealthAdjacentCoverage:
+    """Closes the 2026-09-12 security-review gap item 5: a new mood/
+    mental-health-adjacent nutrition carve-out, mirroring the existing
+    pregnancy carve-out's shape -- bare keywords for terms that are
+    rarely ambiguous in a nutrition-logging context (anxiety, depression,
+    mental health), and a scoped combo for the genuinely ambiguous term
+    "mood" (only flagged alongside food/diet/eating/nutrition wording)."""
+
+    def test_anxiety_question_is_flagged(self) -> None:
+        assert is_health_adjacent("can certain foods help with my anxiety") is True
+
+    def test_depression_question_is_flagged(self) -> None:
+        assert is_health_adjacent("is there a link between diet and depression") is True
+
+    def test_mental_health_question_is_flagged(self) -> None:
+        assert is_health_adjacent("how does nutrition affect mental health") is True
+
+    def test_diet_affects_mood_question_is_flagged(self) -> None:
+        assert is_health_adjacent("does my diet affect my mood") is True
+
+    def test_stressed_eating_question_is_flagged(self) -> None:
+        assert (
+            is_health_adjacent("I've been stressed and eating a lot more, is that normal") is True
+        )
+
+    def test_mood_boosting_recipe_request_is_not_flagged(self) -> None:
+        # Calibration control -- "mood" alone, without any food/diet/
+        # eating/nutrition wording nearby, is an ordinary recipe request
+        # (mirrors the pregnancy carve-out's "toddler recipe" control).
+        assert is_health_adjacent("give me a mood-boosting recipe") is False

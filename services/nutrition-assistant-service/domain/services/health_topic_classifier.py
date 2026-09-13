@@ -33,7 +33,33 @@ probes this was validated against):
    avoided the literal word "disorder".
 This remains a first-cut, rule-based approximation, not a claim of
 completeness -- see `TestKnownPrecisionRecallGap` for cases that still
-resist this approach."""
+resist this approach.
+
+2026-09-12 security review (implementation plan addendum, same date):
+five further concrete recall gaps were found and closed below (see
+`tests/unit/domain/test_health_topic_classifier.py`'s
+`TestNamedMedicalConditionsCoverage`, `TestGeneralSafetyAdjectiveParityCoverage`,
+`TestPlainSymptomPhrasingCoverage`, `TestSupplementByVitaminOrMineralNameCoverage`,
+and `TestMoodMentalHealthAdjacentCoverage` for the exact probes this was
+validated against):
+1. Named medical conditions used by name (diabetes, thyroid, PCOS, IBS,
+   celiac, hypertension/blood pressure, cholesterol) had no coverage --
+   only the generic words disease/disorder/anemi[ac] were hardcoded.
+2. The general-case safety-adjective pattern omitted safe/unsafe, so
+   only the pregnancy/infant/toddler carve-out covered that adjective at
+   all, and only for that narrow population case.
+3. Plain symptom phrasing (dizzy, headache, fatigue/tired, palpitations)
+   combined with "why"/"should I"/"worried" framing, without the literal
+   word "symptom" or any existing causal-framing pattern, was unflagged.
+4. Supplement questions phrased by vitamin/mineral name rather than the
+   literal word "supplement" (e.g. "should I start taking iron pills")
+   slipped through.
+5. Mood/mental-health-adjacent nutrition questions had no carve-out of
+   their own, distinct from phrasing variants of already-covered
+   patterns.
+Same discipline as before: scoped, non-overtriggering additions, not a
+rewrite -- full recall is still not achievable by a keyword approach
+(documented, not solved)."""
 
 from __future__ import annotations
 
@@ -97,6 +123,74 @@ _HEALTH_ADJACENT_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
         r"\bbarely\s+eating\b",
         r"\bnot\s+eating\s+enough\b",
         r"\bafraid\s+to\s+eat\b",
+        # --- 2026-09-12 gap 1: named medical conditions used by name --
+        # previously only the generic words disease/disorder/anemi[ac]
+        # were hardcoded, so any specific condition name bypassed the
+        # filter entirely. Bare keywords are used since these condition
+        # names are rarely ambiguous in a nutrition-logging context.
+        r"\bdiabet(es|ic)\b",
+        r"\bthyroid\b",
+        r"\bpcos\b",
+        r"\bibs\b",
+        r"\b(ce|coe)liac\b",
+        r"\bhypertension\b",
+        r"\bblood\s+pressure\b",
+        r"\bcholesterol\b",
+        # --- 2026-09-12 gap 2: general safety-adjective parity. The
+        # pregnancy/infant/toddler carve-out already covered safe(ty),
+        # but the general case (any subject, not just "this"/"my"/"it")
+        # did not. The second pattern generalizes the subject to any
+        # short noun phrase ("is keto safe...", "is intermittent fasting
+        # safe...") -- scoped to the safe/unsafe adjectives specifically
+        # (not the full dangerous/serious/normal/healthy/unhealthy list)
+        # to keep the broadened-subject case narrow.
+        r"\bis\s+(this|my|it|that)\s+(dangerous|serious|normal|healthy|unhealthy|safe|unsafe)\b",
+        r"\bis\s+\w+(?:\s+\w+){0,3}\s+(safe|unsafe)\b",
+        # --- 2026-09-12 gap 3: plain symptom phrasing (dizzy, headache,
+        # fatigue/tired, palpitations) without the literal word "symptom"
+        # or an existing causal-framing pattern. Calibrated to require
+        # "why"/"should I"/"worried" framing alongside the symptom word
+        # (in either order, within a bounded distance) so a bare
+        # unframed mention (e.g. "I have a headache today") is NOT swept
+        # up -- consistent with `TestKnownPrecisionRecallGap`'s
+        # documented limits on unframed statements.
+        (
+            r"\b(dizzy|dizziness|headaches?|fatigued?|tired|palpitations?)\b"
+            r".{0,40}\b(why|should\s+i|worried)\b"
+        ),
+        (
+            r"\b(why|should\s+i|worried)\b"
+            r".{0,40}\b(dizzy|dizziness|headaches?|fatigued?|tired|palpitations?)\b"
+        ),
+        # --- 2026-09-12 gap 4: supplement questions phrased by vitamin/
+        # mineral name rather than the literal word "supplement" (e.g.
+        # "should I start taking iron pills"). Scoped to "should I
+        # (start) tak(e/ing)" / "do I need (more/extra)" framing so an
+        # ordinary catalog-style mention of a mineral (e.g. "iron-rich
+        # foods") is NOT swept up.
+        (
+            r"\bshould\s+i\s+(start\s+)?tak(e|ing)\b.{0,30}"
+            r"\b(iron|calcium|magnesium|zinc|potassium|iodine|folate|biotin|selenium|"
+            r"vitamin\s*\w*|omega-?3)\b"
+        ),
+        (
+            r"\bdo\s+i\s+need\s+(more|extra)?\s*"
+            r"\b(iron|calcium|magnesium|zinc|potassium|iodine|folate|biotin|selenium|"
+            r"vitamin\s*\w*|omega-?3)\b"
+        ),
+        # --- 2026-09-12 gap 5: mood/mental-health-adjacent nutrition, a
+        # distinct carve-out mirroring the pregnancy carve-out's shape --
+        # bare keywords for terms rarely ambiguous in this context
+        # (anxiety, depression, mental health), and a scoped combo for
+        # the genuinely ambiguous term "mood" (only flagged alongside
+        # food/diet/eating/nutrition wording, so an ordinary "mood-
+        # boosting recipe" request is NOT swept up).
+        r"\banxi(ety|ous)\b",
+        r"\bdepress(ion|ed)\b",
+        r"\bmental\s+health\b",
+        r"\bmood\b.{0,40}\b(food|diet|eating|nutrition)\b",
+        r"\b(food|diet|eating|nutrition)\b.{0,40}\bmood\b",
+        r"\bstress(ed)?\b.{0,40}\b(eating|diet|food)\b",
     )
 )
 

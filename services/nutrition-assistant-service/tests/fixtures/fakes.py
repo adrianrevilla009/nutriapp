@@ -199,6 +199,7 @@ class FakeChatAuditRepository:
         prompt_template_version: str,
         had_sufficient_context: bool,
         disclaimer_included: bool,
+        health_adjacent_flagged: bool,
     ) -> None:
         self.records.append(
             {
@@ -208,5 +209,6 @@ class FakeChatAuditRepository:
                 "prompt_template_version": prompt_template_version,
                 "had_sufficient_context": had_sufficient_context,
                 "disclaimer_included": disclaimer_included,
+                "health_adjacent_flagged": health_adjacent_flagged,
             }
         )

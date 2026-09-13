@@ -148,6 +148,13 @@ class ChatAuditLogModel(Base):
     prompt_template_version: Mapped[str] = mapped_column(String(16), nullable=False)
     had_sufficient_context: Mapped[bool] = mapped_column(Boolean, nullable=False)
     disclaimer_included: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    # Added 2026-09-12 (implementation plan addendum, same date) --
+    # logging-only field for future manual drift review of
+    # health_topic_classifier's precision/recall, independent of whether
+    # a disclaimer ended up in the response. Additive migration 0003.
+    health_adjacent_flagged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     recorded_at: Mapped[datetime] = mapped_column(nullable=False)
 
     __table_args__ = (Index("ix_chat_audit_log_user_id", "user_id"),)

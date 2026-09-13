@@ -24,6 +24,7 @@ class PostgresChatAuditRepository:
         prompt_template_version: str,
         had_sufficient_context: bool,
         disclaimer_included: bool,
+        health_adjacent_flagged: bool,
     ) -> None:
         self._session.add(
             ChatAuditLogModel(
@@ -34,6 +35,7 @@ class PostgresChatAuditRepository:
                 prompt_template_version=prompt_template_version,
                 had_sufficient_context=had_sufficient_context,
                 disclaimer_included=disclaimer_included,
+                health_adjacent_flagged=health_adjacent_flagged,
                 recorded_at=datetime.now(UTC),
             )
         )

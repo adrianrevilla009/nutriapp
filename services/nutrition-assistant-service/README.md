@@ -147,6 +147,35 @@ without a much higher false-positive rate; they are not closed by this
 pass. Not a
 solved problem; a first cut.
 
+A 2026-09-12 security review closed five further concrete recall gaps:
+named medical conditions used by name (diabetes, thyroid, PCOS, IBS,
+celiac, hypertension/blood pressure, cholesterol), general safety
+questions outside the pregnancy/infant/toddler carve-out ("is keto safe
+for someone with diabetes"), plain symptom phrasing (dizzy, headache,
+fatigue/tired, palpitations) combined with why/should-I/worried framing
+without the literal word "symptom", supplement questions phrased by
+vitamin/mineral name rather than the literal word "supplement"
+("should I start taking iron pills"), and a new mood/mental-health-
+adjacent nutrition carve-out mirroring the pregnancy carve-out's shape.
+See `TestNamedMedicalConditionsCoverage`,
+`TestGeneralSafetyAdjectiveParityCoverage`,
+`TestPlainSymptomPhrasingCoverage`,
+`TestSupplementByVitaminOrMineralNameCoverage`, and
+`TestMoodMentalHealthAdjacentCoverage` in the same test file.
+`TestKnownPrecisionRecallGap`'s two residual cases above are still not
+closed by this pass either -- still not a solved problem, a bounded,
+enumerable fix each time, per the module's own docstring.
+
+Operational mitigation added the same date: every chat request now
+records whether `health_topic_classifier.is_health_adjacent` flagged the
+query on `chat_audit_log` (`health_adjacent_flagged`, additive migration
+`0003`), independent of whether a disclaimer ended up in the response --
+for future manual review of the classifier's real-world flagged-vs-
+unflagged distribution, i.e. drift detection. This is a logging addition
+only; it introduces no new retrieval or LLM-trust logic and does not
+change the disclaimer-enforcement behavior above. See
+`tests/unit/application/test_answer_chat_query.py::TestHealthAdjacentFlagLoggingForDriftReview`.
+
 ## Cross-user isolation
 
 Every structured-history repository call in `answer_chat_query.py` is
@@ -189,6 +218,17 @@ use` -- this content is NOT to be treated as production-ready. Seeded via
 `infrastructure/vectorstore/seed_knowledge_base.py` (not a live event
 consumer -- run manually/at deploy time). Chunking: one file = one
 semantic-unit chunk (see that script's own docstring for the reasoning).
+
+**2026-09-12 citation fast-follow**: every file's header block now also
+carries a `Source:` field citing a real, publicly available guidance
+document appropriate to that file's topic (USDA Dietary Guidelines for
+Americans/MyPlate, NIH MedlinePlus, NIH Office of Dietary Supplements,
+CDC, FDA -- see each file for its specific citation). This does NOT
+change or approve the content itself for production -- the `STATUS:
+DRAFT` header is unchanged and still required -- it only gives the
+eventual human/professional reviewer something concrete to check each
+file's claims against, per the 2026-09-12 security review's finding that
+zero citations existed across all 9 files before this pass.
 
 ## Resilience
 
@@ -243,6 +283,27 @@ but this is flagged explicitly rather than claimed as a verified number
 -- run `uv run pytest tests/integration tests/contract -q` plus the
 coverage-gate command in a Docker-capable environment (this repo's CI)
 before merge.
+
+**Health-topic-classifier recall fast-follow + audit-log drift-review
+logging addendum (2026-09-12)**: `tests/unit` re-run after closing the
+five classifier recall gaps and adding `health_adjacent_flagged` to
+`chat_audit_log`: 145/145 tests passing (`tests/unit` + `tests/contract/
+events`), domain 97% / application 100% (`ruff check`/`ruff format
+--check`/`mypy --strict domain application infrastructure` all clean).
+Infrastructure, measured on the same unit+contract-events-only subset
+(Docker still unreachable in this sandbox, the same pre-existing
+constraint as the 2026-09-11 addendum): 39% -- this number specifically
+excludes the Docker-gated integration/contract-http suites, including
+the extended `test_postgres_chat_audit_repository.py` and the new
+`test_migration_0003.py`, both of which collect cleanly under `pytest
+--collect-only` (verified) and mirror already-CI-green precedent
+(`test_migration_0002.py`) closely enough that a green result is
+expected, but this is flagged rather than claimed as verified, exactly
+as the 2026-09-11 addendum did. Run
+`uv run pytest tests/integration tests/contract -q` plus the full
+coverage-gate command in a Docker-capable environment (this repo's CI)
+before merge to get the real infrastructure-layer number against the
+>= 70% floor.
 
 **Both RELEASE-BLOCKING test categories pass**: cross-user isolation
 (`TestCrossUserIsolationReleaseBlocking`, 4 cases) and the
@@ -302,3 +363,24 @@ the original test plan's own description.
 5. No Terraform footprint exists anywhere in this repo for RabbitMQ
    itself (a pre-existing gap this plan's own `infra/terraform/modules/qdrant/`
    does not attempt to fix, flagged for `architecture-agent`).
+6. ~~`health_topic_classifier.py` had zero pattern coverage for named
+   medical conditions, general safe/unsafe parity, plain symptom
+   phrasing, vitamin/mineral-name supplement questions, and mood/mental-
+   health-adjacent nutrition questions~~ -- RESOLVED 2026-09-12 (five
+   named test classes, see "Professional-advice boundary" above). The
+   classifier remains a first-cut, rule-based approximation by design --
+   `TestKnownPrecisionRecallGap`'s two residual cases are still open, and
+   `security-agent`/`architecture-agent` sign-off before staging/prod is
+   still required, same posture as before this fix.
+7. ~~Zero citations existed across the 9 knowledge-base seed files~~ --
+   RESOLVED 2026-09-12: every file now carries a `Source:` field citing a
+   real, publicly available guidance document (see "Knowledge base"
+   above). This closes the citation gap only -- it does **not** resolve
+   or substitute for either of the two items that genuinely need a human
+   professional, both still fully open: (a) content-accuracy review of
+   the seed text itself against those citations (every file is still
+   headed `STATUS: DRAFT`), and (b) whether this 9-file corpus is
+   complete enough to be a production-adequate general-nutrition
+   knowledge base at all -- the fixed evaluation set's grounded-factual/
+   out-of-scope probes exercise the retrieval *pipeline* mechanically but
+   do not constitute either review.
