@@ -139,3 +139,82 @@ async def test_activity_level_and_goal_type_flow_through_from_reveal():
 
     assert target.activity_level is ActivityLevel.ACTIVE
     assert target.goal_type is GoalType.LOSE
+
+
+async def test_published_event_merges_real_micronutrient_minimums_for_an_adult_user():
+    """Phase 2 (dri-rda-addendum.md): the outbox event's
+    `nutrient_targets_min` carries calcium_mg/iron_mg/vitamin_c_mg
+    alongside protein_g/fat_g for a 25-year-old male, using the exact
+    figures cited in `domain/reference_data/dri_reference_table.py`."""
+    reveal_port = FakeProfileRevealPort(
+        metrics=default_revealed_metrics(age=25, sex=Sex.MALE)
+    )
+    handler, *_, outbox = _build_handler(reveal_port)
+
+    command = RecomputeNutritionTargetCommand(
+        user_id=USER_ID, trigger_event_type="WeightRecorded", correlation_id="corr-1"
+    )
+    await handler.handle(command)
+
+    nutrient_targets_min = outbox.enqueued[0].payload["nutrient_targets_min"]
+    assert nutrient_targets_min["calcium_mg"] == 1000.0
+    assert nutrient_targets_min["iron_mg"] == 8.0
+    assert nutrient_targets_min["vitamin_c_mg"] == 90.0
+    assert "protein_g" in nutrient_targets_min
+    assert "fat_g" in nutrient_targets_min
+
+
+async def test_published_event_has_no_micronutrient_minimums_for_an_under_19_user():
+    """Under-19 users get zero micronutrient entries -- absent, not
+    defaulted (addendum acceptance criterion 4) -- while protein_g/fat_g
+    (macro-derived, unaffected by this pass) are still present."""
+    reveal_port = FakeProfileRevealPort(metrics=default_revealed_metrics(age=17))
+    handler, *_, outbox = _build_handler(reveal_port)
+
+    command = RecomputeNutritionTargetCommand(
+        user_id=USER_ID, trigger_event_type="WeightRecorded", correlation_id="corr-1"
+    )
+    await handler.handle(command)
+
+    nutrient_targets_min = outbox.enqueued[0].payload["nutrient_targets_min"]
+    assert set(nutrient_targets_min.keys()) == {"protein_g", "fat_g"}
+    for micronutrient in ("calcium_mg", "iron_mg", "vitamin_c_mg"):
+        assert micronutrient not in nutrient_targets_min
+
+
+async def test_sex_other_with_override_also_gets_micronutrient_minimums_for_the_selected_constant():
+    reveal_port = FakeProfileRevealPort(
+        metrics=default_revealed_metrics(sex=Sex.OTHER, age=40)
+    )
+    handler, *_, outbox = _build_handler(reveal_port)
+
+    command = RecomputeNutritionTargetCommand(
+        user_id=USER_ID,
+        trigger_event_type="BodyMetricRecorded",
+        correlation_id="corr-1",
+        calculation_sex_constant_override=CalculationSexConstant.FEMALE,
+    )
+    await handler.handle(command)
+
+    nutrient_targets_min = outbox.enqueued[0].payload["nutrient_targets_min"]
+    assert nutrient_targets_min["iron_mg"] == 18.0
+
+
+async def test_replaying_the_same_command_twice_produces_stable_identical_micronutrient_minimums():
+    """Idempotency of the new keys specifically: two independent handler
+    invocations for the same unchanged inputs must publish the exact same
+    `nutrient_targets_min` micronutrient entries both times -- no drift, no
+    double-application (test-plan reference, addendum section 8)."""
+    reveal_port = FakeProfileRevealPort(metrics=default_revealed_metrics(age=60, sex=Sex.FEMALE))
+    handler, *_, outbox = _build_handler(reveal_port)
+
+    command = RecomputeNutritionTargetCommand(
+        user_id=USER_ID, trigger_event_type="GoalUpdated", correlation_id="corr-1"
+    )
+    await handler.handle(command)
+    await handler.handle(command)
+
+    first, second = outbox.enqueued[0], outbox.enqueued[1]
+    assert first.payload["nutrient_targets_min"] == second.payload["nutrient_targets_min"]
+    assert first.payload["nutrient_targets_min"]["calcium_mg"] == 1200.0
+    assert first.payload["nutrient_targets_min"]["iron_mg"] == 8.0

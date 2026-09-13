@@ -53,6 +53,21 @@ reading.
 - Never bump `CURRENT_FORMULA_VERSION` or change the activity-factor
   table / calorie-target safety bounds without a new ADR proposal
   (`.claude/skills/domain-calculation-conventions/SKILL.md` section 1).
+- Never add a nutrient to `domain/reference_data/dri_reference_table.py`
+  without a cited primary-source value for **every** band it claims to
+  cover. Every row must trace to a named, dated fact sheet/table (e.g. a
+  specific NIH ODS Health Professional Fact Sheet byline date) with its
+  URL in the module docstring — a partially-sourced nutrient (some age/sex
+  bands cited, others guessed/interpolated/carried-over "because it's
+  probably similar") is exactly the fabrication this service's "never
+  invent a value that is not available in upstream data" rule
+  (`.claude/agents/nutrition-calculation-agent.md`) exists to prevent, and
+  is worse than not covering that nutrient at all. Adding a new nutrient
+  also requires updating `micronutrient_dri_resolver.py`'s tests with
+  reference-value assertions against the newly cited figures, and — per
+  the domain-calculation-conventions skill's "any change to these
+  formulas... is significant enough to warrant an ADR" — a proposal
+  amending or superseding ADR-0024, not a silent table edit.
 
 ## Where things live
 
