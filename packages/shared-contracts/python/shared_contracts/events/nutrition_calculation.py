@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MacroAmountsPayloadV1(BaseModel):
@@ -65,6 +65,20 @@ class NutritionTargetUpdatedPayloadV1(BaseModel):
     tdee_kcal: float
     calorie_target_kcal: float
     macro_targets: MacroTargetRangePayloadV1
+    # Nutrient-keyed minimum-target map (added additively, still v1 -- see
+    # docs/events-catalog.md's NutritionTargetUpdated entry for the
+    # versioning-decision reasoning). Defaults to `{}` (not required) so
+    # an old-shaped payload published before this field existed still
+    # validates -- genuine additive backward compatibility, not merely
+    # assumed (see the contract test proving exactly this in
+    # tests/contract/events/test_event_schemas.py). Always carries
+    # `protein_g`/`fat_g`; as of Phase 2
+    # (dri-rda-addendum.md) also carries `calcium_mg`/`iron_mg`/
+    # `vitamin_c_mg` for adult users -- see
+    # nutrition-calculation-service's
+    # domain/services/nutrient_target_min_builder.py and
+    # domain/services/micronutrient_dri_resolver.py.
+    nutrient_targets_min: dict[str, float] = Field(default_factory=dict)
     goal_type: str
     activity_level: str
     activity_adjustment_kcal: float | None

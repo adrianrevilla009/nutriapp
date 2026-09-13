@@ -449,7 +449,11 @@ yet implemented — the owning service doesn't exist yet).
   `nutrition_calculation_events_consumer.py`, updates the CURRENT
   `protein_g`/`fat_g` target-min reference used by future
   `NutritionValueRecomputed` upserts; never rewrites already-persisted
-  historical `micronutrient_window` rows), **nutrition-assistant-service**
+  historical `micronutrient_window` rows -- still reads
+  `macro_targets.protein_g_min`/`fat_g_min` as of this pass, not the newer
+  `nutrient_targets_min` map below; switching over, and consuming any
+  future non-macro entry in that map, is out of scope here, tracked as a
+  follow-up for analytics-service's own agent), **nutrition-assistant-service**
   (implemented -- `nutrition_calculation_events_consumer.py`, projects a
   one-row-per-user `nutrition_target_history` current-target summary,
   overwritten on every update, per
@@ -464,6 +468,7 @@ yet implemented — the owning service doesn't exist yet).
 - Payload: `{ "user_id": "uuid", "bmr_kcal": "number", "tdee_kcal": "number",
   "calorie_target_kcal": "number", "macro_targets": { "protein_g_min": "number",
   "protein_g_max": "number", "fat_g_min": "number", "carbs_g": "number" },
+  "nutrient_targets_min": { "...": "number" },
   "goal_type": "LOSE | MAINTAIN | GAIN",
   "activity_level": "SEDENTARY | LIGHT | MODERATE | ACTIVE | VERY_ACTIVE",
   "activity_adjustment_kcal": "number | null", "clamped": "boolean",
@@ -471,6 +476,70 @@ yet implemented — the owning service doesn't exist yet).
   "reason": "weight_recorded | body_metric_recorded | goal_set | goal_updated | formula_correction",
   "effective_from": "timestamp" }`. See
   `packages/shared-contracts/schemas/nutrition_target_updated.v1.json`.
+- **`nutrient_targets_min` (added to the payload in a prior pass, extended
+  in this one -- versioning decision, kept at v1, not bumped to v2):** a
+  nutrient-keyed minimum-target map, canonical nutrient names matching
+  `NutritionValueRecomputed`'s `macros`/`micronutrients` dict keys,
+  generalizing what `macro_targets` already exposes so a nutrient-agnostic
+  consumer (analytics-service's deficiency detector) can look a minimum up
+  by key instead of parsing `macro_targets` field-by-field. Always
+  contains `{"protein_g": <number>, "fat_g": <number>}` -- the same two
+  values already in `macro_targets.protein_g_min`/`fat_g_min`, re-exposed
+  in this generic shape. **Not required** in the JSON Schema/optional
+  (defaults to `{}`) in the shared-contracts Pydantic model specifically
+  so an event published before this key existed at all still validates --
+  proven by
+  `tests/contract/events/test_event_schemas.py::test_nutrition_target_updated_old_shaped_payload_without_nutrient_targets_min_still_validates`,
+  not merely assumed.
+  - **Phase 2 update (`plans/nutrition-calculation-service/dri-rda-addendum.md`,
+    ADR-0024 Proposed):** for an adult user (age >= 19) with a resolved
+    sex constant, the map also carries genuine, cited RDA/DRI minimums for
+    `calcium_mg`, `iron_mg`, and `vitamin_c_mg`, sourced from US NIH
+    Office of Dietary Supplements (ODS) Health Professional Fact Sheets
+    (NASEM Dietary Reference Intakes) -- see
+    `services/nutrition-calculation-service/domain/reference_data/dri_reference_table.py`
+    for the exact figures, band boundaries, and per-fact-sheet citations,
+    and `domain/services/micronutrient_dri_resolver.py` for the resolution
+    logic. Users under 19 get **no** entry for these three keys (absent,
+    not defaulted) -- DRI child/adolescent tables use fundamentally
+    different bands, out of scope for this pass. Pregnancy/lactation-
+    adjusted values are not computed -- `profile-service` has no such
+    field today (a genuine cross-service gap, not a scope choice).
+    `analytics-service` does not yet consume these three new keys for
+    deficiency detection -- a distinct, not-yet-planned follow-up in that
+    service's own bounded context (see the `NutritionValueRecomputed`
+    entry above's documented gap, which this doesn't close by itself).
+    `fiber_g` and the upper-limit nutrients (`sodium_mg`/`salt_g`/
+    `sugars_g`/`saturated_fat_g`) remain out of scope for the same reasons
+    as before -- see
+    `services/nutrition-calculation-service/domain/services/nutrient_target_min_builder.py`.
+  - **Versioning decision -- additive, not a breaking change, stays v1:**
+    per `.claude/skills/cqrs-event-sourcing/SKILL.md` ("a breaking payload
+    change means a new version, never mutating the meaning of an existing
+    one") and this event catalog's own `UserRegistered` precedent (its
+    `email_verification_token_reference_id` field was added the same way,
+    "additive, non-breaking for the existing consumers listed above --
+    confirmed by `architecture-agent`"): `nutrient_targets_min` (and its
+    Phase 2 extension) is a brand-new, independent key whose *presence* of
+    new sub-keys does not rename, remove, retype, or change the meaning
+    of any existing field (`macro_targets` is untouched byte-for-byte); no
+    existing consumer's read of `bmr_kcal`, `macro_targets`, `goal_type`,
+    etc. is affected by it. The structural risk from
+    `additionalProperties: false` at the top level and `extra="forbid"` on
+    the shared-contracts `NutritionTargetUpdatedPayloadV1` Pydantic model
+    is handled by keeping `nutrient_targets_min` itself an open map
+    (`additionalProperties: { "type": "number" }`, `dict[str, float]`) and
+    genuinely optional (see above) -- both are updated in this same change
+    (schema + typed model + this doc, one PR, per
+    `docs/documentation-standards.md`). No live consumer today parses this
+    payload with a stricter, already-deployed copy of the old schema that
+    would reject the new sub-keys outright (checked: neither
+    analytics-service nor nutrition-assistant-service imports
+    `NutritionTargetUpdatedPayloadV1` at runtime, only this producer's own
+    contract tests do). A version bump (v2) would only be warranted if an
+    existing field's type/meaning changed, or if `nutrient_targets_min`
+    were made a required precondition for correctly interpreting
+    `macro_targets` -- neither is true here.
 
 ### ExerciseLogged (v1)
 - Status: Active

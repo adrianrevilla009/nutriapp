@@ -10,6 +10,17 @@ circuit is open, or the user's `Sex.OTHER` has no explicit calculation-
 constant selection available, the recompute is deferred cleanly --
 `RecomputeNutritionTargetDeferredError` is raised for the consumer to catch,
 log, and return without producing a `NutritionTargetUpdated` event.
+
+Phase 2 (`plans/nutrition-calculation-service/dri-rda-addendum.md`): also
+resolves the user's calcium_mg/iron_mg/vitamin_c_mg RDA/DRI minimums via
+`domain/services/micronutrient_dri_resolver.py`, using the *already
+resolved* `bmr_result.sex_constant_used` (never `None` once
+`calculate_bmr` has succeeded) -- so this call cannot itself raise
+`InvalidBiometricInputError` in this call path; any `Sex.OTHER`-without-
+override deferral already happened above, at the BMR step. The resolver's
+output (possibly `{}` for an under-19 user) is merged into
+`nutrient_targets_min` alongside the existing protein_g/fat_g entries by
+`build_nutrition_target_updated_event`.
 """
 
 from __future__ import annotations
@@ -31,6 +42,7 @@ from domain.ports.user_metrics_snapshot_port import (
 from domain.services.bmr_calculator import InvalidBiometricInputError, calculate_bmr
 from domain.services.calorie_target_calculator import calculate_calorie_target
 from domain.services.macro_repartition_calculator import calculate_macro_repartition
+from domain.services.micronutrient_dri_resolver import resolve_micronutrient_dri_minimums
 from domain.services.recomputation_policy import target_recompute_reason_for
 from domain.services.tdee_calculator import calculate_tdee
 from domain.value_objects.formula_version import CURRENT_FORMULA_VERSION
@@ -102,6 +114,11 @@ class RecomputeNutritionTargetHandler:
         macro_targets = calculate_macro_repartition(
             calorie_target_kcal=calorie_result.calorie_target_kcal, weight_kg=metrics.weight_kg
         )
+        micronutrient_targets_min = resolve_micronutrient_dri_minimums(
+            sex=metrics.sex,
+            age=metrics.age,
+            calculation_sex_constant=bmr_result.sex_constant_used,
+        )
 
         now = datetime.now(timezone.utc)
         reason = target_recompute_reason_for(command.trigger_event_type)
@@ -146,6 +163,7 @@ class RecomputeNutritionTargetHandler:
             reason=reason,  # type: ignore[arg-type]
             effective_from=now,
             correlation_id=command.correlation_id,
+            micronutrient_targets_min=micronutrient_targets_min,
         )
         await self._outbox_repository.enqueue(event)
         return target
