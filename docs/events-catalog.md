@@ -563,12 +563,16 @@ yet implemented — the owning service doesn't exist yet).
 - Producer: activity-service
 - Consumers: nutrition-calculation-service, analytics-service
 - Emitted when: (future) a wearable provider sync completes. **Not yet
-  implemented** -- `WearableProviderPort` is defined in
-  `activity-service`'s domain layer (interface only: `connect`/`sync`/
-  `disconnect`), but zero provider adapters exist (no real OAuth
-  developer-account credentials are registered for Apple Health, Google
-  Fit, Fitbit, or Garmin -- see `docs/vendor-risk-register.md`). Building
-  this event's producer is a future, separately-planned addition.
+  implemented** -- as of the 2026-09-11 addendum to
+  `/plans/activity-service/implementation-plan.md`, a `FitbitProviderAdapter`
+  implements `WearableProviderPort`'s `connect`/`sync`/`disconnect`
+  against Fitbit (mock-tested only, feature-flag gated off, no real
+  Fitbit developer-account credentials configured -- see
+  `docs/vendor-risk-register.md`), but no application-layer consumer
+  calls it yet, so nothing publishes this event today. Apple Health,
+  Google Fit, and Garmin remain interface-only (zero adapters). Wiring an
+  actual connect/sync flow that publishes this event is a future,
+  separately-planned addition.
 
 ### RecipeCreated (v1)
 - Status: Active
