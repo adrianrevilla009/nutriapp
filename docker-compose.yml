@@ -196,7 +196,7 @@ services:
   catalog-redis:
     image: redis:7-alpine
     ports:
-      - "6381:6379"
+      - "6383:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -214,7 +214,7 @@ services:
     env_file:
       - .env
     ports:
-      - "8003:8000"
+      - "8015:8000"
     environment:
       # DATABASE_URL deliberately NOT hardcoded here -- comes from .env
       # via env_file above, same convention as every other service.
