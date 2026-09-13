@@ -8,7 +8,12 @@ from __future__ import annotations
 import pytest
 from testcontainers.rabbitmq import RabbitMqContainer
 
-from infrastructure.composition_root import Container, Settings, build_repositories
+from infrastructure.composition_root import (
+    Container,
+    Settings,
+    WearableSyncDisabledError,
+    build_repositories,
+)
 
 
 @pytest.fixture(scope="module")
@@ -84,3 +89,108 @@ def test_event_publisher_property_raises_before_startup():
     container = Container(settings)
     with pytest.raises(RuntimeError):
         _ = container.event_publisher
+
+
+# ---------------------------------------------------------------------------
+# Fitbit feature-flag gate -- test-plan addendum (2026-09-11) section 4.
+# ---------------------------------------------------------------------------
+
+
+def _base_settings(**overrides: object) -> Settings:
+    defaults: dict[str, object] = dict(
+        database_url="postgresql+asyncpg://u:p@h/db",
+        rabbitmq_url="amqp://guest:guest@localhost/",
+        identity_jwks_url="http://identity-service.test/.well-known/jwks.json",
+    )
+    defaults.update(overrides)
+    return Settings(**defaults)  # type: ignore[arg-type]
+
+
+def test_settings_from_env_defaults_wearable_sync_disabled_and_credentials_empty(monkeypatch):
+    monkeypatch.setenv("ACTIVITY_SERVICE_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.delenv("ACTIVITY_SERVICE_WEARABLE_SYNC_ENABLED", raising=False)
+    monkeypatch.delenv("ACTIVITY_SERVICE_FITBIT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("ACTIVITY_SERVICE_FITBIT_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("ACTIVITY_SERVICE_FITBIT_REDIRECT_URI", raising=False)
+
+    settings = Settings.from_env()
+
+    assert settings.wearable_sync_enabled is False
+    assert settings.fitbit_client_id == ""
+    assert settings.fitbit_client_secret == ""
+    assert settings.fitbit_redirect_uri == ""
+
+
+def test_settings_from_env_reads_wearable_sync_and_fitbit_credentials(monkeypatch):
+    monkeypatch.setenv("ACTIVITY_SERVICE_DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
+    monkeypatch.setenv("ACTIVITY_SERVICE_WEARABLE_SYNC_ENABLED", "true")
+    monkeypatch.setenv("ACTIVITY_SERVICE_FITBIT_CLIENT_ID", "cid")
+    monkeypatch.setenv("ACTIVITY_SERVICE_FITBIT_CLIENT_SECRET", "csecret")
+    monkeypatch.setenv("ACTIVITY_SERVICE_FITBIT_REDIRECT_URI", "https://app.test/callback")
+
+    settings = Settings.from_env()
+
+    assert settings.wearable_sync_enabled is True
+    assert settings.fitbit_client_id == "cid"
+    assert settings.fitbit_client_secret == "csecret"
+    assert settings.fitbit_redirect_uri == "https://app.test/callback"
+
+
+def test_fitbit_provider_raises_when_flag_disabled_regardless_of_credentials():
+    settings = _base_settings(
+        wearable_sync_enabled=False,
+        fitbit_client_id="cid",
+        fitbit_client_secret="csecret",
+        fitbit_redirect_uri="https://app.test/callback",
+    )
+    container = Container(settings)
+
+    with pytest.raises(WearableSyncDisabledError):
+        _ = container.fitbit_provider
+
+
+def test_fitbit_provider_raises_when_flag_enabled_but_credentials_missing():
+    settings = _base_settings(
+        wearable_sync_enabled=True, fitbit_client_id="", fitbit_client_secret=""
+    )
+    container = Container(settings)
+
+    with pytest.raises(WearableSyncDisabledError):
+        _ = container.fitbit_provider
+
+
+def test_fitbit_provider_returns_working_adapter_when_enabled_and_configured():
+    settings = _base_settings(
+        wearable_sync_enabled=True,
+        fitbit_client_id="cid",
+        fitbit_client_secret="csecret",
+        fitbit_redirect_uri="https://app.test/callback",
+    )
+    container = Container(settings)
+
+    provider = container.fitbit_provider
+
+    from infrastructure.external.fitbit_provider_adapter import FitbitProviderAdapter
+
+    assert isinstance(provider, FitbitProviderAdapter)
+    # Cached -- same instance returned on a second access, not rebuilt.
+    assert container.fitbit_provider is provider
+
+
+async def test_container_shutdown_closes_fitbit_provider_if_constructed():
+    settings = _base_settings(
+        wearable_sync_enabled=True, fitbit_client_id="cid", fitbit_client_secret="csecret"
+    )
+    container = Container(settings)
+    provider = container.fitbit_provider
+
+    closed = {"value": False}
+
+    async def fake_aclose() -> None:
+        closed["value"] = True
+
+    provider.aclose = fake_aclose  # type: ignore[method-assign]
+
+    await container.shutdown()
+
+    assert closed["value"] is True

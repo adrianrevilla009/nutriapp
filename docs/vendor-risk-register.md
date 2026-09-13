@@ -128,40 +128,63 @@ an audit.
   (agreement review)
 
 ### Wearable Providers (Apple Health, Google Fit, Fitbit, Garmin) -- `activity-service`
-- Purpose: (future, not yet built) syncing exercise/calorie-burn data into
-  `activity-service` to adjust TDEE-based nutrition targets
-  (`.claude/agents/activity-agent.md`). **Not yet integrated** --
-  `/plans/activity-service/implementation-plan.md`'s MVP scope is manual
-  exercise logging only. `WearableProviderPort` is defined in the domain
-  layer (interface only: `connect`/`sync`/`disconnect`); zero of the four
-  providers below have a concrete adapter.
-- Data shared: none today (no adapter exists to share anything with).
-  Once built, each provider's own OAuth scope would determine exactly
-  which activity/calorie-burn fields are shared -- to be documented per
-  provider at that time, not assumed now.
-- Data processing agreement: not applicable yet -- no data is exchanged
-  with any of these vendors. A DPA (or equivalent developer-terms
-  acceptance) must be reviewed and linked here before any adapter goes
-  live, per this file's standing requirement.
-- Data retention/training policy: not applicable yet -- document each
-  provider's actual policy when its adapter is built, not assumed now.
-- Compliance relevance: GDPR (ADR-0020) -- synced activity data is
-  linked to a User and would need the same lawful-basis/consent review
-  as any other personal data source before going live.
-- Risk tier: not yet assessed (no live integration) -- assess per
-  provider at the time a real adapter is planned; a provisional estimate
-  is Medium (activity/fitness data, not GDPR Article 9 special-category
-  health data on its own, but user-identifying and behaviorally
-  sensitive).
-- Review cadence: re-assess whenever a new, separately human-approved
-  plan proposes building an adapter for any of the four providers below
-  (per `.claude/agents/activity-agent.md`: "Any change to which
-  providers are supported is significant enough to warrant noting in
-  `docs/vendor-risk-register.md`" -- recorded here even in the
-  "not yet supported" state so it isn't rediscovered from scratch
-  later).
-- Owner: `activity-agent` (technical integration, when built),
-  `security-agent` (agreement review)
+- Purpose: syncing exercise/calorie-burn data into `activity-service` to
+  adjust TDEE-based nutrition targets (`.claude/agents/activity-agent.md`).
+  **Fitbit only, as of the 2026-09-11 addendum to
+  `/plans/activity-service/implementation-plan.md`**: a `FitbitProviderAdapter`
+  (`services/activity-service/infrastructure/external/fitbit_provider_adapter.py`)
+  now exists code-wise, implementing `WearableProviderPort`'s
+  `connect`/`sync`/`disconnect` against Fitbit's real, publicly documented
+  OAuth 2.0 Authorization Code / Activity Logs List API. It is
+  **structurally tested against `httpx.MockTransport` fixtures only --
+  never a live Fitbit call -- and is UNVERIFIED against the real Fitbit
+  API**, because no real Fitbit developer account/OAuth credentials exist
+  in this environment. It is also **gated behind an explicit,
+  defaults-off feature flag** (`ACTIVITY_SERVICE_WEARABLE_SYNC_ENABLED`,
+  `Container.fitbit_provider` in `infrastructure/composition_root.py`)
+  that additionally refuses to construct the adapter unless real-looking
+  `ACTIVITY_SERVICE_FITBIT_CLIENT_ID`/`_CLIENT_SECRET` values are also
+  configured -- so there is no way for this adapter to activate in any
+  real deployment of this repo today. Apple Health, Google Fit, and
+  Garmin remain not yet integrated (interface-only, zero adapters).
+- Data shared: **none today** -- the adapter has never made a real
+  network call (feature-flag gated off, no real credentials configured).
+  Once activated with a real Fitbit developer account, Fitbit's own OAuth
+  scope (`activity`, per the adapter's token-exchange request) would
+  determine exactly which activity/calorie-burn fields are shared -- this
+  must be re-confirmed against the real account's granted scope at
+  activation time, not assumed from the code alone. No data is shared
+  with Apple Health, Google Fit, or Garmin (no adapter exists for any of
+  the three).
+- Data processing agreement: **not yet in place for Fitbit** -- no real
+  Fitbit developer account exists, so no developer-terms acceptance has
+  happened yet. A DPA (or equivalent Fitbit developer-terms acceptance)
+  must be reviewed and linked here BEFORE a human provisions real
+  credentials and flips `ACTIVITY_SERVICE_WEARABLE_SYNC_ENABLED` in any
+  real environment -- this is a precondition of activation, not a
+  follow-up. Not applicable yet for Apple Health, Google Fit, or Garmin.
+- Data retention/training policy: not yet documented for Fitbit -- review
+  Fitbit's actual developer-terms retention/training policy at the same
+  time as the DPA review above, before activation. Not applicable yet for
+  the other three providers.
+- Compliance relevance: GDPR (ADR-0020) -- synced activity data would be
+  linked to a User and needs the same lawful-basis/consent review as any
+  other personal data source before going live; this review has not yet
+  happened because the adapter has never gone live.
+- Risk tier: **Medium (provisional, unchanged from the prior assessment)**
+  -- activity/fitness data is user-identifying and behaviorally sensitive
+  but not GDPR Article 9 special-category health data on its own. Confirm
+  or revise this tier as part of the pre-activation compliance review
+  above, not assumed unchanged forever.
+- Review cadence: re-assess before any human flips
+  `ACTIVITY_SERVICE_WEARABLE_SYNC_ENABLED` on in a real environment, and
+  whenever a new, separately human-approved plan proposes building an
+  adapter for Apple Health, Google Fit, or Garmin (per
+  `.claude/agents/activity-agent.md`: "Any change to which providers are
+  supported is significant enough to warrant noting in
+  `docs/vendor-risk-register.md`").
+- Owner: `activity-agent` (technical integration), `security-agent`
+  (agreement review, pre-activation compliance review)
 - Per-provider status:
   - **Apple Health** -- not yet integrated. No developer account
     registered.
@@ -170,7 +193,14 @@ an audit.
     sunset/migration path toward Health Connect as of this entry's
     writing -- whichever is current at the time an adapter is actually
     planned must be re-verified, not assumed from this note.)
-  - **Fitbit** -- not yet integrated. No developer account registered.
+  - **Fitbit** -- adapter code exists (`FitbitProviderAdapter`), tested
+    exclusively against `httpx.MockTransport` fixtures, **unverified
+    against the real Fitbit API**, gated behind a defaults-off feature
+    flag with a hard credential-presence check. No developer account
+    registered; DPA/developer-terms review still outstanding. Obtaining
+    a real developer account and completing that review are human
+    actions, out of scope for the 2026-09-11 addendum that authorized
+    building this adapter against fixtures.
   - **Garmin** -- not yet integrated. No developer account registered.
 
 ---
