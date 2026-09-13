@@ -360,7 +360,7 @@ jobs:
       - name: Wait for every backend service's /health/live
         run: |
           set -euo pipefail
-          for svc_port in identity-service:8001 catalog-service:8004 diary-service:8003 \
+          for svc_port in identity-service:8001 catalog-service:8004 diary-service:8015 \
                           nutrition-calculation-service:8005 food-recognition-service:8006 \
                           billing-service:8010 recipe-service:8011 bff-service:8008; do
             svc="${svc_port%%:*}"
