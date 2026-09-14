@@ -1,31 +1,75 @@
-/* Minimal, unstyled-but-accessible default (implementation plan resolution 3
-   -- no .claude/skills/frontend-design convention exists in this repo).
-   Theme-aware tokens (light default, dark via prefers-color-scheme), system
-   font stack, WCAG AA contrast defaults, visible focus rings everywhere. */
+/* Design pass (2026-09-14): a real visual identity on top of the
+   original accessible-but-bare defaults. Every existing className stays
+   exactly as-is (no component/JSX changes -- this file only) so no
+   test/behavior risk, just a much more considered look: a warm,
+   food/nutrition-appropriate palette, a card-based layout, proper
+   typographic scale, motion, and polish across buttons, forms, tables,
+   badges, and nav. Theme-aware (light default, dark via
+   prefers-color-scheme), WCAG AA contrast preserved throughout, visible
+   focus rings everywhere. */
 
 :root {
-  --color-bg: #ffffff;
-  --color-fg: #1a1a1a;
-  --color-muted: #595959; /* ~7:1 on white, comfortably AA/AAA for normal text */
-  --color-border: #767676; /* 4.54:1 on white -- meets AA for UI components */
-  --color-primary: #0b5fff;
+  --color-bg: #f6f7f5;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f4f0;
+  --color-fg: #16201a;
+  --color-muted: #5b6b60; /* ~7:1 on --color-surface */
+  --color-border: #d8ded8;
+  --color-border-strong: #6b7a70; /* ~4.6:1 on --color-surface, for input borders */
+
+  --color-primary: #0f8f5f;
+  --color-primary-hover: #0c7a51;
   --color-primary-fg: #ffffff;
+  --color-primary-tint: #e3f5ec;
+
   --color-danger: #b3261e;
   --color-danger-bg: #fceceb;
-  --color-focus: #0b5fff;
+  --color-danger-border: #e3aca7;
+
+  --color-focus: #0f8f5f;
+
+  --color-glow-a: rgb(15 143 95 / 0.08);
+  --color-glow-b: rgb(255 176 59 / 0.07);
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(16 24 20 / 0.06), 0 1px 1px rgb(16 24 20 / 0.04);
+  --shadow-md: 0 4px 12px rgb(16 24 20 / 0.08), 0 1px 3px rgb(16 24 20 / 0.06);
+  --shadow-focus-ring: 0 0 0 4px rgb(15 143 95 / 0.18);
+
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-bg: #121212;
-    --color-fg: #f2f2f2;
-    --color-muted: #b8b8b8;
-    --color-border: #9a9a9a;
-    --color-primary: #6ea8ff;
-    --color-primary-fg: #0b1a33;
+    --color-bg: #12151a;
+    --color-surface: #1b2029;
+    --color-surface-hover: #232a35;
+    --color-fg: #eef1ee;
+    --color-muted: #a9b6ae;
+    --color-border: #333c47;
+    --color-border-strong: #8b968f;
+
+    --color-primary: #3ddc97;
+    --color-primary-hover: #2fc484;
+    --color-primary-fg: #06251a;
+    --color-primary-tint: #16362a;
+
     --color-danger: #ffb4ab;
-    --color-danger-bg: #3a0f0c;
-    --color-focus: #6ea8ff;
+    --color-danger-bg: #3a1210;
+    --color-danger-border: #6b2b26;
+
+    --color-focus: #3ddc97;
+
+    --color-glow-a: rgb(61 220 151 / 0.1);
+    --color-glow-b: rgb(255 176 59 / 0.06);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 6px 16px rgb(0 0 0 / 0.45);
+    --shadow-focus-ring: 0 0 0 4px rgb(61 220 151 / 0.22);
   }
 }
 
@@ -33,116 +77,327 @@
   box-sizing: border-box;
 }
 
+html {
+  color-scheme: light dark;
+}
+
 body {
   margin: 0;
-  background: var(--color-bg);
+  /* A soft, fixed ambient glow (same spirit as a blurred gradient-blob
+     hero accent -- large, low-opacity radial gradients read as "blur"
+     without an actual filter) -- visible only in the gaps around/between
+     opaque cards, never behind them, so it adds warmth without touching
+     text contrast anywhere. */
+  background: radial-gradient(640px circle at 88% -8%, var(--color-glow-a), transparent 60%),
+    radial-gradient(520px circle at -8% 18%, var(--color-glow-b), transparent 60%), var(--color-bg);
+  background-attachment: fixed;
   color: var(--color-fg);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  display: block;
+  min-height: calc(100vh - 65px);
+}
+
+::selection {
+  background: var(--color-primary-tint);
+  color: var(--color-fg);
 }
 
 a {
   color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-focus);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+  border-radius: var(--radius-sm);
 }
 
-.page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 1.5rem;
+h1,
+h2,
+h3 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-fg);
 }
+
+h1 {
+  font-size: 1.85rem;
+  margin: 0 0 1.5rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 1rem;
+  font-weight: 600;
+}
+
+h2 + p,
+h1 + p {
+  margin-top: -0.75rem;
+  color: var(--color-muted);
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+/* ---------- Layout ---------- */
+
+/* Line-based CSS Grid placement (the same underlying technique as
+   https://github.com/Preethi-Dev/Modern-Layout-04's line-based-placement
+   demo, reapplied here to a dashboard of unequal-height cards rather
+   than a marketing hero -- no code/markup borrowed, just the pattern):
+   every top-level <section> is a grid item that wraps into a responsive
+   multi-column arrangement, while every other kind of top-level child
+   (heading, intro copy, a lone toolbar button, a form, a notice)
+   explicitly spans the full row so a page with only one section (almost
+   every page except the dashboard) still reads as a single full-width
+   column -- `auto-fit` collapses unused tracks, so one section expands
+   to fill the row on its own. */
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.page > h1,
+.page > h2,
+.page > p,
+.page > form,
+.page > .notice,
+.page > .error-banner,
+.page > .loading-skeleton,
+.page > ul,
+.page > ol {
+  grid-column: 1 / -1;
+}
+
+.page > h1 {
+  margin-bottom: 0;
+}
+
+.page > form {
+  max-width: 32rem;
+  width: 100%;
+}
+
+/* Every top-level <section> reads as a distinct card -- the single
+   biggest lever for turning bare semantic HTML into something that looks
+   designed, with zero component changes. */
+.page > section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  animation: card-in 0.25s ease-out;
+}
+
+/* On the dashboard specifically, the macro-totals card is the primary,
+   information-densest one -- let it claim the full row above the two
+   secondary cards, which then sit side by side. Harmless no-op on any
+   page with fewer than 3 sections (:nth-of-type(1) of 1 already spans
+   full width via auto-fit's track-collapsing). */
+.page > section:first-of-type:nth-last-of-type(3) {
+  grid-column: 1 / -1;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page > section,
+  .loading-skeleton::after {
+    animation: none;
+  }
+}
+
+/* ---------- Forms ---------- */
 
 .field {
-  margin-block: 1rem;
+  margin-block: 1.1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.4rem;
 }
 
 .field label {
   font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--color-fg);
 }
 
 .field input,
 .field select {
-  padding: 0.5rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
   font-size: 1rem;
-  background: var(--color-bg);
+  font-family: inherit;
+  background: var(--color-surface);
   color: var(--color-fg);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.field input:hover,
+.field select:hover {
+  border-color: var(--color-primary);
+}
+
+.field input:focus-visible,
+.field select:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.field input::placeholder {
+  color: var(--color-muted);
 }
 
 .field-error {
   color: var(--color-danger);
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .field-hint {
   color: var(--color-muted);
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
+/* ---------- Buttons ---------- */
+
 .btn {
-  padding: 0.6rem 1.2rem;
-  border-radius: 4px;
-  font-size: 1rem;
+  padding: 0.65rem 1.35rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1.5px solid transparent;
+  transition:
+    transform 0.1s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.55;
+  transform: none;
 }
 
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-primary-fg);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
   background: transparent;
   color: var(--color-primary);
+  border-color: var(--color-border-strong);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-primary-tint);
   border-color: var(--color-primary);
 }
+
+/* ---------- Notices ---------- */
 
 .error-banner {
   background: var(--color-danger-bg);
   color: var(--color-danger);
-  border: 1px solid var(--color-danger);
-  padding: 0.75rem 1rem;
-  border-radius: 4px;
+  border: 1px solid var(--color-danger-border);
+  border-left: 4px solid var(--color-danger);
+  padding: 0.85rem 1.1rem;
+  border-radius: var(--radius-sm);
   margin-block: 1rem;
-}
-
-.loading-skeleton {
-  color: var(--color-muted);
-  padding: 1rem 0;
+  font-weight: 500;
 }
 
 .notice {
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-primary-tint);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1.1rem;
   margin-block: 1rem;
 }
+
+.loading-skeleton {
+  position: relative;
+  color: var(--color-muted);
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-hover) 25%,
+    var(--color-border) 50%,
+    var(--color-surface-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Lists / result rows ---------- */
 
 .result-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .result-item {
@@ -150,20 +405,92 @@ a {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0.9rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
+
+.result-item:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.ingredient-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  list-style: none;
+}
+
+.ingredient-row > span:first-child {
+  font-weight: 600;
+  flex: 1;
+  align-self: center;
+}
+
+.ingredient-row .field {
+  margin-block: 0;
+  flex: 0 0 auto;
+}
+
+/* ---------- Badges ---------- */
+
+.confidence-badge {
+  display: inline-block;
+  padding: 0.15rem 0.65rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-tint);
+  color: var(--color-primary-hover);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* ---------- Tables ---------- */
 
 table {
   border-collapse: collapse;
   width: 100%;
+  font-size: 0.95rem;
 }
 
 th,
 td {
   text-align: left;
-  padding: 0.4rem 0.6rem;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--color-border);
+}
+
+thead th {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  border-bottom: 2px solid var(--color-border);
+}
+
+tbody th[scope="row"] {
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+tbody tr:last-child th,
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover th,
+tbody tr:hover td {
+  background: var(--color-surface-hover);
 }
 
 .sr-only {
@@ -178,9 +505,51 @@ td {
   border: 0;
 }
 
+/* ---------- Nav ---------- */
+
 nav.app-nav {
   display: flex;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.85rem 1.5rem;
+  /* Translucent + blurred (with an opaque fallback for browsers without
+     backdrop-filter) so the page's own ambient glow reads through as you
+     scroll, rather than disappearing behind a flat panel. */
+  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+nav.app-nav a {
+  color: var(--color-fg);
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s ease;
+}
+
+nav.app-nav a:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+nav.app-nav a[href="/pro"] {
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+}
+
+nav.app-nav a[href="/pro"]:hover {
+  background: var(--color-primary-tint);
+}
+
+nav.app-nav .btn {
+  margin-left: auto;
 }
