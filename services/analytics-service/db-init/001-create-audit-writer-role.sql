@@ -1,0 +1,26 @@
+-- Local-dev-only equivalent of the role creation
+-- infra/k8s/charts/_lib/templates/_db-provision-job.tpl performs against
+-- the shared RDS instance in a real deploy (as the RDS master user, which
+-- has CREATEROLE -- this service's own DB_ROLE does not).
+--
+-- Creates the NOLOGIN `analytics_service_audit_writer` role and grants it
+-- to the analytics-db POSTGRES_USER (analytics_service), so that:
+--   1. migrations/versions/0002_export_audit_log_compliance.py's
+--      `GRANT USAGE ON SCHEMA analytics_audit TO analytics_service_audit_writer;`
+--      and `GRANT SELECT, INSERT ON analytics_audit.export_audit_log TO
+--      analytics_service_audit_writer;` have a role to grant to (it fails
+--      with "role does not exist" otherwise -- mirrors identity-service's
+--      own db-init/001-create-audit-writer-role.sql precedent for the
+--      identical root cause), and
+--   2. infrastructure/composition_root.py's `Container.new_audit_session()`,
+--      which opens every audit-write connection with
+--      `SET ROLE analytics_service_audit_writer`, can actually switch into
+--      it at runtime (`SET ROLE` requires membership in the target role).
+--
+-- Runs automatically on first cluster init via Postgres's own
+-- /docker-entrypoint-initdb.d/ mechanism (docker-compose.yml mounts this
+-- file there) -- it only ever runs against a fresh, empty data volume, so
+-- no idempotency guard is needed here (unlike the Helm hook, which must
+-- tolerate re-running on every `helm upgrade`).
+CREATE ROLE analytics_service_audit_writer NOLOGIN;
+GRANT analytics_service_audit_writer TO analytics_service;
