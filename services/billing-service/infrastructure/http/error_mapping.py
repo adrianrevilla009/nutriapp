@@ -12,7 +12,10 @@ from application.errors import (
     SubscriptionAlreadyActiveError,
     SubscriptionNotFoundError,
 )
-from domain.ports.payment_provider_port import WebhookSignatureVerificationError
+from domain.ports.payment_provider_port import (
+    PaymentProviderUnavailableError,
+    WebhookSignatureVerificationError,
+)
 from domain.value_objects.stripe_ids import InvalidStripeIdError
 from domain.value_objects.subscription_status import InvalidSubscriptionStatusError
 
@@ -38,6 +41,16 @@ _MAPPING: list[tuple[type[Exception], int, str]] = [
         WebhookSignatureVerificationError,
         status.HTTP_401_UNAUTHORIZED,
         "INVALID_WEBHOOK_SIGNATURE",
+    ),
+    (
+        # CLAUDE.md section 2.6: fallback behavior for an external-API
+        # failure must be explicit, never a bare unmapped 500 -- this is
+        # what a real Stripe outage, or (as in local dev) a placeholder/
+        # invalid API key, degrades to: a genuine "try again later"
+        # signal, not "something broke in our own code".
+        PaymentProviderUnavailableError,
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "PAYMENT_PROVIDER_UNAVAILABLE",
     ),
     (InvalidStripeIdError, status.HTTP_422_UNPROCESSABLE_ENTITY, "INVALID_STRIPE_ID"),
     (
